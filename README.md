@@ -4,8 +4,10 @@ A deterministic prototype for one of Quilstead Solutions' onboarding pain points
 Humaans Athena take-home. The agent turns a "contract signed" event into a compliant,
 equipped, connected first morning without a person chasing every step.
 
-Status: deterministic core hardening pass. Data pack, connectors, permission ladder,
-trusted approval checks and prototype are in. Agent loop, approval queue and UI follow.
+Status: checkpoint B complete in mock mode. Data pack, connectors, permission ladder,
+trusted approval checks, one model-assisted flow, current-state timeline, evidence panel,
+start-date interaction and prototype are in. Persistence, live integrations and broader
+orchestration remain deferred.
 See `AGENTS.md` for the map.
 
 ## Run
@@ -33,9 +35,11 @@ human approves or rejects it, and the send remains simulated.
 | Webhook HMAC verification, citation guard | Working, tested |
 | HRIS, identity, equipment, Slack, email, e-sign, buddy directory, policy KB | Simulated adapters behind the production interface |
 | One model-assisted event-to-plan-to-draft trace | Working in mock mode, live adapter available |
-| Minimal approval screen with approve/reject boundary | Working, browser-verified |
+| Minimal approval screen with approve/reject boundary | Working in mock mode, browser-verified |
+| Current timeline, evidence panel and start-date interaction | Working in mock mode, browser-verified |
+| Live Anthropic execution | Not run in this checkout; credentials unresolved |
 | Persistence, live integrations, general model loop, policy Q&A | Deferred |
-| Case-view UI | Incomplete (Sunday) |
+| Broader case-view UI | Deferred |
 | Public holidays in working-day maths | Not modelled |
 
 All people, companies, emails and policies are fictional.
