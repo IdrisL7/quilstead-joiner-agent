@@ -4,7 +4,7 @@ import { BUDDY_CALENDARS } from "@/data/buddy-calendars";
 import { joinerById } from "@/data/joiners";
 import { findAction } from "@/lib/connectors/registry";
 import { authorize } from "@/lib/permissions";
-import { assessBuddyAvailability, firstWorkingWeek, proposedBuddySlots } from "@/lib/policy/buddy-availability";
+import { assessBuddyAvailability, calendarCoversFirstWorkingWeek, firstWorkingWeek, proposedBuddySlots } from "@/lib/policy/buddy-availability";
 
 const aisha = joinerById("J-004")!;
 
@@ -49,6 +49,30 @@ describe("buddy capacity and simulated availability", () => {
     expect(unknown.availability.reason).toContain("unknown");
     expect(unknown.availability.slots).toHaveLength(0);
     expect(busy.availability.status).toBe("busy");
+  });
+
+  it("covers the planned 9, 12 and 19 October demonstrations explicitly", () => {
+    const candidate = BUDDIES.find((buddy) => buddy.id === "b-02")!;
+    const snapshot = BUDDY_CALENDARS.find((calendar) => calendar.buddy_id === candidate.id)!;
+
+    for (const startDate of ["2026-10-09", "2026-10-12", "2026-10-19"]) {
+      expect(calendarCoversFirstWorkingWeek(snapshot, startDate)).toBe(true);
+      const assessment = assessBuddyAvailability(aisha, [candidate], [snapshot], startDate).candidates[0];
+      expect(assessment.availability.status).not.toBe("unknown");
+    }
+  });
+
+  it("does not infer availability for the uncovered 26 October week", () => {
+    const candidate = BUDDIES.find((buddy) => buddy.id === "b-01")!;
+    const snapshot = BUDDY_CALENDARS.find((calendar) => calendar.buddy_id === candidate.id)!;
+    const result = assessBuddyAvailability(aisha, [candidate], [snapshot], "2026-10-26");
+    const assessment = result.candidates[0];
+
+    expect(calendarCoversFirstWorkingWeek(snapshot, "2026-10-26")).toBe(false);
+    expect(assessment.availability.status).toBe("unknown");
+    expect(assessment.availability.reason).toContain("2026-10-26 to 2026-10-30");
+    expect(assessment.availability.slots).toHaveLength(0);
+    expect(proposedBuddySlots(candidate, snapshot, "2026-10-26")).toHaveLength(0);
   });
 
   it("returns a named People escalation when eligible candidates have no suitable slots", () => {

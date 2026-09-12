@@ -104,6 +104,8 @@ export interface BuddyCalendarSnapshot {
   captured_at: string;
   timezone: string;
   utc_offset_minutes: number;
+  coverage_start_date: string;
+  coverage_end_date: string;
   working_hours: {
     start_local: string;
     end_local: string;

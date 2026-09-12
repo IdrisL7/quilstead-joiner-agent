@@ -1,13 +1,21 @@
 import type { BuddyCalendarSnapshot } from "@/lib/types";
 
 // The checkpoint-A fixture is intentionally a small London slice. It records only
-// busy intervals and read state, never private meeting descriptions.
+// busy intervals and read state, never private meeting descriptions. The fixed
+// UTC+01 offset is valid for this fixture's 9-23 October coverage window. Requests
+// whose first working week falls outside that window return unknown.
+const LONDON_COVERAGE = {
+  coverage_start_date: "2026-10-09",
+  coverage_end_date: "2026-10-23",
+} as const;
+
 export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
   {
     buddy_id: "b-01",
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "known",
     busy_intervals: [
@@ -23,6 +31,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "known",
     busy_intervals: [
@@ -38,6 +47,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "known",
     busy_intervals: [],
@@ -47,6 +57,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "unknown",
     busy_intervals: [],
@@ -56,6 +67,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "known",
     busy_intervals: [],
@@ -65,6 +77,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "known",
     busy_intervals: [
@@ -77,6 +90,7 @@ export const BUDDY_CALENDARS: BuddyCalendarSnapshot[] = [
     captured_at: "2026-09-30T09:00:00Z",
     timezone: "Europe/London",
     utc_offset_minutes: 60,
+    ...LONDON_COVERAGE,
     working_hours: { start_local: "09:00", end_local: "17:30" },
     read_status: "error",
     busy_intervals: [],

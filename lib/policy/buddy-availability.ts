@@ -89,6 +89,15 @@ export function firstWorkingWeek(startDate: string): string[] {
   return Array.from({ length: BUDDY_COMMITMENT.first_week_working_days }, (_, index) => addWorkingDays(toIsoDate(first), index));
 }
 
+export function calendarCoversFirstWorkingWeek(snapshot: BuddyCalendarSnapshot, startDate: string): boolean {
+  return firstWorkingWeek(startDate).every((date) => date >= snapshot.coverage_start_date && date <= snapshot.coverage_end_date);
+}
+
+function coverageReason(snapshot: BuddyCalendarSnapshot, startDate: string): string {
+  const dates = firstWorkingWeek(startDate);
+  return `Calendar coverage ${snapshot.coverage_start_date} to ${snapshot.coverage_end_date} does not include the full requested first working week ${dates[0]} to ${dates[dates.length - 1]}.`;
+}
+
 function overlaps(startAt: string, endAt: string, interval: BuddyBusyInterval): boolean {
   const start = Date.parse(startAt);
   const end = Date.parse(endAt);
@@ -145,6 +154,7 @@ export function proposedBuddySlots(
   snapshot: BuddyCalendarSnapshot,
   startDate: string,
 ): BuddySlot[] {
+  if (!calendarCoversFirstWorkingWeek(snapshot, startDate)) return [];
   const dates = firstWorkingWeek(startDate);
   const slots: BuddySlot[] = [];
   for (const session of BUDDY_COMMITMENT.sessions) {
@@ -190,6 +200,15 @@ function assessAvailability(
     return {
       status: "error",
       reason: "Calendar availability could not be read; People must verify the candidate before proposing times.",
+      snapshot_at: snapshot.captured_at,
+      timezone: snapshot.timezone,
+      slots: [],
+    };
+  }
+  if (!calendarCoversFirstWorkingWeek(snapshot, startDate)) {
+    return {
+      status: "unknown",
+      reason: coverageReason(snapshot, startDate),
       snapshot_at: snapshot.captured_at,
       timezone: snapshot.timezone,
       slots: [],
