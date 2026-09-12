@@ -48,6 +48,7 @@ describe("messaging adapters refuse unapproved drafts", () => {
       id: "D-2",
       case_id: "CASE-J-001",
       kind: "nudge",
+      action: "slack.send_message",
       channel: "slack",
       to: "m-1",
       body: "The laptop order is late.",
@@ -79,12 +80,36 @@ describe("messaging adapters refuse unapproved drafts", () => {
     });
     expect(sentResult.status).toBe("ok");
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ channel: "slack", draft_id: draft.id, to: "m-1" });
+    expect(sent[0]).toMatchObject({ action: "slack.send_message", channel: "slack", draft_id: draft.id, to: "m-1" });
     expect(sent[0].content_version).toBeTruthy();
 
     const retry = await a.action.run({ draft_id: draft.id, now: "2026-10-01T10:04:00Z" });
     expect(retry.status).toBe("ok");
     expect(sent).toHaveLength(1);
+  });
+
+  it("does not let an approved email draft authorize an e-sign pack", async () => {
+    const emailDraft: Draft = {
+      id: "D-EMAIL-1",
+      case_id: "CASE-J-001",
+      kind: "welcome",
+      action: "email.send",
+      channel: "email",
+      to: "joiner@example.test",
+      subject: "Welcome",
+      body: "Welcome to the team.",
+      status: "pending",
+      created_at: "2026-10-01T09:00:00Z",
+    };
+    expect(registerDraft(emailDraft)).toBe(true);
+    expect(approveDraft(emailDraft.id, "m-1", "2026-10-01T10:00:00Z")).toBe(true);
+
+    const esign = findAction("esign.send_pack")!;
+    expect(await esign.action.run({ draft_id: emailDraft.id, now: "2026-10-01T10:01:00Z" })).toMatchObject({ status: "denied" });
+
+    const email = findAction("email.send")!;
+    expect(await email.action.run({ draft_id: emailDraft.id, now: "2026-10-01T10:02:00Z" })).toMatchObject({ status: "ok" });
+    expect(await esign.action.run({ draft_id: emailDraft.id, now: "2026-10-01T10:03:00Z" })).toMatchObject({ status: "denied" });
   });
 });
 

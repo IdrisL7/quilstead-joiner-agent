@@ -11,6 +11,7 @@ import { EVENTS } from "@/data/events";
 import { joinerById } from "@/data/joiners";
 import { personById } from "@/data/people";
 import { CaseStore } from "@/lib/store/case-store";
+import { resetDemoState } from "@/lib/store/demo-state";
 import type { Case } from "@/lib/types";
 
 const args = process.argv.slice(2);
@@ -19,6 +20,7 @@ const NOW = todayIdx >= 0 ? args[todayIdx + 1] : "2026-09-30T09:00:00Z";
 const all = args.includes("--all");
 const wanted = args.filter((a) => /^J-\d{3}$/.test(a));
 
+resetDemoState();
 const store = new CaseStore();
 
 function printCase(c: Case) {

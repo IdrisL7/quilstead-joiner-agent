@@ -13,6 +13,7 @@ See `AGENTS.md` for the map.
 ```bash
 npm install
 npm test                        # vitest
+npm run demo                    # one complete mock-mode event-to-send flow
 npm run prototype -- --all      # every event through the state machine, no model call
 npm run prototype -- J-002      # one joiner
 ```
@@ -26,7 +27,8 @@ npm run prototype -- J-002      # one joiner
 | Permission ladder; no grant path; outbound messages gated on approval | Working, tested |
 | Webhook HMAC verification, citation guard | Working, tested |
 | HRIS, identity, equipment, Slack, email, e-sign, buddy directory, policy KB | Simulated adapters behind the production interface |
-| Agent loop, trail, approval queue, drafting | Incomplete (Saturday) |
+| One event-to-plan-to-draft-to-approved-send trace | Working in deterministic mock mode, tested |
+| Full model loop, approval queue UI, general drafting | Incomplete |
 | Case-view UI | Incomplete (Sunday) |
 | Public holidays in working-day maths | Not modelled |
 

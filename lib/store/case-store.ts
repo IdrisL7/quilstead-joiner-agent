@@ -1,8 +1,8 @@
 import type { Case, EscalationCode, HrisEvent, Joiner, Step } from "@/lib/types";
-import { buildPlan, rebuildForNewStartDate, resetIds } from "@/lib/plan";
+import { buildPlan, rebuildForNewStartDate } from "@/lib/plan";
 import { buildContract } from "@/lib/contract";
 import { deriveState } from "@/lib/state-machine";
-import { currentJoinerById, resetJoinerState, saveCurrentJoiner } from "@/lib/store/joiner-store";
+import { currentJoinerById, saveCurrentJoiner } from "@/lib/store/joiner-store";
 
 // In-memory case store with idempotency on event_id. Demo state lives here and in the
 // trail; nothing is written to a real system.
@@ -18,10 +18,7 @@ export class CaseStore {
   private seenEvents = new Map<string, string>(); // event_id -> case_id
   readonly contracts = new Map<string, ReturnType<typeof buildContract>>();
 
-  constructor() {
-    resetIds();
-    resetJoinerState();
-  }
+  // Construction is side-effect free. Demo and test runners reset shared state explicitly.
 
   private step(c: Case, actor: Step["actor"], kind: string, summary: string, at: string, data?: Record<string, unknown>) {
     c.steps.push({ id: `${c.id}-S-${String(c.steps.length + 1).padStart(4, "0")}`, case_id: c.id, at, actor, kind, summary, data });

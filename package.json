@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "demo": "tsx scripts/demo.ts",
     "prototype": "tsx scripts/prototype.ts"
   },
   "dependencies": {

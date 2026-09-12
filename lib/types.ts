@@ -192,11 +192,13 @@ export interface Escalation {
 }
 
 export type DraftKind = "nudge" | "welcome" | "joiner_answer" | "buddy_intro";
+export type DraftAction = "slack.send_message" | "email.send" | "esign.send_pack";
 
 export interface Draft {
   id: string;
   case_id: string;
   kind: DraftKind;
+  action: DraftAction;
   channel: "slack" | "email";
   to: string; // person id or joiner id
   subject?: string;

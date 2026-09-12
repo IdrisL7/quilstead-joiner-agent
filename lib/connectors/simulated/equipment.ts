@@ -18,6 +18,10 @@ export interface EquipmentOrder {
 
 export const orders: EquipmentOrder[] = [];
 
+export const resetEquipmentState = (): void => {
+  orders.length = 0;
+};
+
 export const equipment: Connector = {
   name: "equipment",
   description: "Orders laptops from the equipment policy.",

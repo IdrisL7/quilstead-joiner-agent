@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { EVENTS } from "@/data/events";
 import { joinerById } from "@/data/joiners";
 import { CaseStore } from "@/lib/store/case-store";
+import { resetDemoState } from "@/lib/store/demo-state";
 import { findAction } from "@/lib/connectors/registry";
 import { deriveState } from "@/lib/state-machine";
 
@@ -10,6 +11,7 @@ const evt = (id: string) => EVENTS.find((e) => e.event_id === id)!;
 
 let store: CaseStore;
 beforeEach(() => {
+  resetDemoState();
   store = new CaseStore();
 });
 
@@ -43,6 +45,7 @@ describe("clean UK joiner (J-001)", () => {
       id: "D-CASE-1",
       case_id: opened.id,
       kind: "nudge",
+      action: "slack.send_message",
       channel: "slack",
       to: "m-1",
       body: "Approved copy",
@@ -184,5 +187,19 @@ describe("compliance and routing edge cases", () => {
     const result = await action.action.run({ joiner_id: "J-008" });
     expect(result.status).toBe("ok");
     expect((result.data as { start_date: string }).start_date).toBe("2026-10-19");
+  });
+
+  it("does not reset shared HRIS state when another case store is constructed", async () => {
+    const original = store.open(evt("EVT-008"), joinerById("J-008"), NOW).case!;
+    store.applyStartDateChange(evt("EVT-013"), joinerById("J-008")!, "2026-10-03T10:00:00Z");
+
+    const secondStore = new CaseStore();
+    expect(secondStore.list()).toHaveLength(0);
+
+    const action = findAction("hris.get_joiner")!;
+    const result = await action.action.run({ joiner_id: "J-008" });
+    expect(result.status).toBe("ok");
+    expect((result.data as { start_date: string }).start_date).toBe("2026-10-19");
+    expect(original.start_date).toBe("2026-10-19");
   });
 });
