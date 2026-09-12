@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 
 type ToolResult = { status: "ok" | "warning" | "error" | "denied"; summary: string };
 type DemoDecision = "approve" | "reject";
@@ -136,6 +137,68 @@ interface DemoResponse {
   date_change?: DemoDateChange;
   draft_unavailable?: { message: string };
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
+}
+
+export interface ExecutionStep {
+  key: "event" | "case" | "tasks" | "equipment" | "buddy" | "approval";
+  label: string;
+  status: "complete" | "attention";
+  detail: string;
+}
+
+type ExecutionSummaryRun = Pick<DemoResponse, "case" | "facts" | "equipment" | "draft" | "buddy" | "trace">;
+
+function traceEvidence(run: ExecutionSummaryRun, kind: string) {
+  return run.trace.find((step) => step.kind === kind);
+}
+
+export function executionStepsFor(run: ExecutionSummaryRun): ExecutionStep[] {
+  const eventEvidence = traceEvidence(run, "event.received");
+  const contractEvidence = traceEvidence(run, "contract.written");
+  const planEvidence = traceEvidence(run, "plan.built");
+  const equipmentEvidence = traceEvidence(run, "tool.equipment.order");
+  const buddyEvidence = traceEvidence(run, "tool.buddy_directory.get_availability");
+
+  return [
+    {
+      key: "event",
+      label: "Event received",
+      status: eventEvidence ? "complete" : "attention",
+      detail: eventEvidence?.summary ?? "The returned trace did not include the contract-signed event.",
+    },
+    {
+      key: "case",
+      label: "Case created",
+      status: contractEvidence && !!run.case.id ? "complete" : "attention",
+      detail: contractEvidence ? `${run.case.id} opened for ${run.facts.contract_event_id}.` : "The returned trace did not confirm the case opening.",
+    },
+    {
+      key: "tasks",
+      label: "Tasks planned",
+      status: planEvidence ? "complete" : "attention",
+      detail: planEvidence?.summary ?? `${run.case.task_count} tasks were returned without a planning evidence step.`,
+    },
+    {
+      key: "equipment",
+      label: "Equipment checked",
+      status: equipmentEvidence ? (run.equipment.status === "warning" ? "attention" : "complete") : "attention",
+      detail: equipmentEvidence?.summary ?? "The returned trace did not include an equipment check.",
+    },
+    {
+      key: "buddy",
+      label: "Buddy availability checked",
+      status: buddyEvidence ? "complete" : "attention",
+      detail: buddyEvidence?.summary ?? "The returned trace did not include a buddy availability check.",
+    },
+    {
+      key: "approval",
+      label: "Equipment approval required",
+      status: run.draft ? "attention" : "complete",
+      detail: run.draft
+        ? `Draft ${run.draft.id} is pending approval. Nothing was sent.`
+        : "No equipment action is required from the current facts.",
+    },
+  ];
 }
 
 /* ---------- formatting ---------- */
@@ -275,6 +338,75 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   return null;
 }
 
+export function WorkflowTriggerCard({ busy, onTrigger }: { busy: boolean; onTrigger: () => void }) {
+  return (
+    <section className="panel trigger-card" aria-label="Workflow trigger">
+      <div className="panel-head">
+        <div className="trigger-heading">
+          <p className="eyebrow">Workflow trigger</p>
+          <h2>Contract signed</h2>
+        </div>
+        <Tag tone="info">{DEMO_TRIGGER_PREVIEW.source}</Tag>
+      </div>
+      <div className="panel-body trigger-body">
+        <div className="trigger-grid">
+          <div>
+            <span className="fact-label">Event</span>
+            <strong>{DEMO_TRIGGER_PREVIEW.event_type}</strong>
+          </div>
+          <div>
+            <span className="fact-label">Joiner</span>
+            <strong>{DEMO_TRIGGER_PREVIEW.joiner.full_name}</strong>
+            <span className="fact-detail">{DEMO_TRIGGER_PREVIEW.joiner.title} · {DEMO_TRIGGER_PREVIEW.joiner.office} · starts {formatDate(DEMO_TRIGGER_PREVIEW.joiner.start_date)}</span>
+          </div>
+        </div>
+        <details className="disclosure">
+          <summary><span>Event details</span><span className="meta">fixture evidence</span></summary>
+          <div className="disclosure-body small">
+            <div className="facts">
+              <div><span>Event ID</span><strong>{DEMO_TRIGGER_PREVIEW.event_id}</strong></div>
+              <div><span>Fixture timestamp</span><strong>{formatDateTime(DEMO_TRIGGER_PREVIEW.occurred_at)}</strong></div>
+              <div><span>Start date</span><strong>{formatDate(DEMO_TRIGGER_PREVIEW.joiner.start_date)}</strong></div>
+              <div><span>Work mode</span><strong>{DEMO_TRIGGER_PREVIEW.joiner.work_mode}</strong></div>
+            </div>
+          </div>
+        </details>
+        <div className="trigger-action">
+          <p>Runs the existing onboarding flow against the simulated HRIS event. No external event is sent.</p>
+          <button className="button primary" type="button" onClick={onTrigger} disabled={busy}>{busy ? "Processing event..." : "Simulate contract signed"}</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExecutionSummary({ run }: { run: ExecutionSummaryRun }) {
+  const steps = executionStepsFor(run);
+  return (
+    <section className="panel execution-summary" aria-label="Initial trigger run">
+      <div className="panel-head">
+        <div className="trigger-heading">
+          <p className="eyebrow">Initial trigger run</p>
+          <h3>Onboarding flow completed</h3>
+        </div>
+        <Tag tone="positive">Evidence returned</Tag>
+      </div>
+      <div className="execution-list">
+        {steps.map((step) => (
+          <div className={`execution-step ${step.status}`} key={step.key}>
+            <span className="execution-icon" aria-hidden="true">{step.status === "complete" ? "✓" : "!"}</span>
+            <div>
+              <strong>{step.label}</strong>
+              <span>{step.detail}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="execution-foot">This is the initial trigger result. Current attention below reflects the live case state after the run.</div>
+    </section>
+  );
+}
+
 function Tag({ tone, children }: { tone?: string; children: React.ReactNode }) {
   return <span className={`tag ${tone ?? ""}`}>{children}</span>;
 }
@@ -321,7 +453,9 @@ export default function Home() {
     setBusy("start");
     setError(null);
     try {
-      acceptRun(await postDemo());
+      const next = await postDemo();
+      acceptRun(next);
+      setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
     } finally {
@@ -513,6 +647,7 @@ export default function Home() {
     const compliance = current.attention.compliance;
     return (
       <>
+        <ExecutionSummary run={current} />
         <div className="section-title"><h2>Overview</h2><p>Current case state. Rows open their work area.</p></div>
         <section className="panel" aria-label="Attention">
           <div className="panel-head"><h3>Needs attention</h3><span className="meta">{openAttention === 0 ? "Nothing open" : `${openAttention} open`}</span></div>
@@ -910,12 +1045,7 @@ export default function Home() {
 
         <main className="work">
           {!run && (
-            <section className="panel empty-card">
-              <h2>Prepare the demo to open Aisha&apos;s case</h2>
-              <p>Loads the J-004 case, inspects the equipment ETA against the start date, and holds one proposed Slack nudge for approval. Buddy support and the activity trace open once the case is prepared. Nothing is sent without a named approval.</p>
-              <div className="empty-facts"><Tag>UK · London</Tag><Tag>14 planned tasks</Tag><Tag tone="violet">Simulated systems</Tag></div>
-              <div><button className="button primary" onClick={startFlow} disabled={busy !== null}>{busy === "start" ? "Preparing case..." : "Prepare demo"}</button></div>
-            </section>
+            <WorkflowTriggerCard busy={busy !== null} onTrigger={startFlow} />
           )}
           {run && section === "overview" && renderOverview(run)}
           {run && section === "equipment" && renderEquipment(run)}
