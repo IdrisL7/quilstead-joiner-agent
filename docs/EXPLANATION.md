@@ -36,7 +36,10 @@ The model does not calculate deadlines, choose recipients, grant access, approve
 
 The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”** Both modes keep the facts, approval gate and connector permissions outside the model.
 
-The live adapter exists, but live Anthropic execution is not run because credentials remain unresolved.
+The live adapter was verified once through the local API. It returned HTTP 200 from Anthropic
+using `claude-haiku-4-5-20251001`, with a pending draft body, `before_approval: denied` and
+trace entries for `model.draft` and `send.refused`. This proves bounded adapter wiring and the
+approval hold for one run. It does not prove production reliability or live message delivery.
 
 The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
 policy-eligible candidates, calculates two non-overlapping first-week slots, shows up to three
@@ -56,7 +59,16 @@ Every outbound message is a registered `Draft` with a pending status. `approveDr
 
 The e-sign action has its own action and channel check, so an email approval cannot authorise an e-sign pack.
 
-## 5. Rejection, stale approval, model failure and a changed date
+## 5. How People edits equipment wording
+
+Only a pending equipment draft exposes `Edit draft`. People can change the subject and message,
+while recipient, channel and evidence facts remain application-controlled. `Save changes` validates
+the fields, creates a fresh draft and run id, supersedes the old pending version and records
+`Edited by People`; it sends nothing. Approval then resolves that exact saved draft. A stale tab,
+old draft id, superseded draft or non-pending draft is rejected. Buddy request state and history
+remain separate, and a start-date change can supersede the pending edited draft.
+
+## 6. Rejection, stale approval, model failure and a changed date
 
 - Rejection records a human decision and the connector refuses the send.
 - A new preparation or a start-date change rotates the active run id. An old tab receives a 409 and cannot approve the current draft.
@@ -67,12 +79,12 @@ The e-sign action has its own action and channel check, so an email approval can
 
 The recovery defect fixed in checkpoint C was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
 
-## 6. What is simulated, tested live and still unknown
+## 7. What is simulated, tested live and still unknown
 
 Simulated: HRIS state, in-memory case storage, equipment response, policy files, model mock, Slack send and receipts. No persistence or live connector is included.
 
-Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, typecheck, lint and production build. Live Anthropic execution is **NOT RUN**. Production latency, provider availability, real Slack delivery and IT response remain unknown.
+Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, typecheck, lint and production build. One local Anthropic draft-generation run also passed with approval held. Production latency, provider availability, real Slack delivery and IT response remain unknown.
 
-## 7. Code and AI assistance disclosure
+## 8. Code and AI assistance disclosure
 
 The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, model adapter and approval state functions. Codex applied the bounded checkpoint changes and added focused regression coverage in this branch. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.

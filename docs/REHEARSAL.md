@@ -7,36 +7,38 @@ This is the customer-facing rehearsal for the bounded day-one readiness flow. It
 Run:
 
 ```bash
-npm run dev
+DEMO_MODE=mock npm run dev
 ```
 
 Open `http://localhost:3000`. Keep the browser at a laptop-sized viewport for the main rehearsal. The narrow layout keeps the `SIMULATED / NO LIVE SEND` badge visible and is useful for a final readability check.
 
-The live Anthropic path is not part of this rehearsal. Credentials remain unresolved and live execution is not verified.
+This customer flow stays in mock mode. One separate local live probe generated a draft through Anthropic,
+but no live delivery was exercised. Keep that distinction explicit.
 
 ## 15-minute customer run-of-show
 
 | Time | Action | Point to make |
 |---|---|---|
 | 0:00-1:00 | Set the scene | Athena watches a contract-signed event and looks for one day-one risk. The case is Aisha Okafor, London, hybrid, starting 12 October. |
-| 1:00-2:30 | Click `Generate model nudge` | The event opens `CASE-J-004`. The deterministic plan creates 14 tasks, then the simulated equipment connector reports an ETA of 16 October. |
-| 2:30-4:00 | Read the timeline | Contract, equipment task deadline, first day and delivery ETA are current application facts. The 4-day gap is calculated from the dates. Nadia Hussain is the IT owner. |
-| 4:00-5:30 | Expand `Why this?` | Show the start date, ETA, task deadline, owner, exact equipment policy quote and the human approval requirement. Distinguish source facts from generated wording. |
-| 5:30-7:00 | Review the draft | The model contributes a concise request for a loaner or earlier delivery. It does not choose the recipient, dates, permission or approval state. |
-| 7:00-8:30 | Click `Approve and send` | The simulated Slack action runs only after the People Partner decision. The result says `Sent with approval. Awaiting IT response.` It does not claim the laptop problem is solved. |
-| 8:30-9:30 | Review `ATTENTION SUMMARY` and `BUDDY SUPPORT` | Candidate cards separate eligibility, current assignments, calendar status and proposed slots. The recommendation is an application decision, not a model guess. |
-| 9:30-10:30 | Click `Request Ewan Grant`, then `Approve exact request` | The request preview is the exact fixed mock draft and commitment that the People Partner approves. No message is sent while it is pending. |
-| 10:30-11:30 | Use `Simulate buddy accepts`, then `Confirm allocation as People` | Acceptance is explicitly simulated and remains separate from People confirmation. Only the named People action completes the buddy task. |
-| 11:30-12:30 | Reset, click `Simulate Ewan Grant unavailable` | The current calendar snapshot changes to unknown, the comparison recommends Amara instead, and the trace records the simulation. Affected requests are invalidated. |
-| 12:30-13:30 | Optional recovery: prepare Amara, or simulate a decline | A decline is labelled as a simulation and offers another candidate. No replacement request is sent automatically. |
-| 13:30-15:00 | Change the start date to 19 October and close on boundaries | The same case remains active, deadlines recompute and the chronological timeline updates. People owns approvals and confirmation, IT owns the equipment response, and calendars remain mock read-only snapshots. |
+| 1:00-2:00 | Click `Simulate contract signed` | The event opens `CASE-J-004`. The deterministic plan creates 14 tasks, then the simulated equipment connector reports an ETA of 16 October. |
+| 2:00-3:00 | Read `Initial onboarding checks completed` and the timeline | The initial summary is historical. Current approval, send and date status belong in `Needs attention`; the timeline uses current facts. |
+| 3:00-4:00 | Expand `Why this action` | Show the start date, ETA, task deadline, owner, exact equipment policy quote and human approval requirement. Distinguish source facts from generated wording. |
+| 4:00-5:30 | Click `Edit draft`, change wording, then `Cancel` | Only subject and message are editable. Cancel restores the pending draft and sends nothing. Recipient, channel and evidence remain application-controlled. |
+| 5:30-7:00 | Edit again and click `Save changes` | Saving creates a fresh pending revision, invalidates the old version and shows `Edited by People`. Approval is still required. |
+| 7:00-8:00 | Click `Approve and send` | The simulated Slack action uses exactly the saved wording. Result: `Sent with approval. Awaiting IT response.` It does not claim the laptop problem is solved. |
+| 8:00-10:00 | Open `Buddy support`, prepare Ewan, approve exact request, accept and confirm | The request preview is the exact fixed mock draft. Simulated buddy acceptance remains separate from `Confirm allocation as People`. |
+| 10:00-11:00 | Click `Simulate Ewan Grant unavailable` | The confirmed buddy remains the target. Availability becomes unknown, the request is superseded and Amara is offered. The trace records the simulated response. |
+| 11:00-12:00 | Use `Reset and prepare again`, prepare Ewan and click `Simulate buddy declines` | Decline is labelled simulated and offers recovery. No replacement request is sent automatically. |
+| 12:00-13:30 | Change the start date to 19 October and click `Recalculate case` | The same case remains active, deadlines recompute, the chronological timeline updates and the compliance next action stays tied to the real compliance task. |
+| 13:30-15:00 | Read the trace and close on boundaries | People owns approvals and confirmation, IT owns the equipment response, calendars remain mock read-only snapshots, and one live Anthropic draft probe does not equal live integration proof. |
 
 ## What to avoid saying
 
 - Do not say the equipment was delivered or that IT accepted the request. The receipt only confirms the simulated send.
 - Do not describe this as a general autonomous agent or a full onboarding dashboard.
 - Do not imply that the model calculated deadlines or selected a recipient.
-- Do not claim live Anthropic execution. It remains not run.
+- Do not claim live Slack delivery, a real IT response or production reliability. One local Anthropic draft-generation probe passed, but live delivery was not exercised.
+- Do not describe the one live draft probe as a complete live integration.
 - Say explicitly: “This mock run uses a fixed draft; the live adapter generates wording from the same facts.”
 
 ## Rehearsal checkpoints
