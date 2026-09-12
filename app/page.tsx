@@ -787,7 +787,7 @@ export default function Home() {
           </div>
 
           <section className="panel" aria-label="Approval">
-            <div className="panel-head"><h3>Proposed action</h3><Tag tone={decisionTone(current)}>{decisionLabel(current)}</Tag></div>
+            <div className="panel-head"><h3>Approval-ready draft</h3><Tag tone={decisionTone(current)}>{decisionLabel(current)}</Tag></div>
             <div className="panel-body stack">
               {current.draft ? (
                 <>
@@ -840,17 +840,17 @@ export default function Home() {
                   <p>Save or cancel your draft edits first. Approval stays disabled while editing.</p>
                   <div className="action-buttons">
                     <button className="button secondary" onClick={cancelEquipmentEdit} disabled={busy !== null}>Cancel</button>
-                    <button className="button primary" onClick={saveEquipmentEdit} disabled={busy !== null}>{busy === "edit" ? "Saving..." : "Save changes"}</button>
+                    <button className="button primary" onClick={saveEquipmentEdit} disabled={busy !== null}>{busy === "edit" ? "Saving..." : "Save"}</button>
                   </div>
                 </div>
               ) : isPending ? (
                 <div className="actions">
-                  <p>Draft awaiting your approval. Nothing is sent until you approve.</p>
-                  <div className="action-buttons">
-                    <button className="button ghost" onClick={beginEquipmentEdit} disabled={busy !== null}>Edit draft</button>
-                    <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject draft</button>
-                    <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}</button>
-                  </div>
+                  <p>Needs approval. Sending is simulated in this build. Nothing leaves Athena until you approve.</p>
+                 <div className="action-buttons">
+                    <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject</button>
+                    <button className="button ghost" onClick={beginEquipmentEdit} disabled={busy !== null}>Edit</button>
+                   <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Approving..." : "Approve"}</button>
+                 </div>
                 </div>
               ) : current.screen_state === "draft_unavailable" ? (
                 <div className="outcome unavailable" role="alert">
@@ -991,7 +991,7 @@ export default function Home() {
                         <div className="step-body">
                           <h4>People approves the exact request</h4>
                           {request.status === "pending_approval" && current.buddy.draft ? (
-                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null || editingEquipment}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null || editingEquipment}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}</button></div>
+                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null || editingEquipment}>Reject</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null || editingEquipment}>{busy === "buddy_approve" ? "Approving..." : "Approve"}</button></div>
                           ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.sent_at ? `Approved and sent ${formatDateTime(request.sent_at)}.${request.status === "superseded" ? ` Superseded afterwards: ${request.invalidation_reason ?? "current facts changed."}` : ""}` : request.status === "superseded" ? request.invalidation_reason ?? "Superseded before approval." : "Waiting."}</p>}
                         </div>
                       </div>

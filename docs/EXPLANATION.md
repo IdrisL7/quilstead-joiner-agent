@@ -61,8 +61,8 @@ The e-sign action has its own action and channel check, so an email approval can
 
 ## 5. How People edits equipment wording
 
-Only a pending equipment draft exposes `Edit draft`. People can change the subject and message,
-while recipient, channel and evidence facts remain application-controlled. `Save changes` validates
+Only a pending equipment draft exposes `Edit`. People can change the subject and message,
+while recipient, channel and evidence facts remain application-controlled. `Save` validates
 the fields, creates a fresh draft and run id, supersedes the old pending version and records
 `Edited by People`; it sends nothing. Approval then resolves that exact saved draft. A stale tab,
 old draft id, superseded draft or non-pending draft is rejected. Buddy request state and history
