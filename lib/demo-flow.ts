@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { buddyById } from "@/data/buddies";
+import { buddyCalendarById } from "@/data/buddy-calendars";
 import { EVENTS } from "@/data/events";
 import { joinerById } from "@/data/joiners";
 import { personById } from "@/data/people";
@@ -9,6 +10,7 @@ import { loadKb } from "@/lib/connectors/simulated/policy-kb";
 import {
   releaseBuddyCapacity,
   reserveBuddyCapacity,
+  setSimulatedBuddyCalendar,
 } from "@/lib/connectors/simulated/buddy-directory";
 import {
   approveDraft,
@@ -753,6 +755,57 @@ async function invalidateBuddyForAvailabilityChange(
     ],
   };
   return { preparation: updated, conflict: `${reason} The old request cannot be approved or confirmed; prepare a new request from the refreshed facts.` };
+}
+
+export async function simulateBuddyAvailabilityChange(
+  preparation: DemoPreparation,
+  candidateId: string,
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const snapshot = buddyCalendarById(candidateId);
+  if (!snapshot) throw new BuddyFlowConflict(`No simulated calendar is available for ${buddyName(candidateId)}.`);
+
+  setSimulatedBuddyCalendar({ ...snapshot, read_status: "unknown" });
+  const request = latestBuddyRequest(preparation.case);
+  const affectsCurrentRequest = !!request
+    && ACTIVE_BUDDY_REQUEST_STATUSES.has(request.status)
+    && request.candidate_id === candidateId;
+  if (affectsCurrentRequest && request) {
+    invalidateBuddyRequest(preparation.case, request, now, "Simulated calendar availability changed for the proposed buddy.");
+    preparation.case.state = deriveState(preparation.case);
+  }
+
+  const availability = await readBuddyAvailability(
+    preparation.joiner,
+    preparation.case.start_date,
+    declinedBuddyIds(preparation.case),
+    preparation.case.id,
+  );
+  const candidate = availability.candidates.find((assessment) => assessment.candidate.id === candidateId);
+  const availabilitySummary = candidate
+    ? `${candidate.candidate.full_name} is now ${candidate.availability.status}: ${candidate.availability.reason}`
+    : `${buddyName(candidateId)} is no longer in the current comparison.`;
+  const requestSummary = affectsCurrentRequest && request
+    ? `Request ${request.id} was invalidated because its simulated calendar changed.`
+    : undefined;
+
+  return {
+    ...preparation,
+    run_id: nextRunId(),
+    buddy: buddyState(
+      availability,
+      preparation.case.buddy_requests.at(-1) ?? preparation.buddy.request,
+      affectsCurrentRequest ? null : preparation.buddy.draft,
+      affectsCurrentRequest ? null : preparation.buddy.beforeApproval,
+      affectsCurrentRequest ? undefined : preparation.buddy.afterApproval,
+    ),
+    trace: [
+      ...preparation.trace,
+      { actor: "human", kind: "simulation.buddy_calendar.changed", summary: `Simulated ${buddyName(candidateId)} calendar availability changed to unknown.` },
+      ...(requestSummary ? [{ actor: "system" as const, kind: "buddy.request.invalidated", summary: requestSummary }] : []),
+      { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availabilitySummary },
+    ],
+  };
 }
 
 export async function resolveBuddyApproval(

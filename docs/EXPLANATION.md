@@ -10,6 +10,8 @@ EVT-004 contract.signed
   -> Draft in trusted approval state
   -> People Partner decision
   -> simulated slack.send_message receipt
+  -> buddy comparison -> exact buddy request approval -> labelled simulated response
+  -> named People confirmation
   -> joiner.start_date_changed and current-state recomputation
 ```
 
@@ -36,6 +38,18 @@ The spoken distinction is: **“This mock run uses a fixed draft; the live adapt
 
 The live adapter exists, but live Anthropic execution is not run because credentials remain unresolved.
 
+The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
+policy-eligible candidates, calculates two non-overlapping first-week slots, shows up to three
+comparisons and keeps the exact request in a separate preview. People approves the exact buddy draft
+before the simulated send. A clearly labelled simulated response then records acceptance or decline;
+acceptance alone never completes the task. Named People confirmation is the final buddy boundary.
+
+The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”**
+The buddy request itself is deliberately fixed in this mock checkpoint and is not described as live AI
+output. The attention summary is a projection of the current case, task, request and escalation state,
+not a second readiness store. The trace records simulation inputs, connector observations, approvals,
+responses and confirmation history.
+
 ## 4. Why the approval boundary is outside the model
 
 Every outbound message is a registered `Draft` with a pending status. `approveDraft` and `rejectDraft` are trusted application functions called by the approval route. The connector checks the trusted approval snapshot again before sending and suppresses duplicate sends by action, channel and draft id.
@@ -49,6 +63,7 @@ The e-sign action has its own action and channel check, so an email approval can
 - A start-date change supersedes any pending draft before updating the case. The case and HRIS snapshot then move together.
 - If drafting fails after that state change, `changeDemoStartDate` returns the updated case, updated joiner and current facts with `draft_unavailable`. The screen shows a clear recovery state, keeps the run active, offers `Retry draft` for the same date and allows a different date to be recalculated. No message is approvable in that state.
 - A successful date change to 19 October removes the late-arrival risk because the unchanged 16 October ETA is now earlier than first day. A date such as 9 October keeps the risk and can produce a fresh draft.
+- A simulated calendar change marks the selected buddy's availability unknown, refreshes the comparison and invalidates an affected request. Decline recovery offers another candidate without automatically sending a replacement.
 
 The recovery defect fixed in checkpoint C was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
 

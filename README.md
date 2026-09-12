@@ -38,6 +38,8 @@ human approves or rejects it, and the send remains simulated.
 | HRIS, identity, equipment, Slack, email, e-sign, buddy directory, policy KB | Simulated adapters behind the production interface |
 | One model-assisted event-to-plan-to-draft trace | Working in mock mode, live adapter available |
 | Minimal approval screen with approve/reject boundary | Working in mock mode, browser-verified |
+| Buddy candidate comparison, exact request preview and People confirmation | Working in mock mode, browser-verified; calendar responses are labelled simulations |
+| Equipment, buddy and compliance attention summary | Working from current case state, browser-verified |
 | Current timeline, evidence panel and start-date interaction | Working in mock mode, browser-verified |
 | Draft failure recovery after a date change | Working, tested with missing-key mode |
 | Live Anthropic execution | Not run in this checkout; credentials unresolved |

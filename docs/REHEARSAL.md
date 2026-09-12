@@ -24,10 +24,12 @@ The live Anthropic path is not part of this rehearsal. Credentials remain unreso
 | 4:00-5:30 | Expand `Why this?` | Show the start date, ETA, task deadline, owner, exact equipment policy quote and the human approval requirement. Distinguish source facts from generated wording. |
 | 5:30-7:00 | Review the draft | The model contributes a concise request for a loaner or earlier delivery. It does not choose the recipient, dates, permission or approval state. |
 | 7:00-8:30 | Click `Approve and send` | The simulated Slack action runs only after the People Partner decision. The result says `Sent with approval. Awaiting IT response.` It does not claim the laptop problem is solved. |
-| 8:30-9:30 | Reset with `Run a new case` | Explain that this is an in-memory demonstration reset, not production persistence. |
-| 9:30-11:30 | Change the start date to 19 October and recalculate | The same case remains active. Deadlines are recomputed, the ETA is unchanged, delivery moves before first day in the chronological timeline, and the old pending draft is unavailable. |
-| 11:30-13:00 | Read the cleared state | The late-arrival warning is removed. The screen says no message is needed because the current dates no longer require a nudge. |
-| 13:00-15:00 | Close on boundaries | People owns approval, IT owns the equipment response, and Security retains access and grant decisions. Athena observes, plans, drafts and records simulated receipts. |
+| 8:30-9:30 | Review `ATTENTION SUMMARY` and `BUDDY SUPPORT` | Candidate cards separate eligibility, current assignments, calendar status and proposed slots. The recommendation is an application decision, not a model guess. |
+| 9:30-10:30 | Click `Request Ewan Grant`, then `Approve exact request` | The request preview is the exact fixed mock draft and commitment that the People Partner approves. No message is sent while it is pending. |
+| 10:30-11:30 | Use `Simulate buddy accepts`, then `Confirm allocation as People` | Acceptance is explicitly simulated and remains separate from People confirmation. Only the named People action completes the buddy task. |
+| 11:30-12:30 | Reset, click `Simulate Ewan Grant unavailable` | The current calendar snapshot changes to unknown, the comparison recommends Amara instead, and the trace records the simulation. Affected requests are invalidated. |
+| 12:30-13:30 | Optional recovery: prepare Amara, or simulate a decline | A decline is labelled as a simulation and offers another candidate. No replacement request is sent automatically. |
+| 13:30-15:00 | Change the start date to 19 October and close on boundaries | The same case remains active, deadlines recompute and the chronological timeline updates. People owns approvals and confirmation, IT owns the equipment response, and calendars remain mock read-only snapshots. |
 
 ## What to avoid saying
 
@@ -35,6 +37,7 @@ The live Anthropic path is not part of this rehearsal. Credentials remain unreso
 - Do not describe this as a general autonomous agent or a full onboarding dashboard.
 - Do not imply that the model calculated deadlines or selected a recipient.
 - Do not claim live Anthropic execution. It remains not run.
+- Say explicitly: “This mock run uses a fixed draft; the live adapter generates wording from the same facts.”
 
 ## Rehearsal checkpoints
 

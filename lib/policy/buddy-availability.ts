@@ -11,6 +11,8 @@ import type {
   Joiner,
 } from "@/lib/types";
 
+const SLOT_INCREMENT_MINUTES = BUDDY_COMMITMENT.slot_increment_minutes;
+
 interface CandidateSummary {
   id: string;
   full_name: string;
@@ -130,7 +132,7 @@ function freeSlot(
   const workdayStart = minutesFromLocalTime(snapshot.working_hours.start_local);
   const workdayEnd = minutesFromLocalTime(snapshot.working_hours.end_local);
   for (const date of dates) {
-    for (let startMinutes = workdayStart; startMinutes + durationMinutes <= workdayEnd; startMinutes += BUDDY_COMMITMENT.slot_increment_minutes) {
+    for (let startMinutes = workdayStart; startMinutes + durationMinutes <= workdayEnd; startMinutes += SLOT_INCREMENT_MINUTES) {
       const startAt = localTimestamp(date, localTimeAt(startMinutes), snapshot.utc_offset_minutes);
       const endAt = localTimestamp(date, localTimeAt(startMinutes + durationMinutes), snapshot.utc_offset_minutes);
       const conflictsWithBusy = snapshot.busy_intervals.some((interval) => overlaps(startAt, endAt, interval));

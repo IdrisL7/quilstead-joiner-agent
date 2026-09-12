@@ -11,6 +11,7 @@ import {
   recordBuddyResponse,
   resolveBuddyApproval,
   resolveDemoApproval,
+  simulateBuddyAvailabilityChange,
   type DemoDecision,
   type DemoPreparation,
 } from "@/lib/demo-flow";
@@ -90,6 +91,7 @@ function buddyRequestSummary(request: BuddyRequest | null) {
     responded_at: request.responded_at,
     confirmed_at: request.confirmed_at,
     confirmed_by: request.confirmed_by,
+    confirmed_by_name: request.confirmed_by ? personById(request.confirmed_by)?.full_name ?? request.confirmed_by : undefined,
     invalidated_at: request.invalidated_at,
     invalidation_reason: request.invalidation_reason,
   };
@@ -102,6 +104,90 @@ function buddySummary(run: DemoPreparation) {
     draft: buddyDraftSummary(run),
     before_approval: run.buddy.beforeApproval,
     after_approval: run.buddy.afterApproval,
+  };
+}
+
+function attentionSummary(run: DemoPreparation) {
+  const buddyTask = run.case.tasks.find((task) => task.type === "buddy_allocation");
+  const complianceTasks = run.case.tasks.filter((task) => task.compliance_code);
+  const openComplianceTasks = complianceTasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
+  const unresolvedEscalations = run.case.escalations.filter((escalation) => !escalation.resolved_at);
+  const screenState = run.decision
+    ? "resolved"
+    : run.draft
+    ? "awaiting_decision"
+    : run.draft_unavailable
+    ? "draft_unavailable"
+    : "no_action";
+  const equipmentStatus = !run.facts.equipment_late
+    ? "On track"
+    : run.decision === "approve"
+    ? "Awaiting IT response"
+    : screenState === "draft_unavailable"
+    ? "Draft unavailable"
+    : screenState === "awaiting_decision"
+    ? "Needs approval"
+    : "Needs review";
+  const equipmentNextAction = !run.facts.equipment_late
+    ? "No equipment action required from the current dates."
+    : run.decision === "approve"
+    ? "Wait for IT to arrange a loaner or earlier delivery."
+    : screenState === "draft_unavailable"
+    ? "Retry the draft before any message can be sent."
+    : "Review the current equipment nudge.";
+
+  let buddyStatus = "Ready for review";
+  let buddyNextAction = run.buddy.availability.recommendation
+    ? "Compare candidates and request support."
+    : run.buddy.availability.escalation?.summary ?? "People must review buddy support by hand.";
+  if (run.buddy.request?.status === "pending_approval") {
+    buddyStatus = "Awaiting approval";
+    buddyNextAction = "Approve or reject the exact buddy request.";
+  } else if (run.buddy.request?.status === "awaiting_acceptance") {
+    buddyStatus = "Awaiting buddy acceptance";
+    buddyNextAction = "Use the labelled simulation response control.";
+  } else if (run.buddy.request?.status === "accepted" && buddyTask?.status !== "done") {
+    buddyStatus = "Awaiting People confirmation";
+    buddyNextAction = "Confirm the accepted allocation as People.";
+  } else if (run.buddy.request?.status === "confirmed" && buddyTask?.status === "done") {
+    buddyStatus = "Confirmed";
+    buddyNextAction = "People confirmation is recorded for this case.";
+  } else if (run.buddy.request?.status === "declined" || run.buddy.request?.status === "rejected") {
+    buddyStatus = "Needs replacement";
+    buddyNextAction = "Choose another candidate. No request was sent automatically.";
+  } else if (run.buddy.request?.status === "superseded") {
+    buddyStatus = "Needs revalidation";
+    buddyNextAction = "Prepare a fresh request from the current availability.";
+  }
+
+  return {
+    equipment: {
+      status: equipmentStatus,
+      owner_name: run.facts.equipment_owner_name,
+      next_action: equipmentNextAction,
+    },
+    buddy: {
+      status: buddyStatus,
+      owner_name: personById(buddyTask?.owner_id ?? "")?.full_name ?? buddyTask?.owner_id ?? "People",
+      next_action: buddyNextAction,
+      candidate_name: run.buddy.request
+        ? buddyById(run.buddy.request.candidate_id)?.full_name ?? run.buddy.request.candidate_id
+        : run.buddy.availability.recommendation?.candidate_name ?? null,
+    },
+    compliance: {
+      status: unresolvedEscalations.some((escalation) => escalation.severity === "critical")
+        ? "Blocked"
+        : openComplianceTasks.length > 0
+        ? "In progress"
+        : "Complete",
+      owner_name: personById(openComplianceTasks[0]?.owner_id ?? unresolvedEscalations[0]?.to_person_id ?? "")?.full_name ?? "People",
+      next_action: unresolvedEscalations[0]?.summary ?? (openComplianceTasks.length > 0
+        ? `Review ${openComplianceTasks.length} open compliance task${openComplianceTasks.length === 1 ? "" : "s"}.`
+        : "No open compliance task is due by the current start date."),
+      open_tasks: openComplianceTasks.length,
+      total_tasks: complianceTasks.length,
+      unresolved_escalations: unresolvedEscalations.length,
+    },
   };
 }
 
@@ -126,6 +212,7 @@ function preparationResponse(run: DemoPreparation) {
     },
     model: run.model,
     equipment: equipmentSummary(run),
+    attention: attentionSummary(run),
     facts: run.facts,
     draft: draftSummary(run),
     before_approval: run.beforeApproval,
@@ -169,6 +256,15 @@ export async function POST(request: Request) {
       }
       if (body.action === "retry_draft") {
         const updated = await retryDemoDraft(preparation);
+        activeRun = updated;
+        return NextResponse.json(preparationResponse(updated));
+      }
+
+      if (body.action === "buddy_availability_change") {
+        if (typeof body.candidate_id !== "string") {
+          return NextResponse.json({ error: "candidate_id is required for a simulated availability change" }, { status: 400 });
+        }
+        const updated = await simulateBuddyAvailabilityChange(preparation, body.candidate_id);
         activeRun = updated;
         return NextResponse.json(preparationResponse(updated));
       }

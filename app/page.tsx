@@ -31,6 +31,7 @@ interface DemoDateChange {
   tasks_unchanged: number;
   tasks_added: number;
   superseded_draft_id?: string;
+  superseded_buddy_request_id?: string;
 }
 
 interface DemoDraft {
@@ -46,12 +47,81 @@ interface DemoDraft {
   decision_reason?: string;
 }
 
+interface BuddySlot {
+  id: string;
+  kind: "introduction" | "shadowing";
+  start_at: string;
+  end_at: string;
+  timezone: string;
+  duration_minutes: number;
+}
+
+interface BuddyCandidateAssessment {
+  candidate: {
+    id: string;
+    full_name: string;
+    office: string;
+    timezone: string;
+    team: string;
+    tenure_months: number;
+    active_buddies: number;
+  };
+  eligibility: { eligible: boolean; reasons: string[] };
+  availability: {
+    status: "available" | "busy" | "unavailable" | "unknown" | "error";
+    reason: string;
+    snapshot_at?: string;
+    timezone?: string;
+    slots: BuddySlot[];
+  };
+}
+
+interface BuddyAvailability {
+  start_date: string;
+  candidates: BuddyCandidateAssessment[];
+  recommendation: { candidate_id: string; candidate_name: string; reason: string; slots: BuddySlot[] } | null;
+  escalation: { summary: string; evidence: string[] } | null;
+}
+
+interface BuddyRequest {
+  id: string;
+  draft_id: string;
+  candidate_id: string;
+  candidate_name: string;
+  start_date: string;
+  slots: BuddySlot[];
+  status: "pending_approval" | "awaiting_acceptance" | "accepted" | "declined" | "rejected" | "superseded" | "confirmed";
+  created_at: string;
+  sent_at?: string;
+  response?: "accepted" | "declined";
+  responded_at?: string;
+  confirmed_at?: string;
+  confirmed_by?: string;
+  confirmed_by_name?: string;
+  invalidated_at?: string;
+  invalidation_reason?: string;
+}
+
+interface BuddyState {
+  availability: BuddyAvailability;
+  request: BuddyRequest | null;
+  draft: DemoDraft | null;
+  before_approval: ToolResult | null;
+  after_approval?: ToolResult;
+}
+
+interface AttentionSummary {
+  equipment: { status: string; owner_name: string; next_action: string };
+  buddy: { status: string; owner_name: string; next_action: string; candidate_name: string | null };
+  compliance: { status: string; owner_name: string; next_action: string; open_tasks: number; total_tasks: number; unresolved_escalations: number };
+}
+
 interface DemoResponse {
   phase: "pending" | "resolved";
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
   run_id: string;
   decision?: DemoDecision;
-  case: { id: string; state: string; start_date: string; task_count: number };
+  case: { id: string; state: string; start_date: string; task_count: number; buddy_id: string | null; buddy_task_status: string | null; buddy_task_done_by: string | null };
   joiner: { full_name: string; title: string; office: string; work_mode: string; start_date: string };
   model: { provider: "mock" | "anthropic"; model: string };
   equipment: { status: ToolResult["status"]; summary: string; eta: string | null };
@@ -59,6 +129,8 @@ interface DemoResponse {
   draft: DemoDraft | null;
   before_approval: ToolResult | null;
   after_approval?: ToolResult;
+  attention: AttentionSummary;
+  buddy: BuddyState;
   date_change?: DemoDateChange;
   draft_unavailable?: { message: string };
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
@@ -73,6 +145,59 @@ function formatDate(value: string | null) {
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
     .format(new Date(value));
+}
+
+function formatSlot(slot: BuddySlot) {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: slot.timezone,
+  });
+  return `${formatter.format(new Date(slot.start_at))} to ${new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: slot.timezone,
+  }).format(new Date(slot.end_at))}`;
+}
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function availabilityLabel(status: BuddyCandidateAssessment["availability"]["status"]) {
+  if (status === "available") return "Available";
+  if (status === "busy") return "No suitable slots";
+  if (status === "unknown") return "Availability unknown";
+  if (status === "error") return "Calendar read failed";
+  return "Unavailable";
+}
+
+function requestLabel(status: BuddyRequest["status"]) {
+  if (status === "pending_approval") return "Awaiting approval";
+  if (status === "awaiting_acceptance") return "Awaiting buddy acceptance";
+  if (status === "accepted") return "Awaiting People confirmation";
+  if (status === "declined") return "Buddy declined";
+  if (status === "rejected") return "Request rejected";
+  if (status === "superseded") return "Request superseded";
+  return "Allocation confirmed";
+}
+
+function activeBuddyRequest(request: BuddyRequest | null) {
+  return !!request && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status);
+}
+
+function attentionTone(status: string) {
+  if (["On track", "Confirmed", "Complete"].includes(status)) return "positive";
+  if (["Awaiting IT response", "Awaiting buddy acceptance", "Awaiting People confirmation", "In progress", "Ready for review"].includes(status)) return "pending";
+  return "attention";
 }
 
 function modelLabel(provider: DemoResponse["model"]["provider"]) {
@@ -114,6 +239,74 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   return null;
 }
 
+function AttentionSummaryPanel({ summary }: { summary: AttentionSummary }) {
+  const items = [
+    { key: "equipment", label: "Equipment", data: summary.equipment, detail: "Current ETA and approval state" },
+    { key: "buddy", label: "Buddy support", data: summary.buddy, detail: summary.buddy.candidate_name ?? "No candidate selected" },
+    { key: "compliance", label: "Compliance", data: summary.compliance, detail: `${summary.compliance.open_tasks} of ${summary.compliance.total_tasks} task${summary.compliance.total_tasks === 1 ? "" : "s"} open` },
+  ];
+  return (
+    <section className="panel attention-panel" aria-labelledby="attention-heading">
+      <div className="panel-kicker"><span id="attention-heading">ATTENTION SUMMARY</span><span>current case state</span></div>
+      <div className="attention-grid">
+        {items.map((item) => (
+          <article className="attention-card" key={item.key}>
+            <div className="attention-card-top"><span className="attention-label">{item.label}</span><span className={`attention-status ${attentionTone(item.data.status)}`}>{item.data.status}</span></div>
+            <strong>{item.detail}</strong>
+            <p>Owner: {item.data.owner_name}</p>
+            <span className="attention-next">Next: {item.data.next_action}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BuddyCandidateCard({
+  assessment,
+  selected,
+  recommended,
+  request,
+  canRequest,
+  onRequest,
+}: {
+  assessment: BuddyCandidateAssessment;
+  selected: boolean;
+  recommended: boolean;
+  request: BuddyRequest | null;
+  canRequest: boolean;
+  onRequest: (candidateId: string) => void;
+}) {
+  const { candidate, eligibility, availability } = assessment;
+  const isRequested = request?.candidate_id === candidate.id;
+  const canChoose = canRequest && eligibility.eligible && availability.status === "available";
+  return (
+    <article className={`candidate-card ${selected ? "selected" : ""} ${isRequested ? "requested" : ""} ${recommended ? "recommended" : ""}`}>
+      <div className="candidate-card-top">
+        <div className="candidate-identity"><span className="candidate-avatar">{initials(candidate.full_name)}</span><div><h4>{candidate.full_name}</h4><p>{candidate.team} / {candidate.office}</p></div></div>
+        <div className="candidate-tags">{recommended && <span className="candidate-recommended">Recommended</span>}<span className={`candidate-eligibility ${eligibility.eligible ? "eligible" : "ineligible"}`}>{eligibility.eligible ? "Eligible" : "Not eligible"}</span></div>
+      </div>
+      <div className="candidate-metrics"><span>{candidate.active_buddies} active assignment{candidate.active_buddies === 1 ? "" : "s"}</span><span>{candidate.tenure_months} months tenure</span></div>
+      <div className={`candidate-availability ${availability.status}`}><strong>{availabilityLabel(availability.status)}</strong><span>{availability.reason}</span></div>
+      {eligibility.reasons.length > 0 && (
+        <ul className="candidate-reasons">
+          {eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+        </ul>
+      )}
+      {availability.slots.length > 0 && (
+        <div className="candidate-slots">
+          <span className="source-label">PROPOSED FIRST-WEEK SLOTS</span>
+          {availability.slots.map((slot) => <span key={slot.id}><strong>{slot.kind}</strong> {formatSlot(slot)} <em>{slot.timezone}</em></span>)}
+        </div>
+      )}
+      <div className="candidate-card-footer">
+        {isRequested && <span className="requested-note">Current request</span>}
+        {canChoose && <button className="button secondary candidate-button" onClick={() => onRequest(candidate.id)}>Request {candidate.full_name}</button>}
+      </div>
+    </article>
+  );
+}
+
 async function postDemo(body: Record<string, string> = {}) {
   const response = await fetch("/api/demo", {
     method: "POST",
@@ -142,12 +335,16 @@ function decisionClass(run: DemoResponse) {
 export default function Home() {
   const [run, setRun] = useState<DemoResponse | null>(null);
   const [dateDraft, setDateDraft] = useState("");
-  const [busy, setBusy] = useState<"start" | "date" | DemoDecision | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"start" | "date" | "retry" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function acceptRun(next: DemoResponse) {
     setRun(next);
     setDateDraft(next.joiner.start_date);
+    setSelectedCandidateId(activeBuddyRequest(next.buddy.request)
+      ? next.buddy.request?.candidate_id ?? null
+      : next.buddy.availability.recommendation?.candidate_id ?? null);
   }
 
   async function startFlow() {
@@ -190,7 +387,7 @@ export default function Home() {
 
   async function retryDraft() {
     if (!run || run.screen_state !== "draft_unavailable") return;
-    setBusy("date");
+    setBusy("retry");
     setError(null);
     try {
       acceptRun(await postDemo({ run_id: run.run_id, action: "retry_draft" }));
@@ -201,8 +398,97 @@ export default function Home() {
     }
   }
 
+  async function prepareBuddy(candidateId: string) {
+    if (!run) return;
+    setSelectedCandidateId(candidateId);
+    setBusy("buddy_prepare");
+    setError(null);
+    try {
+      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_prepare", candidate_id: candidateId }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The buddy request could not be prepared");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function simulateAvailability(candidateId: string) {
+    if (!run) return;
+    setBusy("availability");
+    setError(null);
+    try {
+      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_availability_change", candidate_id: candidateId }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The simulated availability change failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function decideBuddy(decision: DemoDecision) {
+    if (!run || !run.buddy.request || !run.buddy.draft || run.buddy.request.status !== "pending_approval") return;
+    setBusy(decision === "approve" ? "buddy_approve" : "buddy_reject");
+    setError(null);
+    try {
+      acceptRun(await postDemo({
+        run_id: run.run_id,
+        action: "buddy_decision",
+        request_id: run.buddy.request.id,
+        draft_id: run.buddy.draft.id,
+        decision,
+      }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The buddy approval action failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function simulateBuddyResponse(response: "accepted" | "declined") {
+    if (!run || !run.buddy.request || run.buddy.request.status !== "awaiting_acceptance") return;
+    setBusy(response === "accepted" ? "buddy_accept" : "buddy_decline");
+    setError(null);
+    try {
+      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_response", request_id: run.buddy.request.id, response }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The simulated buddy response failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function confirmBuddyAllocation() {
+    if (!run || !run.buddy.request || run.buddy.request.status !== "accepted") return;
+    setBusy("buddy_confirm");
+    setError(null);
+    try {
+      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_confirm", request_id: run.buddy.request.id }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The buddy confirmation failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const isPending = run?.screen_state === "awaiting_decision" && !!run.draft;
   const wasApproved = run?.decision === "approve";
+  const buddyRequest = run?.buddy.request ?? null;
+  const hasActiveBuddy = activeBuddyRequest(buddyRequest);
+  const recommendedBuddy = run?.buddy.availability.recommendation;
+  const simulationTarget = buddyRequest?.status === "pending_approval" || buddyRequest?.status === "awaiting_acceptance" || buddyRequest?.status === "accepted"
+    ? buddyRequest.candidate_id
+    : recommendedBuddy?.candidate_id;
+  const buddyCandidates = run ? (() => {
+    const top = run.buddy.availability.candidates.slice(0, 3);
+    const currentRequestCandidate = buddyRequest && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(buddyRequest.status)
+      ? buddyRequest.candidate_id
+      : undefined;
+    const requiredId = currentRequestCandidate ?? recommendedBuddy?.candidate_id;
+    if (!requiredId || top.some((assessment) => assessment.candidate.id === requiredId)) return top;
+    const required = run.buddy.availability.candidates.find((assessment) => assessment.candidate.id === requiredId);
+    return required ? [...top.slice(0, 2), required] : top;
+  })() : [];
+  const simulationCandidate = run?.buddy.availability.candidates.find((assessment) => assessment.candidate.id === simulationTarget && assessment.availability.status === "available");
   const timelineItems = run ? [
     { key: "contract", at: run.facts.contract_signed_at, date: formatDateTime(run.facts.contract_signed_at), title: "Contract signed", detail: `${run.facts.contract_event_id} received`, tone: "" },
     { key: "equipment-task", at: run.facts.equipment_task_due_at, date: `Due ${formatDateTime(run.facts.equipment_task_due_at)}`, title: run.facts.equipment_task_title, detail: `Owner: ${run.facts.equipment_owner_name}`, tone: "" },
@@ -251,6 +537,7 @@ export default function Home() {
 
       {run && (
         <>
+          <AttentionSummaryPanel summary={run.attention} />
           <section className="flow-grid">
             <article className="panel case-panel">
               <div className="panel-kicker"><span>CASE / {run.case.id}</span><span className="state-chip">{run.case.state.replaceAll("_", " ")}</span></div>
@@ -374,13 +661,93 @@ export default function Home() {
             </article>
           </section>
 
+          <section className="panel buddy-panel" aria-labelledby="buddy-support-heading">
+            <div className="panel-kicker"><span id="buddy-support-heading">BUDDY SUPPORT</span><span className="simulation-badge">SIMULATED CALENDAR / NO INVITE</span></div>
+            <div className="buddy-panel-heading">
+              <div>
+                <p className="eyebrow">PEOPLE DECISION</p>
+                <h2>Find support for Aisha&apos;s first week.</h2>
+                <p>Eligibility, capacity, calendar evidence and willingness stay separate. The request is not sent until People approves this exact preview.</p>
+              </div>
+              {simulationCandidate && (
+                <button className="button secondary simulation-button" onClick={() => simulateAvailability(simulationCandidate.candidate.id)} disabled={busy !== null}>
+                  {busy === "availability" ? "Refreshing calendar..." : `Simulate ${simulationCandidate.candidate.full_name} unavailable`}
+                </button>
+              )}
+            </div>
+
+            <div className="comparison-heading"><div><p className="eyebrow">CANDIDATE COMPARISON</p><h3>Current policy and calendar snapshot</h3></div><span className="section-note">top {buddyCandidates.length} of {run.buddy.availability.candidates.length}</span></div>
+            <div className="candidate-grid">
+              {buddyCandidates.map((assessment) => (
+                <BuddyCandidateCard
+                  key={assessment.candidate.id}
+                  assessment={assessment}
+                  selected={selectedCandidateId === assessment.candidate.id}
+                  recommended={recommendedBuddy?.candidate_id === assessment.candidate.id}
+                  request={buddyRequest}
+                  canRequest={!hasActiveBuddy && busy === null}
+                  onRequest={prepareBuddy}
+                />
+              ))}
+            </div>
+
+            {run.buddy.availability.escalation && !run.buddy.availability.recommendation && (
+              <div className="buddy-escalation" role="status"><strong>People review required</strong><p>{run.buddy.availability.escalation.summary}</p></div>
+            )}
+
+            <div className="request-preview">
+              <div className="comparison-heading request-heading"><div><p className="eyebrow">REQUEST PREVIEW</p><h3>One exact commitment, held for approval</h3></div>{buddyRequest && <span className={`request-status ${buddyRequest.status}`}>{requestLabel(buddyRequest.status)}</span>}</div>
+              {!buddyRequest && (
+                <div className="request-empty"><strong>No buddy request prepared.</strong><p>Select an eligible candidate with two known slots to create a fixed request preview. No message is sent by comparing candidates.</p></div>
+              )}
+              {buddyRequest && (
+                <div className="request-preview-card">
+                  <div className="request-card-top"><div><span className="source-label">CANDIDATE</span><strong>{buddyRequest.candidate_name}</strong></div><div><span className="source-label">START DATE</span><strong>{formatDate(buddyRequest.start_date)}</strong></div><div><span className="source-label">REQUEST ID</span><strong>{buddyRequest.id}</strong></div></div>
+                  {run.buddy.draft && (
+                    <div className="buddy-message-preview">
+                      <div className="draft-preview-label"><span className="source-label">EXACT DRAFT / {run.buddy.draft.status.toUpperCase()}</span><span className="simulation-badge">FIXED MOCK TEMPLATE</span></div>
+                      <h4>{run.buddy.draft.subject}</h4>
+                      <p>{run.buddy.draft.body}</p>
+                      <span className="draft-boundary">Draft content is fixed for this mock run. The live adapter is not used here.</span>
+                    </div>
+                  )}
+                  <div className="request-slots"><div className="request-slots-heading"><span className="source-label">{buddyRequest.status === "confirmed" ? "CONFIRMED COMMITMENT" : "PROPOSED COMMITMENT"}</span><span>{buddyRequest.slots.length} sessions / first working week</span></div>{buddyRequest.slots.map((slot) => <div className="request-slot" key={slot.id}><span className="slot-kind">{slot.kind}</span><strong>{formatSlot(slot)}</strong><span>{slot.duration_minutes} min / {slot.timezone}</span></div>)}</div>
+
+                  {buddyRequest.status === "pending_approval" && run.buddy.draft && (
+                    <div className="buddy-actions approval-actions"><p>Draft awaiting your approval</p><div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}<span aria-hidden="true">↗</span></button></div></div>
+                  )}
+                  {buddyRequest.status === "awaiting_acceptance" && run.buddy.after_approval?.status === "ok" && (
+                    <div className="simulation-response" role="status"><div className="simulation-response-heading"><span className="simulation-badge">SIMULATED RESPONSE</span><strong>Message receipt is recorded. No real buddy was contacted.</strong></div><p>Choose the response for this exact request. Acceptance is separate from People confirmation.</p><div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div></div>
+                  )}
+                  {buddyRequest.status === "accepted" && (
+                    <div className="simulation-response accepted-response" role="status"><div className="simulation-response-heading"><span className="simulation-badge">SIMULATED ACCEPTANCE</span><strong>{buddyRequest.candidate_name} accepted this request.</strong></div><p>People confirmation is still required before the allocation task can complete.</p><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
+                  )}
+                  {buddyRequest.status === "confirmed" && (
+                    <div className="resolution-card positive buddy-resolution" role="status"><span className="resolution-icon">✓</span><div><strong>Allocation confirmed by People.</strong><p>{buddyRequest.candidate_name} is recorded on this case. The task was completed by {buddyRequest.confirmed_by_name ?? "the named People actor"}.</p></div></div>
+                  )}
+                  {buddyRequest.status === "declined" && (
+                    <div className="resolution-card unavailable buddy-resolution" role="status"><span className="resolution-icon">!</span><div><strong>Buddy declined in simulation.</strong><p>No replacement request was sent automatically. Choose another current candidate above.</p></div></div>
+                  )}
+                  {buddyRequest.status === "rejected" && (
+                    <div className="resolution-card negative buddy-resolution" role="status"><span className="resolution-icon">×</span><div><strong>People rejected the request.</strong><p>No message was sent. Choose another current candidate above.</p></div></div>
+                  )}
+                  {buddyRequest.status === "superseded" && (
+                    <div className="resolution-card unavailable buddy-resolution" role="status"><span className="resolution-icon">!</span><div><strong>Request superseded by current facts.</strong><p>{buddyRequest.invalidation_reason ?? "Availability or the start date changed."} Prepare a new request from the refreshed comparison.</p></div></div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="panel trace-panel">
-            <div className="panel-kicker"><span>AGENT TRACE</span><span>{run.trace.length} events</span></div>
+            <div className="panel-kicker"><span>AGENT TRACE</span><span>{run.trace.length} events / source-of-truth history</span></div>
+            <div className="trace-legend"><span><i className="trace-legend-dot system" /> system</span><span><i className="trace-legend-dot agent" /> agent</span><span><i className="trace-legend-dot human" /> human or simulation input</span></div>
             <div className="trace-list">
               {run.trace.map((step, index) => (
                 <div className="trace-row" key={`${step.kind}-${index}`}>
                   <span className={`trace-marker ${step.actor}`} />
                   <span className="trace-kind">{step.kind.replaceAll(".", " / ")}</span>
+                  <span className="trace-actor">{step.actor}</span>
                   <span className="trace-summary">{step.summary}</span>
                 </div>
               ))}

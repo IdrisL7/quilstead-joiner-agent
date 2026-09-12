@@ -120,4 +120,40 @@ describe("demo approval route", () => {
       else process.env.ANTHROPIC_API_KEY = previousKey;
     }
   });
+
+  it("projects current attention and refreshes the candidate recommendation after simulated availability changes", async () => {
+    const initialResponse = await POST(request());
+    expect(initialResponse.status).toBe(200);
+    const initial = await initialResponse.json() as {
+      run_id: string;
+      attention: { equipment: { status: string }; buddy: { status: string }; compliance: { open_tasks: number; total_tasks: number } };
+      buddy: { availability: { recommendation: { candidate_id: string } | null } };
+    };
+
+    expect(initial.attention.equipment.status).toBe("Needs approval");
+    expect(initial.attention.buddy.status).toBe("Ready for review");
+    expect(initial.attention.compliance.open_tasks).toBeGreaterThan(0);
+    expect(initial.attention.compliance.total_tasks).toBeGreaterThanOrEqual(initial.attention.compliance.open_tasks);
+    expect(initial.buddy.availability.recommendation?.candidate_id).toBe("b-06");
+
+    const changedResponse = await POST(request({
+      run_id: initial.run_id,
+      action: "buddy_availability_change",
+      candidate_id: "b-06",
+    }));
+    expect(changedResponse.status).toBe(200);
+    const changed = await changedResponse.json() as {
+      buddy: {
+        availability: {
+          recommendation: { candidate_id: string } | null;
+          candidates: Array<{ candidate: { id: string }; availability: { status: string } }>;
+        };
+      };
+      trace: Array<{ kind: string; summary: string }>;
+    };
+
+    expect(changed.buddy.availability.recommendation?.candidate_id).toBe("b-01");
+    expect(changed.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-06")?.availability.status).toBe("unknown");
+    expect(changed.trace.some((step) => step.kind === "simulation.buddy_calendar.changed")).toBe(true);
+  });
 });
