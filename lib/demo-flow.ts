@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buddyById } from "@/data/buddies";
 import { EVENTS } from "@/data/events";
 import { joinerById } from "@/data/joiners";
 import { personById } from "@/data/people";
@@ -15,7 +16,9 @@ import { draftEquipmentNudge, type NudgeModelDraft } from "@/lib/model";
 import { CaseStore } from "@/lib/store/case-store";
 import { currentJoinerById } from "@/lib/store/joiner-store";
 import { resetDemoState } from "@/lib/store/demo-state";
-import type { Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
+import { deriveState } from "@/lib/state-machine";
+import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
+import type { BuddyRequest, Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
 
 const DEMO_NOW = "2026-09-30T09:00:00Z";
 const DEMO_EVENT_ID = "EVT-004";
@@ -23,6 +26,8 @@ const EQUIPMENT_POLICY_ID = "equipment-policy";
 const EQUIPMENT_POLICY_QUOTE = "IT orders equipment within five working days of the contract being signed.";
 
 export type DemoDecision = "approve" | "reject";
+export type BuddyApprovalDecision = "approve" | "reject";
+export type BuddyResponseDecision = "accepted" | "declined";
 
 export interface DemoTraceEntry {
   actor: "system" | "agent" | "human";
@@ -56,6 +61,7 @@ export interface DemoDateChange {
   tasks_unchanged: number;
   tasks_added: number;
   superseded_draft_id?: string;
+  superseded_buddy_request_id?: string;
 }
 
 export interface DemoDraftUnavailable {
@@ -72,6 +78,9 @@ export interface DemoPreparation {
   equipment: ToolResult;
   beforeApproval: ToolResult | null;
   facts: DemoFacts;
+  buddy: DemoBuddyState;
+  decision?: DemoDecision;
+  afterApproval?: ToolResult;
   date_change?: DemoDateChange;
   draft_unavailable?: DemoDraftUnavailable;
   trace: DemoTraceEntry[];
@@ -89,9 +98,24 @@ export interface DemoResolution {
   beforeApproval: ToolResult;
   afterApproval: ToolResult;
   facts: DemoFacts;
+  buddy: DemoBuddyState;
   date_change?: DemoDateChange;
   draft_unavailable?: DemoDraftUnavailable;
   trace: DemoTraceEntry[];
+}
+
+export interface DemoBuddyState {
+  availability: BuddyAvailabilityResult;
+  request: BuddyRequest | null;
+  draft: Draft | null;
+  beforeApproval: ToolResult | null;
+  afterApproval?: ToolResult;
+}
+
+export interface DemoBuddyActionResult {
+  preparation: DemoPreparation;
+  conflict?: string;
+  duplicate?: boolean;
 }
 
 export interface DemoRun extends Omit<DemoPreparation, "draft" | "beforeApproval"> {
@@ -112,10 +136,145 @@ interface DraftState {
 
 const DRAFT_UNAVAILABLE_MESSAGE = "Draft unavailable. The case and dates are current, no message was sent, and you can retry drafting or change the start date.";
 
+const ACTIVE_BUDDY_REQUEST_STATUSES = new Set<BuddyRequest["status"]>([
+  "pending_approval",
+  "awaiting_acceptance",
+  "accepted",
+  "confirmed",
+]);
+
+export class BuddyFlowConflict extends Error {
+  readonly statusCode = 409;
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 function requireAction(tool: string) {
   const resolved = findAction(tool);
   if (!resolved) throw new Error(`Demo action is not registered: ${tool}`);
   return resolved;
+}
+
+function nextRunId(): string {
+  return `DEMO-RUN-${randomUUID()}`;
+}
+
+function recordCaseStep(c: Case, actor: "system" | "agent" | "human", kind: string, summary: string, at: string, data?: Record<string, unknown>): void {
+  c.steps.push({
+    id: `${c.id}-S-${String(c.steps.length + 1).padStart(4, "0")}`,
+    case_id: c.id,
+    at,
+    actor,
+    kind,
+    summary,
+    data,
+  });
+}
+
+function latestBuddyRequest(c: Case): BuddyRequest | null {
+  return c.buddy_requests.at(-1) ?? null;
+}
+
+function declinedBuddyIds(c: Case): string[] {
+  return c.buddy_requests
+    .filter((request) => request.status === "declined")
+    .map((request) => request.candidate_id);
+}
+
+function buddyTask(c: Case) {
+  return c.tasks.find((task) => task.type === "buddy_allocation");
+}
+
+function updateBuddyTask(c: Case, status: "open" | "waiting_approval" | "done", detail: string, doneBy?: string, doneAt?: string): void {
+  const task = buddyTask(c);
+  if (!task) throw new Error("Demo buddy allocation task is missing from the plan");
+  task.status = status;
+  task.detail = detail;
+  if (status === "done") {
+    task.done_by = doneBy;
+    task.done_at = doneAt;
+  } else {
+    delete task.done_by;
+    delete task.done_at;
+  }
+}
+
+function buddyName(candidateId: string): string {
+  return buddyById(candidateId)?.full_name ?? candidateId;
+}
+
+function readBuddyResult(result: ToolResult): BuddyAvailabilityResult {
+  if (!result.data || typeof result.data !== "object" || !("candidates" in result.data) || !("commitment" in result.data)) {
+    throw new Error("Buddy availability result did not include the expected assessment");
+  }
+  return result.data as BuddyAvailabilityResult;
+}
+
+async function readBuddyAvailability(joiner: Joiner, startDate: string, excludedBuddyIds: string[] = []): Promise<BuddyAvailabilityResult> {
+  const tool = "buddy_directory.get_availability";
+  if (authorize(tool).mode !== "automatic") throw new Error(`${tool} is not automatic`);
+  const action = requireAction(tool);
+  const result = await action.action.run({ joiner_id: joiner.id, start_date: startDate, exclude_buddy_ids: excludedBuddyIds });
+  if (result.status === "error" || result.status === "denied") throw new Error(result.summary);
+  return readBuddyResult(result);
+}
+
+function sameSlots(left: BuddyRequest["slots"], right: BuddyRequest["slots"]): boolean {
+  return left.length === right.length && left.every((slot, index) => {
+    const other = right[index];
+    return other
+      && slot.id === other.id
+      && slot.kind === other.kind
+      && slot.start_at === other.start_at
+      && slot.end_at === other.end_at
+      && slot.timezone === other.timezone
+      && slot.duration_minutes === other.duration_minutes;
+  });
+}
+
+function availabilityMatchesRequest(availability: BuddyAvailabilityResult, request: BuddyRequest): boolean {
+  const candidate = availability.candidates.find((assessment) => assessment.candidate.id === request.candidate_id);
+  return availability.start_date === request.start_date
+    && candidate?.eligibility.eligible === true
+    && candidate.availability.status === "available"
+    && sameSlots(request.slots, candidate.availability.slots);
+}
+
+function updateCaseDraftFromTrustedState(c: Case, draftId: string, status: Draft["status"], decidedBy?: string, decidedAt?: string, reason?: string): Draft {
+  const draft = c.drafts.find((candidate) => candidate.id === draftId);
+  if (!draft) throw new Error(`Demo case draft is missing: ${draftId}`);
+  draft.status = status;
+  draft.decided_by = decidedBy;
+  draft.decided_at = decidedAt;
+  draft.decision_reason = reason;
+  return draft;
+}
+
+function invalidateBuddyRequest(c: Case, request: BuddyRequest, now: string, reason: string): void {
+  if (request.status === "pending_approval") {
+    supersedeDraft(request.draft_id, now, reason);
+    updateCaseDraftFromTrustedState(c, request.draft_id, "rejected", undefined, now, reason);
+  }
+  request.status = "superseded";
+  request.invalidated_at = now;
+  request.invalidation_reason = reason;
+  updateBuddyTask(c, "open", reason);
+  recordCaseStep(c, "system", "buddy.request.invalidated", `Buddy request ${request.id} for ${buddyName(request.candidate_id)} was invalidated. ${reason}`, now, {
+    request_id: request.id,
+    draft_id: request.draft_id,
+    candidate_id: request.candidate_id,
+  });
+}
+
+function buddyState(
+  availability: BuddyAvailabilityResult,
+  request: BuddyRequest | null,
+  draft: Draft | null = null,
+  beforeApproval: ToolResult | null = null,
+  afterApproval?: ToolResult,
+): DemoBuddyState {
+  return { availability, request, draft, beforeApproval, afterApproval };
 }
 
 function traceFromCase(c: Case): DemoTraceEntry[] {
@@ -278,7 +437,7 @@ async function createDraftWithRecovery(
 
 export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?? "mock"): Promise<DemoPreparation> {
   resetDemoState();
-  const runId = `DEMO-RUN-${randomUUID()}`;
+  const runId = nextRunId();
 
   const event = EVENTS.find((candidate) => candidate.event_id === DEMO_EVENT_ID && candidate.type === "contract.signed");
   if (!event) throw new Error(`Demo event is not registered: ${DEMO_EVENT_ID}`);
@@ -302,6 +461,16 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
   trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
   const facts = buildDemoFacts(c, event, joiner, equipment);
   const generated = await createDraftForCurrentState(c, joiner, equipment, facts, now, mode);
+  const availability = await readBuddyAvailability(joiner, c.start_date);
+  const availabilitySummary = availability.recommendation
+    ? `Recommended ${availability.recommendation.candidate_name} from the current first-week calendar snapshot.`
+    : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
+  recordCaseStep(c, "agent", "tool.buddy_directory.get_availability", availabilitySummary, now);
+  trace.push({
+    actor: "agent",
+    kind: "tool.buddy_directory.get_availability",
+    summary: availabilitySummary,
+  });
 
   return {
     run_id: runId,
@@ -313,6 +482,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
     equipment,
     beforeApproval: generated.beforeApproval,
     facts,
+    buddy: buddyState(availability, null),
     draft_unavailable: generated.unavailable,
     trace: [...trace, ...generated.trace],
     store,
@@ -341,6 +511,14 @@ export async function changeDemoStartDate(
     markCaseDraftSuperseded(preparation.case, supersededDraftId, now, reason);
   }
 
+  const supersededBuddyRequest = latestBuddyRequest(preparation.case);
+  const supersededBuddyRequestId = supersededBuddyRequest && ACTIVE_BUDDY_REQUEST_STATUSES.has(supersededBuddyRequest.status)
+    ? supersededBuddyRequest.id
+    : undefined;
+  if (supersededBuddyRequestId && supersededBuddyRequest) {
+    invalidateBuddyRequest(preparation.case, supersededBuddyRequest, now, "Start date changed before the buddy commitment was revalidated.");
+  }
+
   const event: HrisEvent = {
     event_id: `DEMO-START-${randomUUID()}`,
     type: "joiner.start_date_changed",
@@ -354,6 +532,7 @@ export async function changeDemoStartDate(
   const updatedJoiner = currentJoinerById(preparation.joiner.id) ?? { ...currentJoiner, start_date: newStartDate };
   const facts = buildDemoFacts(recomputed.case, preparation.event, updatedJoiner, preparation.equipment);
   const generated = await createDraftWithRecovery(recomputed.case, updatedJoiner, preparation.equipment, facts, now, mode);
+  const availability = await readBuddyAvailability(updatedJoiner, newStartDate, declinedBuddyIds(recomputed.case));
   const dateChange: DemoDateChange = {
     previous_start_date: previousStartDate,
     new_start_date: newStartDate,
@@ -364,11 +543,14 @@ export async function changeDemoStartDate(
     tasks_unchanged: recomputed.unchanged,
     tasks_added: recomputed.added,
     superseded_draft_id: supersededDraftId,
+    superseded_buddy_request_id: supersededBuddyRequestId,
   };
   const trace = [
     ...preparation.trace,
     { actor: "system" as const, kind: "start_date.changed", summary: `Start date ${previousStartDate} -> ${newStartDate}; ${recomputed.deadlineChanged} deadlines moved and ${recomputed.changed} tasks reconciled.` },
     ...(supersededDraftId ? [{ actor: "system" as const, kind: "draft.superseded", summary: `Draft ${supersededDraftId} is unavailable after the start-date change.` }] : []),
+    ...(supersededBuddyRequestId ? [{ actor: "system" as const, kind: "buddy.request.superseded", summary: `Buddy request ${supersededBuddyRequestId} is unavailable after the start-date change.` }] : []),
+    { actor: "agent" as const, kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} for the revised first week.` : availability.escalation?.summary ?? "No buddy recommendation is available for the revised first week." },
     ...generated.trace,
   ];
 
@@ -381,6 +563,7 @@ export async function changeDemoStartDate(
     draft: generated.draft,
     beforeApproval: generated.beforeApproval,
     facts,
+    buddy: buddyState(availability, latestBuddyRequest(recomputed.case)),
     date_change: dateChange,
     draft_unavailable: generated.unavailable,
     trace,
@@ -442,7 +625,7 @@ export async function resolveDemoApproval(
   });
 
   return {
-    run_id: preparation.run_id,
+    run_id: nextRunId(),
     decision,
     case: preparation.case,
     joiner: preparation.joiner,
@@ -452,9 +635,297 @@ export async function resolveDemoApproval(
     beforeApproval: preparation.beforeApproval,
     afterApproval,
     facts: preparation.facts,
+    buddy: preparation.buddy,
     date_change: preparation.date_change,
     draft_unavailable: preparation.draft_unavailable,
     trace,
+  };
+}
+
+function buddyRequestBody(joiner: Joiner, candidateName: string, slots: BuddyRequest["slots"]): string {
+  const slotSummary = slots
+    .map((slot) => `${slot.kind} ${slot.start_at} to ${slot.end_at} (${slot.timezone})`)
+    .join("; ");
+  return `Hi ${candidateName}, could you support ${joiner.preferred_name} as their onboarding buddy? The proposed commitment is one introduction and one shadowing session during the first working week: ${slotSummary}. Please accept or decline this specific request.`;
+}
+
+export async function prepareBuddyRequest(
+  preparation: DemoPreparation,
+  candidateId?: string,
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const existing = latestBuddyRequest(preparation.case);
+  if (existing && ACTIVE_BUDDY_REQUEST_STATUSES.has(existing.status)) {
+    throw new BuddyFlowConflict(`Buddy request ${existing.id} is already ${existing.status}. Await its next decision before preparing another request.`);
+  }
+
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  const selectedId = candidateId ?? availability.recommendation?.candidate_id;
+  const selected = selectedId
+    ? availability.candidates.find((assessment) => assessment.candidate.id === selectedId)
+    : undefined;
+  if (!selected || !selected.eligibility.eligible || selected.availability.status !== "available") {
+    throw new BuddyFlowConflict(
+      selectedId
+        ? `${buddyName(selectedId)} is not a current eligible and available candidate. Prepare a new request from the current assessment.`
+        : availability.escalation?.summary ?? "No current eligible buddy has the required first-week slots.",
+    );
+  }
+
+  const requestId = `BUDDY-REQ-${randomUUID()}`;
+  const draftId = `DRAFT-BUDDY-${randomUUID()}`;
+  const draft: Draft = {
+    id: draftId,
+    case_id: preparation.case.id,
+    kind: "buddy_intro",
+    action: "slack.send_message",
+    channel: "slack",
+    to: selected.candidate.id,
+    subject: `Buddy support request for ${preparation.joiner.preferred_name}`,
+    body: buddyRequestBody(preparation.joiner, selected.candidate.full_name, selected.availability.slots),
+    status: "pending",
+    created_at: now,
+  };
+  if (!registerDraft(draft)) throw new Error(`Buddy draft was not registered: ${draft.id}`);
+
+  const request: BuddyRequest = {
+    id: requestId,
+    case_id: preparation.case.id,
+    draft_id: draftId,
+    candidate_id: selected.candidate.id,
+    start_date: preparation.case.start_date,
+    slots: selected.availability.slots.map((slot) => ({ ...slot })),
+    status: "pending_approval",
+    created_at: now,
+  };
+  preparation.case.drafts.push({ ...draft, citations: draft.citations ? [...draft.citations] : undefined });
+  preparation.case.buddy_requests.push(request);
+  updateBuddyTask(preparation.case, "waiting_approval", `Buddy request ${request.id} awaits People approval for ${selected.candidate.full_name}.`);
+  recordCaseStep(preparation.case, "agent", "buddy.request.prepared", `Prepared a fixed buddy request for ${selected.candidate.full_name} with two proposed first-week slots.`, now, {
+    request_id: request.id,
+    draft_id: draft.id,
+    candidate_id: request.candidate_id,
+    start_date: request.start_date,
+    slots: request.slots,
+  });
+  recordCaseStep(preparation.case, "agent", "draft.created", `Draft ${draft.id} created for the buddy request and awaits People approval.`, now, {
+    draft_id: draft.id,
+    request_id: request.id,
+  });
+
+  const slackAction = requireAction("slack.send_message");
+  const beforeApproval = await slackAction.action.run({ draft_id: draft.id, now });
+  recordCaseStep(preparation.case, "system", "send.refused", beforeApproval.summary, now, { draft_id: draft.id, request_id: request.id });
+
+  return {
+    ...preparation,
+    run_id: nextRunId(),
+    buddy: buddyState(availability, request, draft, beforeApproval),
+    trace: [
+      ...preparation.trace,
+      { actor: "agent", kind: "buddy.request.prepared", summary: `Prepared a fixed buddy request for ${selected.candidate.full_name} with two proposed first-week slots.` },
+      { actor: "agent", kind: "draft.created", summary: `Draft ${draft.id} created for the buddy request and awaits People approval.` },
+      { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
+    ],
+  };
+}
+
+async function invalidateBuddyForAvailabilityChange(
+  preparation: DemoPreparation,
+  request: BuddyRequest,
+  availability: BuddyAvailabilityResult,
+  now: string,
+  reason: string,
+): Promise<DemoBuddyActionResult> {
+  invalidateBuddyRequest(preparation.case, request, now, reason);
+  const updated: DemoPreparation = {
+    ...preparation,
+    run_id: nextRunId(),
+    buddy: buddyState(availability, request),
+    trace: [
+      ...preparation.trace,
+      { actor: "system", kind: "buddy.request.invalidated", summary: `Buddy request ${request.id} was invalidated because the current availability no longer matches the reviewed proposal.` },
+      { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} from the refreshed availability.` : availability.escalation?.summary ?? "No buddy recommendation is available from the refreshed availability." },
+    ],
+  };
+  return { preparation: updated, conflict: `${reason} The old request cannot be approved or confirmed; prepare a new request from the refreshed facts.` };
+}
+
+export async function resolveBuddyApproval(
+  preparation: DemoPreparation,
+  requestId: string,
+  draftId: string,
+  decision: BuddyApprovalDecision,
+  decidedBy = "pp-1",
+  now = DEMO_NOW,
+): Promise<DemoBuddyActionResult> {
+  const request = preparation.case.buddy_requests.find((candidate) => candidate.id === requestId);
+  if (!request || preparation.buddy.request?.id !== requestId || preparation.buddy.draft?.id !== draftId) {
+    throw new BuddyFlowConflict("This buddy request or draft is no longer the current reviewed action.");
+  }
+  if (request.status !== "pending_approval") {
+    throw new BuddyFlowConflict(`Buddy request ${request.id} is ${request.status} and cannot receive another approval decision.`);
+  }
+  if (personById(decidedBy)?.function !== "people") {
+    throw new BuddyFlowConflict("Buddy requests must be approved or rejected by a named People actor.");
+  }
+  if (preparation.buddy.draft.status !== "pending") {
+    throw new BuddyFlowConflict(`Buddy draft ${draftId} is ${preparation.buddy.draft.status} and cannot receive another approval decision.`);
+  }
+
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  if (!availabilityMatchesRequest(availability, request)) {
+    return invalidateBuddyForAvailabilityChange(
+      preparation,
+      request,
+      availability,
+      now,
+      "Buddy availability changed after the request was prepared.",
+    );
+  }
+
+  const changed = decision === "approve"
+    ? approveDraft(draftId, decidedBy, now)
+    : rejectDraft(draftId, decidedBy, now, "Rejected in the approval screen.");
+  if (!changed) throw new BuddyFlowConflict(`Buddy approval could not be recorded for ${draftId}.`);
+
+  const draft = updateCaseDraftFromTrustedState(
+    preparation.case,
+    draftId,
+    decision === "approve" ? "approved" : "rejected",
+    decidedBy,
+    now,
+    decision === "reject" ? "Rejected in the approval screen." : undefined,
+  );
+  const trace = [...preparation.trace, {
+    actor: "human" as const,
+    kind: decision === "approve" ? "buddy.request.approved" : "buddy.request.rejected",
+    summary: decision === "approve"
+      ? `Buddy request ${request.id} and exact draft ${draft.id} approved by ${decidedBy}.`
+      : `Buddy request ${request.id} rejected by ${decidedBy}. No message was sent.`,
+  }];
+
+  const slackAction = requireAction("slack.send_message");
+  const afterApproval = await slackAction.action.run({ draft_id: draft.id, now });
+  if (decision === "approve") {
+    request.status = "awaiting_acceptance";
+    request.sent_at = now;
+    updateBuddyTask(preparation.case, "open", `Awaiting ${buddyName(request.candidate_id)} response to request ${request.id}.`);
+  } else {
+    request.status = "rejected";
+    updateBuddyTask(preparation.case, "open", `People rejected buddy request ${request.id}; no request was sent.`);
+  }
+  recordCaseStep(preparation.case, "human", decision === "approve" ? "buddy.request.approved" : "buddy.request.rejected", trace.at(-1)!.summary, now, {
+    request_id: request.id,
+    draft_id: draft.id,
+    decided_by: decidedBy,
+  });
+  recordCaseStep(preparation.case, "system", decision === "approve" ? "buddy.request.sent" : "send.refused", afterApproval.summary, now, {
+    request_id: request.id,
+    draft_id: draft.id,
+  });
+  trace.push({ actor: "system", kind: decision === "approve" ? "buddy.request.sent" : "send.refused", summary: afterApproval.summary });
+
+  return {
+    preparation: {
+      ...preparation,
+      run_id: nextRunId(),
+      buddy: buddyState(availability, request, draft, preparation.buddy.beforeApproval, afterApproval),
+      trace,
+    },
+  };
+}
+
+export async function recordBuddyResponse(
+  preparation: DemoPreparation,
+  requestId: string,
+  response: BuddyResponseDecision,
+  now = DEMO_NOW,
+): Promise<DemoBuddyActionResult> {
+  const request = preparation.case.buddy_requests.find((candidate) => candidate.id === requestId);
+  if (!request || preparation.buddy.request?.id !== requestId) {
+    throw new BuddyFlowConflict("This buddy response does not match the current request.");
+  }
+  if (request.status !== "awaiting_acceptance" || request.sent_at === undefined || preparation.buddy.afterApproval?.status !== "ok") {
+    throw new BuddyFlowConflict("Buddy responses are accepted only for the current successfully sent request.");
+  }
+
+  request.status = response === "accepted" ? "accepted" : "declined";
+  request.response = response;
+  request.responded_at = now;
+  const summary = response === "accepted"
+    ? `${buddyName(request.candidate_id)} accepted request ${request.id}; People confirmation is still required.`
+    : `${buddyName(request.candidate_id)} declined request ${request.id}; no replacement request was sent.`;
+  updateBuddyTask(preparation.case, "open", response === "accepted" ? `Awaiting People confirmation of ${buddyName(request.candidate_id)}.` : `Buddy request ${request.id} declined; People must choose another candidate.`);
+  recordCaseStep(preparation.case, "system", "buddy.response.simulated", summary, now, {
+    request_id: request.id,
+    candidate_id: request.candidate_id,
+    response,
+  });
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  return {
+    preparation: {
+      ...preparation,
+      run_id: nextRunId(),
+      buddy: buddyState(availability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
+      trace: [
+        ...preparation.trace,
+        { actor: "system", kind: "buddy.response.simulated", summary },
+        { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} as the next candidate.` : availability.escalation?.summary ?? "No replacement buddy recommendation is available." },
+      ],
+    },
+  };
+}
+
+export async function confirmBuddy(
+  preparation: DemoPreparation,
+  requestId: string,
+  confirmedBy = "pp-1",
+  now = DEMO_NOW,
+): Promise<DemoBuddyActionResult> {
+  const request = preparation.case.buddy_requests.find((candidate) => candidate.id === requestId);
+  if (!request || preparation.buddy.request?.id !== requestId) {
+    throw new BuddyFlowConflict("This People confirmation does not match the current request.");
+  }
+  if (request.status === "confirmed" && preparation.case.buddy_id === request.candidate_id) {
+    return { preparation, duplicate: true };
+  }
+  if (request.status !== "accepted") {
+    throw new BuddyFlowConflict(`Buddy request ${request.id} is ${request.status}; buddy acceptance must precede People confirmation.`);
+  }
+  if (personById(confirmedBy)?.function !== "people") {
+    throw new BuddyFlowConflict("Buddy allocation must be confirmed by a named People actor.");
+  }
+
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  if (!availabilityMatchesRequest(availability, request)) {
+    return invalidateBuddyForAvailabilityChange(
+      preparation,
+      request,
+      availability,
+      now,
+      "Buddy availability changed before People confirmation.",
+    );
+  }
+
+  request.status = "confirmed";
+  request.confirmed_at = now;
+  request.confirmed_by = confirmedBy;
+  preparation.case.buddy_id = request.candidate_id;
+  updateBuddyTask(preparation.case, "done", `Buddy allocation confirmed for ${buddyName(request.candidate_id)}.`, confirmedBy, now);
+  recordCaseStep(preparation.case, "human", "buddy.allocation.confirmed", `${buddyName(request.candidate_id)} confirmed for ${preparation.joiner.preferred_name} by ${confirmedBy}.`, now, {
+    request_id: request.id,
+    candidate_id: request.candidate_id,
+    confirmed_by: confirmedBy,
+  });
+  preparation.case.state = deriveState(preparation.case);
+  return {
+    preparation: {
+      ...preparation,
+      run_id: nextRunId(),
+      buddy: buddyState(availability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
+      trace: [...preparation.trace, { actor: "human", kind: "buddy.allocation.confirmed", summary: `${buddyName(request.candidate_id)} confirmed by ${confirmedBy}.` }],
+    },
   };
 }
 

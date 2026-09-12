@@ -77,6 +77,7 @@ export class CaseStore {
       tasks: [],
       escalations: [],
       drafts: [],
+      buddy_requests: [],
       steps: [],
     };
     this.cases.set(id, c);

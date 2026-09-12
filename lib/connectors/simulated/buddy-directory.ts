@@ -6,6 +6,29 @@ import { joinerById } from "@/data/joiners";
 import { currentJoinerById } from "@/lib/store/joiner-store";
 import { assessBuddyAvailability } from "@/lib/policy/buddy-availability";
 import { eligibleBuddies } from "@/lib/policy/buddy";
+import type { BuddyCalendarSnapshot } from "@/lib/types";
+
+const calendarOverrides = new Map<string, BuddyCalendarSnapshot>();
+
+const cloneCalendar = (snapshot: BuddyCalendarSnapshot): BuddyCalendarSnapshot => ({
+  ...snapshot,
+  working_hours: { ...snapshot.working_hours },
+  busy_intervals: snapshot.busy_intervals.map((interval) => ({ ...interval })),
+});
+
+export const resetBuddyCalendarState = (): void => {
+  calendarOverrides.clear();
+};
+
+// A narrow simulation seam for the checkpoint-B availability-change test. It does not
+// create calendar events or add scheduling behaviour to the connector.
+export const setSimulatedBuddyCalendar = (snapshot: BuddyCalendarSnapshot): void => {
+  calendarOverrides.set(snapshot.buddy_id, cloneCalendar(snapshot));
+};
+
+function currentCalendars(): BuddyCalendarSnapshot[] {
+  return BUDDY_CALENDARS.map((snapshot) => cloneCalendar(calendarOverrides.get(snapshot.buddy_id) ?? snapshot));
+}
 
 export const buddyDirectory: Connector = {
   name: "buddy_directory",
@@ -25,12 +48,22 @@ export const buddyDirectory: Connector = {
     },
     get_availability: {
       description: "Assess eligible buddy capacity and read-only first-week calendar availability.",
-      schema: { joiner_id: "string", start_date: "iso date" },
-      run: async ({ joiner_id, start_date }) => {
+      schema: { joiner_id: "string", start_date: "iso date", exclude_buddy_ids: "string[] (optional)" },
+      run: async ({ joiner_id, start_date, exclude_buddy_ids }) => {
         const j = currentJoinerById(String(joiner_id)) ?? joinerById(String(joiner_id));
         if (!j) return failed(`No joiner ${joiner_id}`);
         const requestedStart = typeof start_date === "string" ? start_date : j.start_date;
-        const result = assessBuddyAvailability(j, BUDDIES, BUDDY_CALENDARS, requestedStart);
+        const excluded = new Set(
+          Array.isArray(exclude_buddy_ids)
+            ? exclude_buddy_ids.filter((id): id is string => typeof id === "string")
+            : [],
+        );
+        const result = assessBuddyAvailability(
+          j,
+          BUDDIES.filter((buddy) => !excluded.has(buddy.id)),
+          currentCalendars(),
+          requestedStart,
+        );
         if (result.recommendation) return ok(`Recommended ${result.recommendation.candidate_name} for ${j.id}.`, result);
         return {
           status: "warning" as const,

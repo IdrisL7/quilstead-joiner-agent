@@ -125,6 +125,35 @@ export interface BuddySlot {
   duration_minutes: number;
 }
 
+export type BuddyRequestStatus =
+  | "pending_approval"
+  | "awaiting_acceptance"
+  | "accepted"
+  | "declined"
+  | "rejected"
+  | "superseded"
+  | "confirmed";
+
+export type BuddyResponse = "accepted" | "declined";
+
+export interface BuddyRequest {
+  id: string;
+  case_id: string;
+  draft_id: string;
+  candidate_id: string;
+  start_date: string;
+  slots: BuddySlot[];
+  status: BuddyRequestStatus;
+  created_at: string;
+  sent_at?: string;
+  response?: BuddyResponse;
+  responded_at?: string;
+  confirmed_at?: string;
+  confirmed_by?: string;
+  invalidated_at?: string;
+  invalidation_reason?: string;
+}
+
 export type HrisEventType = "contract.signed" | "joiner.start_date_changed" | "joiner.withdrawn";
 
 export interface HrisEvent {
@@ -267,6 +296,7 @@ export interface Case {
   tasks: Task[];
   escalations: Escalation[];
   drafts: Draft[];
+  buddy_requests: BuddyRequest[];
   steps: Step[];
   buddy_id?: string;
   closed_at?: string;

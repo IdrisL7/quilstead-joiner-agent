@@ -34,3 +34,5 @@ export const BUDDIES: BuddyCandidate[] = [
   { id: "b-24", full_name: "Isabel Torres", office: "Austin", country: "US", timezone: "America/Chicago", team: "Finance", tenure_months: 25, active_buddies: 0, on_leave: false, opted_in: true },
   { id: "b-25", full_name: "Aaron Cole", office: "Austin", country: "US", timezone: "America/Chicago", team: "Platform", tenure_months: 13, active_buddies: 1, on_leave: false, opted_in: true },
 ];
+
+export const buddyById = (id: string): BuddyCandidate | undefined => BUDDIES.find((buddy) => buddy.id === id);
