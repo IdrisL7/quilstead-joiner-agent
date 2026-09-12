@@ -6,10 +6,35 @@ import type { BuddyCandidate, Joiner } from "@/lib/types";
 
 export const MIN_TENURE_MONTHS = 6;
 export const MAX_ACTIVE_BUDDIES = 2;
+export const BUDDY_COMMITMENT = {
+  first_week_working_days: 5,
+  slot_increment_minutes: 15,
+  working_hours: { start_local: "09:00", end_local: "17:30" },
+  sessions: [
+    { kind: "introduction", duration_minutes: 30 },
+    { kind: "shadowing", duration_minutes: 45 },
+  ],
+} as const;
+
+export interface BuddyEligibility {
+  eligible: boolean;
+  reasons: string[];
+}
+
+export function assessBuddyEligibility(joiner: Joiner, candidate: BuddyCandidate): BuddyEligibility {
+  const reasons: string[] = [];
+  if (!candidate.opted_in) reasons.push("Not opted in to buddy support.");
+  if (candidate.on_leave) reasons.push("Currently on leave.");
+  if (candidate.tenure_months < MIN_TENURE_MONTHS) reasons.push(`Tenure is ${candidate.tenure_months} months; minimum is ${MIN_TENURE_MONTHS}.`);
+  if (candidate.active_buddies >= MAX_ACTIVE_BUDDIES) reasons.push(`At capacity with ${candidate.active_buddies} active buddies.`);
+  if (joiner.work_mode === "remote" && candidate.country !== joiner.country) reasons.push("Different country from a remote joiner.");
+  if (joiner.work_mode !== "remote" && candidate.office !== joiner.office) reasons.push("Different office from the joiner.");
+  return { eligible: reasons.length === 0, reasons };
+}
 
 export function eligibleBuddies(joiner: Joiner, candidates: BuddyCandidate[]): BuddyCandidate[] {
   const base = candidates.filter(
-    (b) => b.opted_in && !b.on_leave && b.tenure_months >= MIN_TENURE_MONTHS && b.active_buddies < MAX_ACTIVE_BUDDIES,
+    (b) => assessBuddyEligibility(joiner, b).eligible,
   );
   const sameOffice = base.filter((b) => b.office === joiner.office);
   const pool =

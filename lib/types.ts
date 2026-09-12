@@ -92,6 +92,37 @@ export interface BuddyCandidate {
   opted_in: boolean;
 }
 
+export type BuddyCalendarReadStatus = "known" | "unknown" | "error";
+
+export interface BuddyBusyInterval {
+  start_at: string;
+  end_at: string;
+}
+
+export interface BuddyCalendarSnapshot {
+  buddy_id: string;
+  captured_at: string;
+  timezone: string;
+  utc_offset_minutes: number;
+  working_hours: {
+    start_local: string;
+    end_local: string;
+  };
+  read_status: BuddyCalendarReadStatus;
+  busy_intervals: BuddyBusyInterval[];
+}
+
+export type BuddyAvailabilityStatus = "available" | "busy" | "unavailable" | "unknown" | "error";
+
+export interface BuddySlot {
+  id: string;
+  kind: "introduction" | "shadowing";
+  start_at: string;
+  end_at: string;
+  timezone: string;
+  duration_minutes: number;
+}
+
 export type HrisEventType = "contract.signed" | "joiner.start_date_changed" | "joiner.withdrawn";
 
 export interface HrisEvent {
@@ -171,6 +202,7 @@ export type EscalationCode =
   | "MANAGER_UNAVAILABLE"
   | "OWNER_SLA_BREACHED"
   | "NO_ELIGIBLE_BUDDY"
+  | "NO_AVAILABLE_BUDDY"
   | "KB_NO_ANSWER"
   | "UNSAFE_ACTION_ATTEMPT"
   | "DUPLICATE_EVENT"

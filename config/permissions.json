@@ -7,6 +7,7 @@
     { "tool": "policy_kb.search", "mode": "automatic" },
     { "tool": "policy_kb.cite", "mode": "automatic", "requires": ["verbatim_substring"] },
     { "tool": "buddy_directory.list_eligible", "mode": "automatic" },
+    { "tool": "buddy_directory.get_availability", "mode": "automatic" },
     { "tool": "tasks.create", "mode": "automatic", "requires": ["diff_recorded"] },
     { "tool": "tasks.update", "mode": "automatic", "requires": ["diff_recorded"] },
     { "tool": "identity.request_access", "mode": "automatic", "requires": ["matrix_row", "approver_named"] },
