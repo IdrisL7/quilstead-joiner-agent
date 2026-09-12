@@ -72,6 +72,7 @@ h1 { max-width: 620px; margin-bottom: 14px; color: var(--navy); font-family: Geo
 .decision-chip.pending { background: var(--amber-soft); color: var(--amber); }
 .decision-chip.approved { background: var(--teal-soft); color: var(--teal); }
 .decision-chip.cleared { background: var(--teal-soft); color: var(--teal); }
+.decision-chip.failed { background: var(--red-soft); color: var(--red); }
 .decision-chip.rejected { background: var(--red-soft); color: var(--red); }
 .case-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .case-heading h2, .approval-heading h2 { margin-bottom: 8px; color: var(--navy); font-family: Georgia, serif; font-size: 33px; font-weight: 400; letter-spacing: -0.045em; line-height: 1.03; }
@@ -127,6 +128,7 @@ h1 { max-width: 620px; margin-bottom: 14px; color: var(--navy); font-family: Geo
 .change-stats { display: flex; flex-wrap: wrap; gap: 7px 13px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 
 .approval-panel { display: flex; flex-direction: column; }
+.approval-panel { align-self: start; }
 .approval-panel .panel-kicker { margin-bottom: 37px; }
 .approval-heading { margin-bottom: 21px; }
 .approval-heading h2 { max-width: 390px; font-size: 29px; }
@@ -154,15 +156,17 @@ h1 { max-width: 620px; margin-bottom: 14px; color: var(--navy); font-family: Geo
 .source-block blockquote { margin: 7px 0 0; padding-left: 11px; border-left: 2px solid #9fcac1; color: #3b5e5a; font-family: Georgia, serif; font-size: 13px; line-height: 1.45; }
 .approval-requirement { margin-top: 14px; padding: 10px 12px; background: #f5f7f4; }
 .approval-requirement p { margin: 5px 0 0; color: var(--ink); font-size: 11px; line-height: 1.4; }
-.approval-actions { margin-top: auto; padding-top: 26px; }
+.approval-actions { margin-top: 22px; padding-top: 0; }
 .approval-actions p { margin-bottom: 15px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .action-buttons { justify-content: flex-end; gap: 9px; }
-.resolution-card { display: flex; gap: 12px; align-items: flex-start; margin-top: auto; padding: 15px; }
+.resolution-card { display: flex; gap: 12px; align-items: flex-start; margin-top: 22px; padding: 15px; }
 .resolution-card.positive { background: var(--teal-soft); color: var(--teal); }
 .resolution-card.negative { background: var(--red-soft); color: var(--red); }
+.resolution-card.unavailable { background: var(--amber-soft); color: var(--amber); }
 .resolution-icon { font-size: 21px; font-weight: 700; line-height: 1; }
 .resolution-card strong { display: block; margin-bottom: 5px; font-size: 13px; }
 .resolution-card p { margin: 0; color: inherit; font-size: 11px; line-height: 1.4; opacity: 0.86; }
+.retry-button { min-height: 36px; margin-top: 13px; padding: 0 12px; font-size: 10px; }
 
 .trace-panel { margin-top: 18px; padding: 25px 27px 20px; }
 .trace-panel .panel-kicker { margin-bottom: 19px; }
@@ -186,7 +190,11 @@ footer { justify-content: space-between; gap: 20px; padding-top: 33px; color: #9
 }
 
 @media (max-width: 560px) {
-  .brand-context, .environment-pill { display: none; }
+  .brand-context { display: none; }
+  .topbar { gap: 8px; }
+  .brand-lockup { gap: 7px; min-width: 0; }
+  .brand-name { font-size: 11px; }
+  .environment-pill { display: flex; flex: 0 0 auto; gap: 6px; padding: 7px 8px; font-size: 8px; letter-spacing: 0.07em; white-space: nowrap; }
   h1 { font-size: 46px; }
   .case-panel, .approval-panel { padding: 21px; }
   .metric-row { gap: 16px; justify-content: space-between; }

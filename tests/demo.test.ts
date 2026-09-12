@@ -85,4 +85,37 @@ describe("single end-to-end demonstration", () => {
     expect(riskReturned.draft?.id).toBeDefined();
     expect(riskReturned.draft?.id).not.toBe(oldDraftId);
   });
+
+  it("keeps the updated case recoverable when regeneration fails", async () => {
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const preparation = await prepareDemo(undefined, "mock");
+      const failed = await changeDemoStartDate(preparation, "2026-10-09", "live");
+
+      expect(failed.case.start_date).toBe("2026-10-09");
+      expect(failed.joiner.start_date).toBe("2026-10-09");
+      expect(failed.facts.start_date).toBe("2026-10-09");
+      expect(failed.facts.equipment_late).toBe(true);
+      expect(failed.draft).toBeNull();
+      expect(failed.draft_unavailable?.message).toContain("case and dates are current");
+      expect(failed.trace.at(-1)?.kind).toBe("draft.unavailable");
+      expect(failed.case.drafts[0]?.status).toBe("rejected");
+      await expect(resolveDemoApproval(failed, "approve", "pp-1")).rejects.toThrow("no current draft");
+
+      const retriedSameDate = await changeDemoStartDate(failed, "2026-10-09", "mock");
+      expect(retriedSameDate.case.id).toBe("CASE-J-004");
+      expect(retriedSameDate.facts.start_date).toBe("2026-10-09");
+      expect(retriedSameDate.draft?.status).toBe("pending");
+      expect(retriedSameDate.draft_unavailable).toBeUndefined();
+
+      const changedAgain = await changeDemoStartDate(failed, "2026-10-19", "mock");
+      expect(changedAgain.facts.equipment_late).toBe(false);
+      expect(changedAgain.draft).toBeNull();
+      expect(changedAgain.draft_unavailable).toBeUndefined();
+    } finally {
+      if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  });
 });

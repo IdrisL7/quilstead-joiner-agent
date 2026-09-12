@@ -70,4 +70,54 @@ describe("demo approval route", () => {
     expect(risk.facts.equipment_late).toBe(true);
     expect(risk.draft?.status).toBe("pending");
   });
+
+  it("returns a recoverable current case when date-change drafting fails", async () => {
+    const previousMode = process.env.DEMO_MODE;
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.DEMO_MODE;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const pendingResponse = await POST(request());
+      const pending = await pendingResponse.json() as { run_id: string };
+
+      process.env.DEMO_MODE = "live";
+      const failedResponse = await POST(request({
+        run_id: pending.run_id,
+        action: "start_date_change",
+        start_date: "2026-10-09",
+      }));
+      expect(failedResponse.status).toBe(200);
+      const failed = await failedResponse.json() as {
+        run_id: string;
+        screen_state: string;
+        case: { start_date: string };
+        joiner: { start_date: string };
+        facts: { start_date: string; equipment_late: boolean };
+        draft: unknown;
+        draft_unavailable: { message: string };
+      };
+
+      expect(failed.run_id).not.toBe(pending.run_id);
+      expect(failed.screen_state).toBe("draft_unavailable");
+      expect(failed.case.start_date).toBe("2026-10-09");
+      expect(failed.joiner.start_date).toBe("2026-10-09");
+      expect(failed.facts.start_date).toBe("2026-10-09");
+      expect(failed.facts.equipment_late).toBe(true);
+      expect(failed.draft).toBeNull();
+      expect(failed.draft_unavailable.message).toContain("retry drafting");
+
+      process.env.DEMO_MODE = "mock";
+      const retryResponse = await POST(request({ run_id: failed.run_id, action: "retry_draft" }));
+      expect(retryResponse.status).toBe(200);
+      const retried = await retryResponse.json() as { screen_state: string; facts: { start_date: string }; draft: { status: string } | null };
+      expect(retried.screen_state).toBe("awaiting_decision");
+      expect(retried.facts.start_date).toBe("2026-10-09");
+      expect(retried.draft?.status).toBe("pending");
+    } finally {
+      if (previousMode === undefined) delete process.env.DEMO_MODE;
+      else process.env.DEMO_MODE = previousMode;
+      if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousKey;
+    }
+  });
 });

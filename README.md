@@ -4,10 +4,10 @@ A deterministic prototype for one of Quilstead Solutions' onboarding pain points
 Humaans Athena take-home. The agent turns a "contract signed" event into a compliant,
 equipped, connected first morning without a person chasing every step.
 
-Status: checkpoint B complete in mock mode. Data pack, connectors, permission ladder,
+Status: checkpoint C polish complete in mock mode. Data pack, connectors, permission ladder,
 trusted approval checks, one model-assisted flow, current-state timeline, evidence panel,
-start-date interaction and prototype are in. Persistence, live integrations and broader
-orchestration remain deferred.
+recoverable start-date interaction, browser polish and rehearsal materials are in.
+Persistence, live integrations and broader orchestration remain deferred.
 See `AGENTS.md` for the map.
 
 ## Run
@@ -20,6 +20,8 @@ npm run dev                     # minimal approval screen at localhost:3000
 npm run prototype -- --all      # every event through the state machine, no model call
 npm run prototype -- J-002      # one joiner
 ```
+
+Rehearsal and build explanation: `docs/REHEARSAL.md` and `docs/EXPLANATION.md`.
 
 The approval screen defaults to a deterministic mock model. Set `DEMO_MODE=live` and provide
 `ANTHROPIC_API_KEY` to use the bounded Anthropic drafting path. The draft is still held until a
@@ -37,6 +39,7 @@ human approves or rejects it, and the send remains simulated.
 | One model-assisted event-to-plan-to-draft trace | Working in mock mode, live adapter available |
 | Minimal approval screen with approve/reject boundary | Working in mock mode, browser-verified |
 | Current timeline, evidence panel and start-date interaction | Working in mock mode, browser-verified |
+| Draft failure recovery after a date change | Working, tested with missing-key mode |
 | Live Anthropic execution | Not run in this checkout; credentials unresolved |
 | Persistence, live integrations, general model loop, policy Q&A | Deferred |
 | Broader case-view UI | Deferred |

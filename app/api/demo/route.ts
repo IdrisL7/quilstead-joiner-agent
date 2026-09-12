@@ -3,6 +3,7 @@ import { personById } from "@/data/people";
 import {
   changeDemoStartDate,
   prepareDemo,
+  retryDemoDraft,
   resolveDemoApproval,
   type DemoDecision,
   type DemoPreparation,
@@ -47,7 +48,11 @@ function draftSummary(run: DemoPreparation) {
 function preparationResponse(run: DemoPreparation) {
   return {
     phase: "pending" as const,
-    screen_state: run.draft ? "awaiting_decision" as const : "no_action" as const,
+    screen_state: run.draft
+      ? "awaiting_decision" as const
+      : run.draft_unavailable
+        ? "draft_unavailable" as const
+        : "no_action" as const,
     run_id: run.run_id,
     case: caseSummary(run),
     joiner: {
@@ -63,6 +68,7 @@ function preparationResponse(run: DemoPreparation) {
     draft: draftSummary(run),
     before_approval: run.beforeApproval,
     date_change: run.date_change,
+    draft_unavailable: run.draft_unavailable,
     trace: run.trace,
   };
 }
@@ -80,6 +86,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "start_date is required for a start-date change" }, { status: 400 });
         }
         const updated = await changeDemoStartDate(preparation, body.start_date);
+        activeRun = updated;
+        return NextResponse.json(preparationResponse(updated));
+      }
+      if (body.action === "retry_draft") {
+        const updated = await retryDemoDraft(preparation);
         activeRun = updated;
         return NextResponse.json(preparationResponse(updated));
       }

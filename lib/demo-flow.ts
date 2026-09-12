@@ -58,6 +58,10 @@ export interface DemoDateChange {
   superseded_draft_id?: string;
 }
 
+export interface DemoDraftUnavailable {
+  message: string;
+}
+
 export interface DemoPreparation {
   run_id: string;
   case: Case;
@@ -69,6 +73,7 @@ export interface DemoPreparation {
   beforeApproval: ToolResult | null;
   facts: DemoFacts;
   date_change?: DemoDateChange;
+  draft_unavailable?: DemoDraftUnavailable;
   trace: DemoTraceEntry[];
   store: CaseStore;
 }
@@ -85,6 +90,7 @@ export interface DemoResolution {
   afterApproval: ToolResult;
   facts: DemoFacts;
   date_change?: DemoDateChange;
+  draft_unavailable?: DemoDraftUnavailable;
   trace: DemoTraceEntry[];
 }
 
@@ -100,8 +106,11 @@ interface DraftState {
   model: Pick<NudgeModelDraft, "provider" | "model">;
   draft: Draft | null;
   beforeApproval: ToolResult | null;
+  unavailable?: DemoDraftUnavailable;
   trace: DemoTraceEntry[];
 }
+
+const DRAFT_UNAVAILABLE_MESSAGE = "Draft unavailable. The case and dates are current, no message was sent, and you can retry drafting or change the start date.";
 
 function requireAction(tool: string) {
   const resolved = findAction(tool);
@@ -245,6 +254,28 @@ async function createDraftForCurrentState(
   };
 }
 
+async function createDraftWithRecovery(
+  c: Case,
+  joiner: Joiner,
+  equipment: ToolResult,
+  facts: DemoFacts,
+  now: string,
+  mode: string,
+): Promise<DraftState> {
+  try {
+    return await createDraftForCurrentState(c, joiner, equipment, facts, now, mode);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown drafting failure";
+    return {
+      model: modelMetadata(mode),
+      draft: null,
+      beforeApproval: null,
+      unavailable: { message: DRAFT_UNAVAILABLE_MESSAGE },
+      trace: [{ actor: "system", kind: "draft.unavailable", summary: `Draft generation failed after the state change: ${detail}` }],
+    };
+  }
+}
+
 export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?? "mock"): Promise<DemoPreparation> {
   resetDemoState();
   const runId = `DEMO-RUN-${randomUUID()}`;
@@ -282,6 +313,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
     equipment,
     beforeApproval: generated.beforeApproval,
     facts,
+    draft_unavailable: generated.unavailable,
     trace: [...trace, ...generated.trace],
     store,
   };
@@ -297,7 +329,10 @@ export async function changeDemoStartDate(
     throw new Error("start_date must be a valid ISO date");
   }
   const previousStartDate = preparation.case.start_date;
-  if (newStartDate === previousStartDate) throw new Error("Choose a different start date to recalculate the case");
+  if (newStartDate === previousStartDate) {
+    if (!preparation.draft_unavailable) throw new Error("Choose a different start date to recalculate the case");
+    return retryDemoDraft(preparation, mode, now);
+  }
 
   const supersededDraftId = preparation.draft?.id;
   if (supersededDraftId) {
@@ -318,7 +353,7 @@ export async function changeDemoStartDate(
   if (!recomputed.case) throw new Error(`Demo case was not found for ${preparation.joiner.id}`);
   const updatedJoiner = currentJoinerById(preparation.joiner.id) ?? { ...currentJoiner, start_date: newStartDate };
   const facts = buildDemoFacts(recomputed.case, preparation.event, updatedJoiner, preparation.equipment);
-  const generated = await createDraftForCurrentState(recomputed.case, updatedJoiner, preparation.equipment, facts, now, mode);
+  const generated = await createDraftWithRecovery(recomputed.case, updatedJoiner, preparation.equipment, facts, now, mode);
   const dateChange: DemoDateChange = {
     previous_start_date: previousStartDate,
     new_start_date: newStartDate,
@@ -347,7 +382,32 @@ export async function changeDemoStartDate(
     beforeApproval: generated.beforeApproval,
     facts,
     date_change: dateChange,
+    draft_unavailable: generated.unavailable,
     trace,
+  };
+}
+
+export async function retryDemoDraft(
+  preparation: DemoPreparation,
+  mode = process.env.DEMO_MODE ?? "mock",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  if (!preparation.draft_unavailable) throw new Error("Demo has no unavailable draft to retry");
+  const facts = buildDemoFacts(preparation.case, preparation.event, preparation.joiner, preparation.equipment);
+  const generated = await createDraftWithRecovery(preparation.case, preparation.joiner, preparation.equipment, facts, now, mode);
+  return {
+    ...preparation,
+    run_id: `DEMO-RUN-${randomUUID()}`,
+    model: generated.model,
+    draft: generated.draft,
+    beforeApproval: generated.beforeApproval,
+    facts,
+    draft_unavailable: generated.unavailable,
+    trace: [
+      ...preparation.trace,
+      { actor: "system", kind: "draft.retry", summary: `Retried drafting for the current ${facts.start_date} case state.` },
+      ...generated.trace,
+    ],
   };
 }
 
@@ -393,6 +453,7 @@ export async function resolveDemoApproval(
     afterApproval,
     facts: preparation.facts,
     date_change: preparation.date_change,
+    draft_unavailable: preparation.draft_unavailable,
     trace,
   };
 }

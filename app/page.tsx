@@ -48,7 +48,7 @@ interface DemoDraft {
 
 interface DemoResponse {
   phase: "pending" | "resolved";
-  screen_state: "awaiting_decision" | "no_action" | "resolved";
+  screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
   run_id: string;
   decision?: DemoDecision;
   case: { id: string; state: string; start_date: string; task_count: number };
@@ -60,6 +60,7 @@ interface DemoResponse {
   before_approval: ToolResult | null;
   after_approval?: ToolResult;
   date_change?: DemoDateChange;
+  draft_unavailable?: { message: string };
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
 }
 
@@ -97,12 +98,14 @@ async function postDemo(body: Record<string, string> = {}) {
 
 function decisionLabel(run: DemoResponse) {
   if (run.screen_state === "awaiting_decision") return "AWAITING DECISION";
+  if (run.screen_state === "draft_unavailable") return "DRAFT UNAVAILABLE";
   if (run.screen_state === "no_action") return "RISK CLEARED";
   return run.decision === "approve" ? "SENT WITH APPROVAL" : "REJECTED";
 }
 
 function decisionClass(run: DemoResponse) {
   if (run.screen_state === "awaiting_decision") return "pending";
+  if (run.screen_state === "draft_unavailable") return "failed";
   if (run.screen_state === "no_action" || run.decision === "approve") return "approved";
   return "rejected";
 }
@@ -156,8 +159,27 @@ export default function Home() {
     }
   }
 
+  async function retryDraft() {
+    if (!run || run.screen_state !== "draft_unavailable") return;
+    setBusy("date");
+    setError(null);
+    try {
+      acceptRun(await postDemo({ run_id: run.run_id, action: "retry_draft" }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The draft retry failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const isPending = run?.screen_state === "awaiting_decision" && !!run.draft;
   const wasApproved = run?.decision === "approve";
+  const timelineItems = run ? [
+    { key: "contract", at: run.facts.contract_signed_at, date: formatDateTime(run.facts.contract_signed_at), title: "Contract signed", detail: `${run.facts.contract_event_id} received`, tone: "" },
+    { key: "equipment-task", at: run.facts.equipment_task_due_at, date: `Due ${formatDateTime(run.facts.equipment_task_due_at)}`, title: run.facts.equipment_task_title, detail: `Owner: ${run.facts.equipment_owner_name}`, tone: "" },
+    { key: "start", at: `${run.facts.start_date}T00:00:00Z`, date: formatDate(run.facts.start_date), title: "First day", detail: `${run.joiner.office} / ${run.joiner.work_mode}`, tone: "" },
+    { key: "delivery", at: `${run.facts.equipment_eta}T00:00:00Z`, date: `ETA ${formatDate(run.facts.equipment_eta)}`, title: "Equipment delivery", detail: `${gapLabel(run.facts.gap_days)} / ${run.facts.equipment_owner_name}`, tone: run.facts.equipment_late ? "risk" : "cleared" },
+  ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at)) : [];
 
   return (
     <main className="shell">
@@ -222,22 +244,12 @@ export default function Home() {
                 <span className="section-note">source facts</span>
               </div>
               <ol className="timeline" aria-label="Current onboarding case timeline">
-                <li className="timeline-item">
-                  <span className="timeline-dot" aria-hidden="true" />
-                  <div className="timeline-content"><span className="timeline-date">{formatDateTime(run.facts.contract_signed_at)}</span><strong>Contract signed</strong><span>{run.facts.contract_event_id} received</span></div>
-                </li>
-                <li className="timeline-item">
-                  <span className="timeline-dot" aria-hidden="true" />
-                  <div className="timeline-content"><span className="timeline-date">Due {formatDateTime(run.facts.equipment_task_due_at)}</span><strong>{run.facts.equipment_task_title}</strong><span>Owner: {run.facts.equipment_owner_name}</span></div>
-                </li>
-                <li className="timeline-item">
-                  <span className="timeline-dot" aria-hidden="true" />
-                  <div className="timeline-content"><span className="timeline-date">{formatDate(run.facts.start_date)}</span><strong>First day</strong><span>{run.joiner.office} / {run.joiner.work_mode}</span></div>
-                </li>
-                <li className={`timeline-item ${run.facts.equipment_late ? "risk" : "cleared"}`}>
-                  <span className="timeline-dot" aria-hidden="true" />
-                  <div className="timeline-content"><span className="timeline-date">ETA {formatDate(run.facts.equipment_eta)}</span><strong>Equipment delivery</strong><span>{gapLabel(run.facts.gap_days)} / {run.facts.equipment_owner_name}</span></div>
-                </li>
+                {timelineItems.map((item) => (
+                  <li className={`timeline-item ${item.tone}`} key={item.key}>
+                    <span className="timeline-dot" aria-hidden="true" />
+                    <div className="timeline-content"><span className="timeline-date">{item.date}</span><strong>{item.title}</strong><span>{item.detail}</span></div>
+                  </li>
+                ))}
               </ol>
 
               <div className={`risk-card ${run.facts.equipment_late ? "" : "cleared"}`}>
@@ -314,11 +326,16 @@ export default function Home() {
 
               {isPending ? (
                 <div className="approval-actions">
-                  <p>This message is a draft. The pre-approval check was refused: {run.before_approval?.summary}</p>
+                  <p>Draft awaiting your approval</p>
                   <div className="action-buttons">
                     <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject draft</button>
                     <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}<span aria-hidden="true">↗</span></button>
                   </div>
+                </div>
+              ) : run.screen_state === "draft_unavailable" ? (
+                <div className="resolution-card unavailable" role="alert">
+                  <span className="resolution-icon">!</span>
+                  <div><strong>Draft unavailable.</strong><p>{run.draft_unavailable?.message}</p><button className="button secondary retry-button" onClick={retryDraft} disabled={busy !== null}>{busy === "date" ? "Retrying..." : "Retry draft"}</button></div>
                 </div>
               ) : run.screen_state === "no_action" ? (
                 <div className="resolution-card positive" role="status">
