@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 type ToolResult = { status: "ok" | "warning" | "error" | "denied"; summary: string };
 type DemoDecision = "approve" | "reject";
+type Section = "overview" | "equipment" | "buddy" | "activity";
 
 interface DemoFacts {
   contract_event_id: string;
@@ -136,6 +138,8 @@ interface DemoResponse {
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
 }
 
+/* ---------- formatting ---------- */
+
 function formatDate(value: string | null) {
   if (!value) return "Unknown";
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
@@ -190,6 +194,13 @@ function requestLabel(status: BuddyRequest["status"]) {
   return "Allocation confirmed";
 }
 
+function requestTone(status: BuddyRequest["status"]) {
+  if (status === "confirmed") return "positive";
+  if (status === "awaiting_acceptance" || status === "accepted") return "pending";
+  if (status === "pending_approval") return "info";
+  return "attention";
+}
+
 function activeBuddyRequest(request: Pick<BuddyRequest, "status"> | null) {
   return !!request && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status);
 }
@@ -208,7 +219,7 @@ function attentionTone(status: string) {
 }
 
 function modelLabel(provider: DemoResponse["model"]["provider"]) {
-  return provider === "anthropic" ? "ANTHROPIC" : "MOCK MODEL";
+  return provider === "anthropic" ? "Anthropic model" : "Mock model";
 }
 
 function gapLabel(gapDays: number) {
@@ -216,6 +227,24 @@ function gapLabel(gapDays: number) {
   const days = Math.abs(gapDays);
   return `${days} calendar ${days === 1 ? "day" : "days"} ${gapDays > 0 ? "after" : "before"} first day`;
 }
+
+function decisionLabel(run: DemoResponse) {
+  if (run.screen_state === "awaiting_decision") return "Awaiting decision";
+  if (run.screen_state === "draft_unavailable") return "Draft unavailable";
+  if (run.screen_state === "no_action") return "Risk cleared";
+  return run.decision === "approve" ? "Sent with approval" : "Rejected";
+}
+
+function decisionTone(run: DemoResponse) {
+  if (run.screen_state === "awaiting_decision") return "pending";
+  if (run.screen_state === "draft_unavailable") return "attention";
+  if (run.screen_state === "no_action" || run.decision === "approve") return "positive";
+  return "attention";
+}
+
+const IMPORTANT_TRACE = /(decision|approved|rejected|sent|refused|escalat|superseded|recomputed|confirmed|accepted|declined|received)/i;
+
+/* ---------- small presentational pieces ---------- */
 
 type ApprovalPanelRun = {
   screen_state: DemoResponse["screen_state"];
@@ -226,7 +255,7 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   if (run.screen_state === "draft_unavailable") {
     return (
       <div className="no-action-heading unavailable-heading">
-        <p className="eyebrow">MODEL-PROPOSED ACTION</p>
+        <p className="eyebrow">Model-proposed action</p>
         <h2>Draft unavailable. Equipment risk remains</h2>
         <p>The current ETA is still after the current start date. Retry drafting before any message can be sent.</p>
       </div>
@@ -236,7 +265,7 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   if (run.screen_state === "no_action" && !run.facts.equipment_late) {
     return (
       <div className="no-action-heading">
-        <p className="eyebrow">MODEL-PROPOSED ACTION</p>
+        <p className="eyebrow">Model-proposed action</p>
         <h2>No message needed</h2>
         <p>The current ETA precedes the current start date, so the superseded draft is not available to send.</p>
       </div>
@@ -246,73 +275,18 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   return null;
 }
 
-function AttentionSummaryPanel({ summary }: { summary: AttentionSummary }) {
-  const items = [
-    { key: "equipment", label: "Equipment", data: summary.equipment, detail: "Current ETA and approval state" },
-    { key: "buddy", label: "Buddy support", data: summary.buddy, detail: summary.buddy.candidate_name ?? "No candidate selected" },
-    { key: "compliance", label: "Compliance", data: summary.compliance, detail: `${summary.compliance.open_tasks} of ${summary.compliance.total_tasks} task${summary.compliance.total_tasks === 1 ? "" : "s"} open` },
-  ];
-  return (
-    <section className="panel attention-panel" aria-labelledby="attention-heading">
-      <div className="panel-kicker"><span id="attention-heading">ATTENTION SUMMARY</span><span>current case state</span></div>
-      <div className="attention-grid">
-        {items.map((item) => (
-          <article className="attention-card" key={item.key}>
-            <div className="attention-card-top"><span className="attention-label">{item.label}</span><span className={`attention-status ${attentionTone(item.data.status)}`}>{item.data.status}</span></div>
-            <strong>{item.detail}</strong>
-            <p>Owner: {item.data.owner_name}</p>
-            <span className="attention-next">Next: {item.data.next_action}</span>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+function Tag({ tone, children }: { tone?: string; children: React.ReactNode }) {
+  return <span className={`tag ${tone ?? ""}`}>{children}</span>;
 }
 
-function BuddyCandidateCard({
-  assessment,
-  selected,
-  recommended,
-  request,
-  canRequest,
-  onRequest,
-}: {
-  assessment: BuddyCandidateAssessment;
-  selected: boolean;
-  recommended: boolean;
-  request: BuddyRequest | null;
-  canRequest: boolean;
-  onRequest: (candidateId: string) => void;
-}) {
-  const { candidate, eligibility, availability } = assessment;
-  const isRequested = request?.candidate_id === candidate.id;
-  const canChoose = canRequest && eligibility.eligible && availability.status === "available";
-  return (
-    <article className={`candidate-card ${selected ? "selected" : ""} ${isRequested ? "requested" : ""} ${recommended ? "recommended" : ""}`}>
-      <div className="candidate-card-top">
-        <div className="candidate-identity"><span className="candidate-avatar">{initials(candidate.full_name)}</span><div><h4>{candidate.full_name}</h4><p>{candidate.team} / {candidate.office}</p></div></div>
-        <div className="candidate-tags">{recommended && <span className="candidate-recommended">Recommended</span>}<span className={`candidate-eligibility ${eligibility.eligible ? "eligible" : "ineligible"}`}>{eligibility.eligible ? "Eligible" : "Not eligible"}</span></div>
-      </div>
-      <div className="candidate-metrics"><span>{candidate.active_buddies} active assignment{candidate.active_buddies === 1 ? "" : "s"}</span><span>{candidate.tenure_months} months tenure</span></div>
-      <div className={`candidate-availability ${availability.status}`}><strong>{availabilityLabel(availability.status)}</strong><span>{availability.reason}</span></div>
-      {eligibility.reasons.length > 0 && (
-        <ul className="candidate-reasons">
-          {eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
-        </ul>
-      )}
-      {availability.slots.length > 0 && (
-        <div className="candidate-slots">
-          <span className="source-label">PROPOSED FIRST-WEEK SLOTS</span>
-          {availability.slots.map((slot) => <span key={slot.id}><strong>{slot.kind}</strong> {formatSlot(slot)} <em>{slot.timezone}</em></span>)}
-        </div>
-      )}
-      <div className="candidate-card-footer">
-        {isRequested && <span className="requested-note">Current request</span>}
-        {canChoose && <button className="button secondary candidate-button" onClick={() => onRequest(candidate.id)}>Request {candidate.full_name}</button>}
-      </div>
-    </article>
-  );
-}
+const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
+  { key: "overview", label: "Overview", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8.5 8 3l6 5.5M4 7.5V13h8V7.5" /></svg> },
+  { key: "equipment", label: "Equipment", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3.5" width="12" height="8" rx="1" /><path d="M1.5 13h13" /></svg> },
+  { key: "buddy", label: "Buddy support", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="6" r="2.5" /><circle cx="11.5" cy="7" r="2" /><path d="M1.5 13.5c.6-2.3 2.3-3.5 4.5-3.5s3.9 1.2 4.5 3.5M10.5 10.6c1.9 0 3.3.9 4 2.9" /></svg> },
+  { key: "activity", label: "Activity", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8h3l2-4 3 8 2-4h2" /></svg> },
+];
+
+/* ---------- data access ---------- */
 
 async function postDemo(body: Record<string, string> = {}) {
   const response = await fetch("/api/demo", {
@@ -325,22 +299,11 @@ async function postDemo(body: Record<string, string> = {}) {
   return payload;
 }
 
-function decisionLabel(run: DemoResponse) {
-  if (run.screen_state === "awaiting_decision") return "AWAITING DECISION";
-  if (run.screen_state === "draft_unavailable") return "DRAFT UNAVAILABLE";
-  if (run.screen_state === "no_action") return "RISK CLEARED";
-  return run.decision === "approve" ? "SENT WITH APPROVAL" : "REJECTED";
-}
-
-function decisionClass(run: DemoResponse) {
-  if (run.screen_state === "awaiting_decision") return "pending";
-  if (run.screen_state === "draft_unavailable") return "failed";
-  if (run.screen_state === "no_action" || run.decision === "approve") return "approved";
-  return "rejected";
-}
+/* ---------- page ---------- */
 
 export default function Home() {
   const [run, setRun] = useState<DemoResponse | null>(null);
+  const [section, setSection] = useState<Section>("overview");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [busy, setBusy] = useState<"start" | "date" | "retry" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
@@ -477,6 +440,8 @@ export default function Home() {
     }
   }
 
+  /* ---------- derived ---------- */
+
   const isPending = run?.screen_state === "awaiting_decision" && !!run.draft;
   const wasApproved = run?.decision === "approve";
   const buddyRequest = run?.buddy.request ?? null;
@@ -494,274 +459,470 @@ export default function Home() {
     return required ? [...top.slice(0, 2), required] : top;
   })() : [];
   const simulationCandidate = run?.buddy.availability.candidates.find((assessment) => assessment.candidate.id === simulationTarget && assessment.availability.status === "available");
+  const selectedAssessment = run?.buddy.availability.candidates.find((assessment) => assessment.candidate.id === selectedCandidateId) ?? null;
   const timelineItems = run ? [
     { key: "contract", at: run.facts.contract_signed_at, date: formatDateTime(run.facts.contract_signed_at), title: "Contract signed", detail: `${run.facts.contract_event_id} received`, tone: "" },
     { key: "equipment-task", at: run.facts.equipment_task_due_at, date: `Due ${formatDateTime(run.facts.equipment_task_due_at)}`, title: run.facts.equipment_task_title, detail: `Owner: ${run.facts.equipment_owner_name}`, tone: "" },
     { key: "start", at: `${run.facts.start_date}T00:00:00Z`, date: formatDate(run.facts.start_date), title: "First day", detail: `${run.joiner.office} / ${run.joiner.work_mode}`, tone: "" },
     { key: "delivery", at: `${run.facts.equipment_eta}T00:00:00Z`, date: `ETA ${formatDate(run.facts.equipment_eta)}`, title: "Equipment delivery", detail: `${gapLabel(run.facts.gap_days)} / ${run.facts.equipment_owner_name}`, tone: run.facts.equipment_late ? "risk" : "cleared" },
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at)) : [];
+  const openAttention = run ? [run.attention.equipment, run.attention.buddy, run.attention.compliance].filter((item) => attentionTone(item.status) !== "positive").length : 0;
 
-  return (
-    <main className="shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-mark">A</span>
-          <span className="brand-name">ATHENA</span>
-          <span className="brand-context">JOINER READINESS</span>
-        </div>
-        <div className="environment-pill"><span className="status-dot" /> SIMULATED / NO LIVE SEND</div>
-      </header>
+  /* ---------- pieces that need state ---------- */
 
-      <section className="hero">
-        <div>
-          <p className="eyebrow">ONE BOUNDED AGENT FLOW</p>
-          <h1>Make day one feel prepared.</h1>
-          <p className="hero-copy">One onboarding risk, grounded in current facts and held for human approval.</p>
-        </div>
-        <button className="button primary hero-button" onClick={startFlow} disabled={busy !== null}>
-          {busy === "start" ? "Preparing case..." : run ? "Run a new case" : "Generate model nudge"}
-          <span aria-hidden="true">↗</span>
-        </button>
-      </section>
+  const navButtons = (variant: "side" | "tab") =>
+    NAV.map((item) => (
+      <button
+        key={item.key}
+        type="button"
+        className={variant === "side" ? "nav-button" : "tab"}
+        aria-current={section === item.key ? "page" : undefined}
+        onClick={() => setSection(item.key)}
+      >
+        {variant === "side" && item.icon}
+        {item.label}
+        {variant === "side" && item.key === "overview" && openAttention > 0 && <span className="nav-count" aria-label={`${openAttention} items need attention`}>{openAttention}</span>}
+      </button>
+    ));
 
-      {error && <div className="error-banner" role="alert">{error}</div>}
+  const dateChangeNote = run?.date_change && (
+    <div className="change-note" role="status">
+      <strong>Start date moved {formatDate(run.date_change.previous_start_date)} to {formatDate(run.date_change.new_start_date)}</strong>
+      <span>{run.date_change.risk_before && !run.date_change.risk_after ? "Late-arrival risk cleared from the current dates. The pending draft was superseded." : run.date_change.risk_after ? "Late-arrival risk remains from the current dates. A fresh draft is available for review." : "The current case was recalculated from the new start date."}</span>
+      <div className="change-stats"><span>{run.date_change.deadlines_changed} deadlines moved</span><span>{run.date_change.tasks_changed} tasks reconciled</span><span>{run.date_change.tasks_unchanged} unchanged</span>{run.date_change.superseded_buddy_request_id && <span>buddy request superseded</span>}</div>
+    </div>
+  );
 
-      {!run && (
-        <section className="empty-state panel">
-          <div className="empty-index">01</div>
-          <div>
-            <p className="eyebrow">READY WHEN YOU ARE</p>
-            <h2>Review one real decision boundary</h2>
-            <p>Open Aisha&apos;s case, inspect the evidence behind one equipment nudge, then decide whether the simulated Slack action may run.</p>
-          </div>
-          <div className="empty-facts">
-            <span>J-004</span><span>UK / London</span><span>14 planned tasks</span>
+  const riskCard = run && (
+    <div className={`risk ${run.facts.equipment_late ? "" : "cleared"}`}>
+      <div className="risk-icon" aria-hidden="true">{run.facts.equipment_late ? "!" : "✓"}</div>
+      <div>
+        <strong>{run.facts.equipment_late ? "Laptop misses day one" : "Laptop is on track for day one"}</strong>
+        <p>{run.facts.equipment_late ? run.equipment.summary : `The ${formatDate(run.facts.equipment_eta)} ETA now precedes the ${formatDate(run.facts.start_date)} start.`}</p>
+      </div>
+    </div>
+  );
+
+  /* ---------- sections ---------- */
+
+  function renderOverview(current: DemoResponse) {
+    const rows = [
+      { key: "equipment" as Section, label: "Equipment", data: current.attention.equipment, detail: current.facts.equipment_late ? `ETA ${formatDate(current.facts.equipment_eta)}, start ${formatDate(current.facts.start_date)}` : `ETA ${formatDate(current.facts.equipment_eta)} before start` },
+      { key: "buddy" as Section, label: "Buddy support", data: current.attention.buddy, detail: current.attention.buddy.candidate_name ?? "No candidate selected" },
+    ];
+    const compliance = current.attention.compliance;
+    return (
+      <>
+        <div className="section-title"><h2>Overview</h2><p>Current case state. Rows open their work area.</p></div>
+        <section className="panel" aria-label="Attention">
+          <div className="panel-head"><h3>Needs attention</h3><span className="meta">{openAttention === 0 ? "Nothing open" : `${openAttention} open`}</span></div>
+          <div className="rows">
+            {rows.map((row) => (
+              <div className="row clickable" key={row.key} role="button" tabIndex={0} onClick={() => setSection(row.key)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSection(row.key); } }}>
+                <div className="row-label"><strong>{row.label}</strong><Tag tone={attentionTone(row.data.status)}>{row.data.status}</Tag></div>
+                <div className="row-main"><strong>{row.detail}</strong><span>Owner {row.data.owner_name}</span><span className="next">Next: {row.data.next_action}</span></div>
+                <div className="row-side"><span className="button ghost small">Open</span></div>
+              </div>
+            ))}
+            <div className="row">
+              <div className="row-label"><strong>Compliance</strong><Tag tone={attentionTone(compliance.status)}>{compliance.status}</Tag></div>
+              <div className="row-main">
+                <strong>{compliance.open_tasks} of {compliance.total_tasks} compliance task{compliance.total_tasks === 1 ? "" : "s"} open</strong>
+                <span>Owner {compliance.owner_name}</span>
+                <span className="next">Next: {compliance.next_action}</span>
+              </div>
+              <div className="row-side">
+                <details className="disclosure">
+                  <summary>Evidence</summary>
+                  <div className="disclosure-body small">
+                    <div className="facts">
+                      <div><span>Open tasks</span><strong>{compliance.open_tasks} of {compliance.total_tasks}</strong></div>
+                      <div><span>Unresolved escalations</span><strong>{compliance.unresolved_escalations}</strong></div>
+                      <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
+                      <div><span>Owner</span><strong>{compliance.owner_name}</strong></div>
+                    </div>
+                    <p className="muted">Compliance items are evidenced by a named person. The agent tracks and escalates; it cannot complete them.</p>
+                  </div>
+                </details>
+              </div>
+            </div>
           </div>
         </section>
-      )}
+        {dateChangeNote}
+        <section className="panel" aria-label="Case timeline">
+          <div className="panel-head"><h3>Timeline</h3><span className="meta">source facts, chronological</span></div>
+          <div className="panel-body">
+            <ol className="timeline">
+              {timelineItems.map((item) => (
+                <li className={`timeline-item ${item.tone}`} key={item.key}>
+                  <span className="timeline-dot" aria-hidden="true" />
+                  <span className="timeline-date">{item.date}</span>
+                  <div className="timeline-body"><strong>{item.title}</strong><span>{item.detail}</span></div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      </>
+    );
+  }
 
-      {run && (
-        <>
-          <AttentionSummaryPanel summary={run.attention} />
-          <section className="flow-grid">
-            <article className="panel case-panel">
-              <div className="panel-kicker"><span>CASE / {run.case.id}</span><span className="state-chip">{run.case.state.replaceAll("_", " ")}</span></div>
-              <div className="case-heading">
-                <div>
-                  <p className="eyebrow">NEW JOINER</p>
-                  <h2>{run.joiner.full_name}</h2>
-                  <p>{run.joiner.title} <span className="muted-separator">/</span> {run.joiner.office} <span className="muted-separator">/</span> {run.joiner.work_mode}</p>
+  function renderEquipment(current: DemoResponse) {
+    return (
+      <>
+        <div className="section-title"><h2>Equipment</h2><p>Case facts on the left, the exact proposed action on the right.</p></div>
+        <div className="two-col">
+          <div className="stack">
+            <section className="panel" aria-label="Equipment facts">
+              <div className="panel-head"><h3>Current facts</h3><Tag tone={attentionTone(current.attention.equipment.status)}>{current.attention.equipment.status}</Tag></div>
+              <div className="panel-body stack">
+                {riskCard}
+                <div className="facts">
+                  <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
+                  <div><span>Equipment ETA</span><strong>{formatDate(current.facts.equipment_eta)}</strong></div>
+                  <div><span>Relation</span><strong>{gapLabel(current.facts.gap_days)}</strong></div>
+                  <div><span>Task deadline</span><strong>{formatDateTime(current.facts.equipment_task_due_at)}</strong></div>
+                  <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
+                  <div><span>Task</span><strong>{current.facts.equipment_task_title}</strong></div>
                 </div>
-                <div className="avatar">AO</div>
+                <div className="next-action"><strong>Next:</strong> {current.attention.equipment.next_action}</div>
+                {dateChangeNote}
               </div>
-              <div className="metric-row">
-                <div><span>START DATE</span><strong>{formatDate(run.facts.start_date)}</strong></div>
-                <div><span>PLAN</span><strong>{run.case.task_count} tasks</strong></div>
-                <div><span>MODEL</span><strong>{modelLabel(run.model.provider)}</strong></div>
-              </div>
+            </section>
+          </div>
 
-              <div className="section-heading">
-                <div><p className="eyebrow">CURRENT CASE TIMELINE</p><h3>What the agent knows now</h3></div>
-                <span className="section-note">source facts</span>
-              </div>
-              <ol className="timeline" aria-label="Current onboarding case timeline">
-                {timelineItems.map((item) => (
-                  <li className={`timeline-item ${item.tone}`} key={item.key}>
-                    <span className="timeline-dot" aria-hidden="true" />
-                    <div className="timeline-content"><span className="timeline-date">{item.date}</span><strong>{item.title}</strong><span>{item.detail}</span></div>
-                  </li>
-                ))}
-              </ol>
-
-              <div className={`risk-card ${run.facts.equipment_late ? "" : "cleared"}`}>
-                <div className="risk-icon">{run.facts.equipment_late ? "!" : "✓"}</div>
-                <div className="risk-content">
-                  <div className="risk-label">{run.facts.equipment_late ? "ACTION NEEDED" : "CURRENT STATE"}</div>
-                  <h3>{run.facts.equipment_late ? "Laptop misses day one" : "Laptop is on track for day one"}</h3>
-                  <p>{run.facts.equipment_late ? run.equipment.summary : `The ${formatDate(run.facts.equipment_eta)} ETA now precedes the ${formatDate(run.facts.start_date)} start.`}</p>
-                  <div className="fact-grid">
-                    <div><span>STARTS</span><strong>{formatDate(run.facts.start_date)}</strong></div>
-                    <div><span>ARRIVES</span><strong>{formatDate(run.facts.equipment_eta)}</strong></div>
-                    <div><span>RELATION</span><strong>{gapLabel(run.facts.gap_days)}</strong></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="date-control">
-                <div className="date-control-heading"><div><p className="eyebrow">HRIS EVENT</p><h3>Change the start date</h3></div><span className="section-note">same case, recalculated</span></div>
-                <div className="date-control-row">
-                  <label htmlFor="start-date">New start date</label>
-                  <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={run.phase === "resolved" || busy !== null} />
-                  <button className="button secondary" onClick={changeStartDate} disabled={run.phase === "resolved" || busy !== null || !dateDraft || dateDraft === run.joiner.start_date}>
-                    {busy === "date" ? "Recalculating..." : "Recalculate case"}
-                  </button>
-                </div>
-                <p>Deadlines and risks are recalculated from the current case. The case identity, equipment ETA and completed work remain intact.</p>
-              </div>
-
-              {run.date_change && (
-                <div className="date-change-summary" role="status">
-                  <div className="date-change-top"><span className="eyebrow">LATEST CHANGE</span><strong>{formatDate(run.date_change.previous_start_date)} <span aria-hidden="true">→</span> {formatDate(run.date_change.new_start_date)}</strong></div>
-                  <p>{run.date_change.risk_before && !run.date_change.risk_after ? "Late-arrival risk cleared from the current dates. The pending draft was superseded." : run.date_change.risk_after ? "Late-arrival risk remains from the current dates. A fresh draft is available for review." : "The current case was recalculated from the new start date."}</p>
-                  <div className="change-stats"><span>{run.date_change.deadlines_changed} deadlines moved</span><span>{run.date_change.tasks_changed} tasks reconciled</span><span>{run.date_change.tasks_unchanged} unchanged</span></div>
-                </div>
-              )}
-            </article>
-
-            <article className="panel approval-panel">
-              <div className="panel-kicker"><span>APPROVAL QUEUE</span><span className={`decision-chip ${decisionClass(run)}`}>{decisionLabel(run)}</span></div>
-              {run.draft ? (
+          <section className="panel" aria-label="Approval">
+            <div className="panel-head"><h3>Proposed action</h3><Tag tone={decisionTone(current)}>{decisionLabel(current)}</Tag></div>
+            <div className="panel-body stack">
+              {current.draft ? (
                 <>
-                  <div className="approval-heading">
-                    <p className="eyebrow">MODEL-PROPOSED ACTION</p>
-                    <h2>{run.draft.subject}</h2>
+                  <div className="draft-meta">
+                    <div><span>To</span><strong>{current.draft.recipient}</strong></div>
+                    <div><span>Channel</span><strong>{current.draft.channel} · # onboarding-ops</strong></div>
+                    <div><span>Subject</span><strong>{current.draft.subject}</strong></div>
+                    <div><span>Wording</span><Tag tone="violet">{modelLabel(current.model.provider)}</Tag></div>
                   </div>
-                  <div className="draft-meta"><span>TO {run.draft.recipient.toUpperCase()}</span><span>{run.draft.channel.toUpperCase()}</span><span>{modelLabel(run.model.provider)}</span></div>
-                  <div className="message-card">
-                    <div className="message-avatar">A</div>
-                    <div><strong>{run.draft.recipient}</strong><span className="message-channel"># onboarding-ops</span><p>{run.draft.body}</p></div>
+                  <div className="message">
+                    <div className="message-avatar" aria-hidden="true">A</div>
+                    <div>
+                      <div className="message-head"><strong>Athena</strong><span>to {current.draft.recipient}</span></div>
+                      <p>{current.draft.body}</p>
+                    </div>
                   </div>
                 </>
-              ) : <ApprovalEmptyState run={run} />}
+              ) : <ApprovalEmptyState run={current} />}
 
-              <details className="evidence-panel">
-                <summary><span>Why this?</span><span className="summary-meta">facts + policy source</span></summary>
-                <div className="evidence-body">
-                  <p className="evidence-intro">The recommendation is grounded in the current case snapshot. Generated wording is kept separate from source facts.</p>
-                  <div className="evidence-grid">
-                    <div><span>START DATE</span><strong>{formatDate(run.facts.start_date)}</strong></div>
-                    <div><span>EQUIPMENT ETA</span><strong>{formatDate(run.facts.equipment_eta)}</strong></div>
-                    <div><span>TASK DEADLINE</span><strong>{formatDateTime(run.facts.equipment_task_due_at)}</strong></div>
-                    <div><span>OWNER</span><strong>{run.facts.equipment_owner_name}</strong></div>
+              <details className="disclosure">
+                <summary><span>Why this action</span><span className="meta">facts and policy source</span></summary>
+                <div className="disclosure-body">
+                  <p className="muted small">The recommendation is grounded in the current case snapshot. Generated wording is kept separate from source facts.</p>
+                  <div className="facts">
+                    <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
+                    <div><span>Equipment ETA</span><strong>{formatDate(current.facts.equipment_eta)}</strong></div>
+                    <div><span>Task deadline</span><strong>{formatDateTime(current.facts.equipment_task_due_at)}</strong></div>
+                    <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
                   </div>
-                  <div className="source-block"><span className="source-label">SOURCE POLICY / {run.facts.policy_page_id}</span><blockquote>“{run.facts.policy_quote}”</blockquote></div>
-                  <div className="approval-requirement"><span className="source-label">HUMAN GATE</span><p>{run.facts.approval_required}</p></div>
+                  <div><p className="muted small">Source policy: {current.facts.policy_page_id}</p><blockquote className="quote">{current.facts.policy_quote}</blockquote></div>
+                  <div className="gate"><strong>Human gate</strong>{current.facts.approval_required}</div>
                 </div>
               </details>
 
               {isPending ? (
-                <div className="approval-actions">
-                  <p>Draft awaiting your approval</p>
+                <div className="actions">
+                  <p>Draft awaiting your approval. Nothing is sent until you approve.</p>
                   <div className="action-buttons">
                     <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject draft</button>
-                    <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}<span aria-hidden="true">↗</span></button>
+                    <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}</button>
                   </div>
                 </div>
-              ) : run.screen_state === "draft_unavailable" ? (
-                <div className="resolution-card unavailable" role="alert">
-                  <span className="resolution-icon">!</span>
-                  <div><strong>Draft unavailable.</strong><p>{run.draft_unavailable?.message}</p><button className="button secondary retry-button" onClick={retryDraft} disabled={busy !== null}>{busy === "date" ? "Retrying..." : "Retry draft"}</button></div>
+              ) : current.screen_state === "draft_unavailable" ? (
+                <div className="outcome unavailable" role="alert">
+                  <span className="outcome-icon">!</span>
+                  <div><strong>Draft unavailable.</strong><p>{current.draft_unavailable?.message}</p><div style={{ marginTop: 8 }}><button className="button secondary small" onClick={retryDraft} disabled={busy !== null}>{busy === "retry" ? "Retrying..." : "Retry draft"}</button></div></div>
                 </div>
-              ) : run.screen_state === "no_action" ? (
-                <div className="resolution-card positive" role="status">
-                  <span className="resolution-icon">✓</span>
-                  <div><strong>Risk cleared from current dates.</strong><p>No outbound action was sent. Choose another date to recalculate the same case.</p></div>
+              ) : current.screen_state === "no_action" ? (
+                <div className="outcome positive" role="status">
+                  <span className="outcome-icon">✓</span>
+                  <div><strong>Risk cleared from current dates.</strong><p>No outbound action was sent. Change the start date to recalculate the same case.</p></div>
                 </div>
               ) : (
-                <div className={`resolution-card ${wasApproved ? "positive" : "negative"}`} role="status">
-                  <span className="resolution-icon">{wasApproved ? "✓" : "×"}</span>
-                  <div><strong>{wasApproved ? "Sent with approval. Awaiting IT response." : "Nothing was sent."}</strong><p>{run.after_approval?.summary}</p></div>
+                <div className={`outcome ${wasApproved ? "positive" : "negative"}`} role="status">
+                  <span className="outcome-icon">{wasApproved ? "✓" : "×"}</span>
+                  <div><strong>{wasApproved ? "Sent with approval. Awaiting IT response." : "Nothing was sent."}</strong><p>{current.after_approval?.summary}</p>{current.draft?.decided_by && <p>Decided by {current.draft.decided_by}{current.draft.decision_reason ? `: ${current.draft.decision_reason}` : ""}</p>}</div>
                 </div>
               )}
-            </article>
+            </div>
           </section>
+        </div>
+      </>
+    );
+  }
 
-          <section className="panel buddy-panel" aria-labelledby="buddy-support-heading">
-            <div className="panel-kicker"><span id="buddy-support-heading">BUDDY SUPPORT</span><span className="simulation-badge">SIMULATED CALENDAR / NO INVITE</span></div>
-            <div className="buddy-panel-heading">
+  function renderBuddy(current: DemoResponse) {
+    const request = buddyRequest;
+    const detail = selectedAssessment;
+    const canPrepare = !!detail && !hasActiveBuddy && busy === null && detail.eligibility.eligible && detail.availability.status === "available";
+    const stepState = (n: 1 | 2 | 3): "todo" | "active" | "done" => {
+      if (!request) return n === 1 ? "active" : "todo";
+      const s = request.status;
+      if (n === 1) return s === "pending_approval" ? "active" : ["awaiting_acceptance", "accepted", "confirmed"].includes(s) ? "done" : "active";
+      if (n === 2) return s === "awaiting_acceptance" ? "active" : ["accepted", "confirmed"].includes(s) ? "done" : "todo";
+      return s === "accepted" ? "active" : s === "confirmed" ? "done" : "todo";
+    };
+    return (
+      <>
+        <div className="section-title"><h2>Buddy support</h2><p>Compare candidates on the left. The request on the right is not sent until People approves the exact preview.</p></div>
+        <div className="two-col">
+          <div className="stack">
+            <section className="panel" aria-label="Candidate comparison">
+              <div className="panel-head"><h3>Candidates</h3><span className="meta">top {buddyCandidates.length} of {current.buddy.availability.candidates.length} · <span className="sim-badge">Simulated calendar</span></span></div>
               <div>
-                <p className="eyebrow">PEOPLE DECISION</p>
-                <h2>Find support for Aisha&apos;s first week.</h2>
-                <p>Eligibility, capacity, calendar evidence and willingness stay separate. The request is not sent until People approves this exact preview.</p>
+                {buddyCandidates.map((assessment) => {
+                  const { candidate, eligibility, availability } = assessment;
+                  const isRequested = request?.candidate_id === candidate.id;
+                  const isRecommended = recommendedBuddy?.candidate_id === candidate.id;
+                  return (
+                    <button type="button" className="cand" key={candidate.id} aria-pressed={selectedCandidateId === candidate.id} onClick={() => setSelectedCandidateId(candidate.id)}>
+                      <span className="avatar small" aria-hidden="true">{initials(candidate.full_name)}</span>
+                      <span className="cand-name"><strong>{candidate.full_name}</strong><span>{candidate.team} · {candidate.office}</span></span>
+                      <span className="cand-col"><span>Capacity</span><strong>{candidate.active_buddies} of 2 · {candidate.tenure_months} mo tenure</strong></span>
+                      <span className="cand-col"><span>Availability</span><strong className={`availability ${availability.status}`}>{availabilityLabel(availability.status)}{availability.slots.length > 0 ? ` · ${availability.slots.length} slots` : ""}</strong></span>
+                      <span className="cand-tags">
+                        <Tag tone={eligibility.eligible ? "positive" : "attention"}>{eligibility.eligible ? "Eligible" : "Not eligible"}</Tag>
+                        {isRequested ? <Tag tone="info">Current request</Tag> : isRecommended ? <Tag tone="violet">Recommended</Tag> : null}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              {simulationCandidate && (
-                <button className="button secondary simulation-button" onClick={() => simulateAvailability(simulationCandidate.candidate.id)} disabled={busy !== null}>
-                  {busy === "availability" ? "Refreshing calendar..." : `Simulate ${simulationCandidate.candidate.full_name} unavailable`}
-                </button>
-              )}
-            </div>
-
-            <div className="comparison-heading"><div><p className="eyebrow">CANDIDATE COMPARISON</p><h3>Current policy and calendar snapshot</h3></div><span className="section-note">top {buddyCandidates.length} of {run.buddy.availability.candidates.length}</span></div>
-            <div className="candidate-grid">
-              {buddyCandidates.map((assessment) => (
-                <BuddyCandidateCard
-                  key={assessment.candidate.id}
-                  assessment={assessment}
-                  selected={selectedCandidateId === assessment.candidate.id}
-                  recommended={recommendedBuddy?.candidate_id === assessment.candidate.id}
-                  request={buddyRequest}
-                  canRequest={!hasActiveBuddy && busy === null}
-                  onRequest={prepareBuddy}
-                />
-              ))}
-            </div>
-
-            {run.buddy.availability.escalation && !run.buddy.availability.recommendation && (
-              <div className="buddy-escalation" role="status"><strong>People review required</strong><p>{run.buddy.availability.escalation.summary}</p></div>
+            </section>
+            {current.buddy.availability.escalation && !current.buddy.availability.recommendation && (
+              <div className="escalation" role="status"><strong>People review required</strong>{current.buddy.availability.escalation.summary}</div>
             )}
+            {simulationCandidate && (
+              <div className="panel">
+                <div className="panel-head"><h3>Demo simulation</h3><span className="sim-badge">Simulated calendar</span></div>
+                <div className="panel-body actions">
+                  <p>Change {simulationCandidate.candidate.full_name}&apos;s calendar and watch the evidence, status and next action update together.</p>
+                  <button className="button secondary small" onClick={() => simulateAvailability(simulationCandidate.candidate.id)} disabled={busy !== null}>{busy === "availability" ? "Refreshing calendar..." : `Simulate ${simulationCandidate.candidate.full_name} unavailable`}</button>
+                </div>
+              </div>
+            )}
+          </div>
 
-            <div className="request-preview">
-              <div className="comparison-heading request-heading"><div><p className="eyebrow">REQUEST PREVIEW</p><h3>One exact commitment, held for approval</h3></div>{buddyRequest && <span className={`request-status ${buddyRequest.status}`}>{requestLabel(buddyRequest.status)}</span>}</div>
-              {!buddyRequest && (
-                <div className="request-empty"><strong>No buddy request prepared.</strong><p>Select an eligible candidate with two known slots to create a fixed request preview. No message is sent by comparing candidates.</p></div>
-              )}
-              {buddyRequest && (
-                <div className="request-preview-card">
-                  <div className="request-card-top"><div><span className="source-label">CANDIDATE</span><strong>{buddyRequest.candidate_name}</strong></div><div><span className="source-label">START DATE</span><strong>{formatDate(buddyRequest.start_date)}</strong></div><div><span className="source-label">REQUEST ID</span><strong>{buddyRequest.id}</strong></div></div>
-                  {run.buddy.draft && (
-                    <div className="buddy-message-preview">
-                      <div className="draft-preview-label"><span className="source-label">EXACT DRAFT / {run.buddy.draft.status.toUpperCase()}</span><span className="simulation-badge">FIXED MOCK TEMPLATE</span></div>
-                      <h4>{run.buddy.draft.subject}</h4>
-                      <p>{run.buddy.draft.body}</p>
-                      <span className="draft-boundary">Draft content is fixed for this mock run. The live adapter is not used here.</span>
+          <div className="stack">
+            <section className="panel" aria-label="Selected candidate">
+              <div className="panel-head"><h3>{detail ? detail.candidate.full_name : "Select a candidate"}</h3>{detail && <Tag tone={detail.eligibility.eligible ? "positive" : "attention"}>{detail.eligibility.eligible ? "Eligible" : "Not eligible"}</Tag>}</div>
+              <div className="panel-body stack">
+                {!detail && <p className="muted small">Choose a row to see eligibility, capacity, availability and proposed London-time slots. Selecting never sends anything.</p>}
+                {detail && (
+                  <>
+                    <div className="facts">
+                      <div><span>Team · office</span><strong>{detail.candidate.team} · {detail.candidate.office}</strong></div>
+                      <div><span>Capacity</span><strong>{detail.candidate.active_buddies} of 2 active</strong></div>
+                      <div><span>Tenure</span><strong>{detail.candidate.tenure_months} months</strong></div>
+                      <div><span>Availability</span><strong className={`availability ${detail.availability.status}`}>{availabilityLabel(detail.availability.status)}</strong></div>
                     </div>
-                  )}
-                  <div className="request-slots"><div className="request-slots-heading"><span className="source-label">{buddyRequest.status === "confirmed" ? "CONFIRMED COMMITMENT" : "PROPOSED COMMITMENT"}</span><span>{buddyRequest.slots.length} sessions / first working week</span></div>{buddyRequest.slots.map((slot) => <div className="request-slot" key={slot.id}><span className="slot-kind">{slot.kind}</span><strong>{formatSlot(slot)}</strong><span>{slot.duration_minutes} min / {slot.timezone}</span></div>)}</div>
+                    <p className="muted small">{detail.availability.reason}</p>
+                    {detail.eligibility.reasons.length > 0 && <ul className="reasons">{detail.eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+                    {detail.availability.slots.length > 0 && (
+                      <div className="slots">
+                        {detail.availability.slots.map((slot) => <div className="slot" key={slot.id}><span className="kind">{slot.kind}</span><span className="when">{formatSlot(slot)}</span><span className="tz">{slot.duration_minutes} min · {slot.timezone}</span></div>)}
+                      </div>
+                    )}
+                    {!hasActiveBuddy && (
+                      <div className="actions">
+                        <p>{canPrepare ? "Prepares an exact request preview. No message is sent yet." : "Only an eligible, available candidate can be requested."}</p>
+                        <button className="button primary" onClick={() => prepareBuddy(detail.candidate.id)} disabled={!canPrepare}>{busy === "buddy_prepare" ? "Preparing..." : `Prepare request for ${detail.candidate.full_name.split(" ")[0]}`}</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
 
-                  {buddyRequest.status === "pending_approval" && run.buddy.draft && (
-                    <div className="buddy-actions approval-actions"><p>Draft awaiting your approval</p><div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}<span aria-hidden="true">↗</span></button></div></div>
-                  )}
-                  {buddyRequest.status === "awaiting_acceptance" && run.buddy.after_approval?.status === "ok" && (
-                    <div className="simulation-response" role="status"><div className="simulation-response-heading"><span className="simulation-badge">SIMULATED RESPONSE</span><strong>Message receipt is recorded. No real buddy was contacted.</strong></div><p>Choose the response for this exact request. Acceptance is separate from People confirmation.</p><div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div></div>
-                  )}
-                  {buddyRequest.status === "accepted" && (
-                    <div className="simulation-response accepted-response" role="status"><div className="simulation-response-heading"><span className="simulation-badge">SIMULATED ACCEPTANCE</span><strong>{buddyRequest.candidate_name} accepted this request.</strong></div><p>People confirmation is still required before the allocation task can complete.</p><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
-                  )}
-                  {buddyRequest.status === "confirmed" && (
-                    <div className="resolution-card positive buddy-resolution" role="status"><span className="resolution-icon">✓</span><div><strong>Allocation confirmed by People.</strong><p>{buddyRequest.candidate_name} is recorded on this case. The task was completed by {buddyRequest.confirmed_by_name ?? "the named People actor"}.</p></div></div>
-                  )}
-                  {buddyRequest.status === "declined" && (
-                    <div className="resolution-card unavailable buddy-resolution" role="status"><span className="resolution-icon">!</span><div><strong>Buddy declined in simulation.</strong><p>No replacement request was sent automatically. Choose another current candidate above.</p></div></div>
-                  )}
-                  {buddyRequest.status === "rejected" && (
-                    <div className="resolution-card negative buddy-resolution" role="status"><span className="resolution-icon">×</span><div><strong>People rejected the request.</strong><p>No message was sent. Choose another current candidate above.</p></div></div>
-                  )}
-                  {buddyRequest.status === "superseded" && (
-                    <div className="resolution-card unavailable buddy-resolution" role="status"><span className="resolution-icon">!</span><div><strong>Request superseded by current facts.</strong><p>{buddyRequest.invalidation_reason ?? "Availability or the start date changed."} Prepare a new request from the refreshed comparison.</p></div></div>
-                  )}
-                </div>
-              )}
+            <section className="panel" aria-label="Buddy request">
+              <div className="panel-head"><h3>Request</h3>{request ? <Tag tone={requestTone(request.status)}>{requestLabel(request.status)}</Tag> : <span className="meta">none prepared</span>}</div>
+              <div className="panel-body stack">
+                {!request && <p className="muted small">No buddy request prepared. Prepare one from the selected candidate to see the exact draft and the three separate steps.</p>}
+                {request && (
+                  <>
+                    <div className="facts">
+                      <div><span>Candidate</span><strong>{request.candidate_name}</strong></div>
+                      <div><span>Start date</span><strong>{formatDate(request.start_date)}</strong></div>
+                      <div><span>{request.status === "confirmed" ? "Confirmed commitment" : "Proposed commitment"}</span><strong>{request.slots.length} sessions, first working week</strong></div>
+                    </div>
+                    <div className="slots">
+                      {request.slots.map((slot) => <div className="slot" key={slot.id}><span className="kind">{slot.kind}</span><span className="when">{formatSlot(slot)}</span><span className="tz">{slot.duration_minutes} min · {slot.timezone}</span></div>)}
+                    </div>
+                    {current.buddy.draft && (
+                      <div className="message">
+                        <div className="message-avatar" aria-hidden="true">A</div>
+                        <div>
+                          <div className="message-head"><strong>{current.buddy.draft.subject}</strong><span>to {current.buddy.draft.recipient}</span><Tag tone="violet">Fixed mock template</Tag><Tag>{current.buddy.draft.status}</Tag></div>
+                          <p>{current.buddy.draft.body}</p>
+                          <p className="muted small">Draft content is fixed for this mock run. The live adapter is not used here.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="steps">
+                      <div className={`step ${stepState(1)}`}>
+                        <span className="step-num" aria-hidden="true">1</span>
+                        <div className="step-body">
+                          <h4>People approves the exact request</h4>
+                          {request.status === "pending_approval" && current.buddy.draft ? (
+                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}</button></div>
+                          ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.status === "superseded" ? request.invalidation_reason ?? "Superseded by current facts." : stepState(1) === "done" ? `Approved and sent. ${current.buddy.after_approval?.summary ?? ""}` : "Waiting."}</p>}
+                        </div>
+                      </div>
+                      <div className={`step ${stepState(2)}`}>
+                        <span className="step-num" aria-hidden="true">2</span>
+                        <div className="step-body">
+                          <h4>Buddy responds <span className="sim-badge">Simulated response</span></h4>
+                          {request.status === "awaiting_acceptance" && current.buddy.after_approval?.status === "ok" ? (
+                            <>
+                              <p>Message receipt is recorded. No real buddy was contacted. Choose the response for this exact request.</p>
+                              <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
+                            </>
+                          ) : <p>{request.status === "declined" ? "Buddy declined in simulation. No replacement request was sent automatically; choose another candidate." : stepState(2) === "done" ? `${request.candidate_name} accepted this request.` : "Waiting for approval first."}</p>}
+                        </div>
+                      </div>
+                      <div className={`step ${stepState(3)}`}>
+                        <span className="step-num" aria-hidden="true">3</span>
+                        <div className="step-body">
+                          <h4>People confirms the allocation</h4>
+                          {request.status === "accepted" ? (
+                            <>
+                              <p>Acceptance is separate from confirmation. The allocation task completes only here.</p>
+                              <div className="action-buttons"><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
+                            </>
+                          ) : <p>{request.status === "confirmed" ? `Confirmed by ${request.confirmed_by_name ?? "the named People actor"}. ${request.candidate_name} is recorded on this case.` : "Waiting for acceptance first."}</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {request.status === "confirmed" && <div className="outcome positive" role="status"><span className="outcome-icon">✓</span><div><strong>Allocation confirmed by People.</strong><p>Buddy task completed by {request.confirmed_by_name ?? "the named People actor"}.</p></div></div>}
+                    {request.status === "declined" && <div className="outcome unavailable" role="status"><span className="outcome-icon">!</span><div><strong>Buddy declined in simulation.</strong><p>Choose another current candidate on the left.</p></div></div>}
+                    {request.status === "rejected" && <div className="outcome negative" role="status"><span className="outcome-icon">×</span><div><strong>People rejected the request.</strong><p>No message was sent. Choose another current candidate on the left.</p></div></div>}
+                    {request.status === "superseded" && <div className="outcome unavailable" role="status"><span className="outcome-icon">!</span><div><strong>Request superseded by current facts.</strong><p>{request.invalidation_reason ?? "Availability or the start date changed."} Prepare a new request from the refreshed comparison.</p></div></div>}
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderActivity(current: DemoResponse) {
+    return (
+      <>
+        <div className="section-title"><h2>Activity</h2><p>Every step on this case, by actor. Source-of-truth history.</p></div>
+        <div className="next-action"><strong>Next:</strong> {current.attention.equipment.status !== "On track" ? current.attention.equipment.next_action : current.attention.buddy.next_action}</div>
+        <section className="panel" aria-label="Activity trace">
+          <div className="panel-head"><h3>Trace</h3><span className="meta">{current.trace.length} events · <span className="trace-marker" style={{ display: "inline-block" }} /> system · <span className="trace-marker agent" style={{ display: "inline-block" }} /> agent · <span className="trace-marker human" style={{ display: "inline-block" }} /> human or simulation</span></div>
+          <div className="trace">
+            {current.trace.map((step, index) => (
+              <div className="trace-row" key={`${step.kind}-${index}`}>
+                <span className={`trace-marker ${step.actor}`} aria-hidden="true" />
+                <span className="trace-actor">{step.actor}</span>
+                <span className="trace-kind">{step.kind.replaceAll(".", " / ")}</span>
+                <span className={`trace-summary ${IMPORTANT_TRACE.test(step.summary) ? "important" : ""}`}>{step.summary}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <details className="disclosure">
+          <summary><span>Details</span><span className="meta">technical identifiers</span></summary>
+          <div className="disclosure-body">
+            <div className="ids">
+              <div><span>run </span>{current.run_id}</div>
+              <div><span>case </span>{current.case.id} · {current.case.state.replaceAll("_", " ")} · {current.case.task_count} tasks</div>
+              <div><span>event </span>{current.facts.contract_event_id}</div>
+              <div><span>model </span>{current.model.provider} · {current.model.model}</div>
+              {current.draft && <div><span>equipment draft </span>{current.draft.id} · {current.draft.status}</div>}
+              {current.buddy.request && <div><span>buddy request </span>{current.buddy.request.id} · {current.buddy.request.status}</div>}
+              {current.buddy.draft && <div><span>buddy draft </span>{current.buddy.draft.id} · {current.buddy.draft.status}</div>}
             </div>
-          </section>
+          </div>
+        </details>
+      </>
+    );
+  }
 
-          <section className="panel trace-panel">
-            <div className="panel-kicker"><span>AGENT TRACE</span><span>{run.trace.length} events / source-of-truth history</span></div>
-            <div className="trace-legend"><span><i className="trace-legend-dot system" /> system</span><span><i className="trace-legend-dot agent" /> agent</span><span><i className="trace-legend-dot human" /> human or simulation input</span></div>
-            <div className="trace-list">
-              {run.trace.map((step, index) => (
-                <div className="trace-row" key={`${step.kind}-${index}`}>
-                  <span className={`trace-marker ${step.actor}`} />
-                  <span className="trace-kind">{step.kind.replaceAll(".", " / ")}</span>
-                  <span className="trace-actor">{step.actor}</span>
-                  <span className="trace-summary">{step.summary}</span>
-                </div>
-              ))}
+  /* ---------- layout ---------- */
+
+  const workspace = (
+    <div className="workspace">
+      <span className="workspace-avatar" aria-hidden="true">Q</span>
+      <div><strong>Quilstead Solutions</strong><span>Athena · onboarding</span></div>
+    </div>
+  );
+
+  return (
+    <div className="app">
+      <aside className="sidebar" aria-label="Workspace navigation">
+        {workspace}
+        <nav className="nav">{navButtons("side")}</nav>
+        <div className="sidebar-foot">
+          <span className="sim-badge">Simulated · no live send</span>
+          <div className="sidebar-brand"><Image className="wordmark" src="/humaans-wordmark-white.svg" alt="Humaans" width={112} height={16} /><span>demo</span></div>
+        </div>
+      </aside>
+
+      <div className="main">
+        <div className="topnav">
+          <div className="topnav-row">{workspace}<span className="sim-badge">Simulated</span></div>
+          <nav className="tabs" aria-label="Sections">{navButtons("tab")}</nav>
+        </div>
+
+        <header className="case-header">
+          <div className="case-identity">
+            <span className="avatar" aria-hidden="true">{run ? initials(run.joiner.full_name) : "AO"}</span>
+            <div>
+              <h1>{run ? run.joiner.full_name : "Aisha Okafor"}</h1>
+              <p>{run ? `${run.joiner.title} · ${run.joiner.office} · ${run.joiner.work_mode}` : "Customer Success Manager · London · hybrid"}</p>
+              <div className="case-tags">
+                {run ? <><Tag tone="info">{run.case.state.replaceAll("_", " ")}</Tag><Tag>{run.case.id}</Tag><Tag>{run.case.task_count} tasks</Tag><Tag tone="violet">{modelLabel(run.model.provider)}</Tag></> : <><Tag>J-004</Tag><Tag>No case loaded</Tag></>}
+              </div>
             </div>
-          </section>
-        </>
-      )}
+          </div>
+          <div className="header-controls">
+            <div className="field">
+              <label htmlFor="start-date">Start date</label>
+              <div className="field-row">
+                <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={!run || run.phase === "resolved" || busy !== null} />
+                <button className="button secondary" onClick={changeStartDate} disabled={!run || run.phase === "resolved" || busy !== null || !dateDraft || dateDraft === run.joiner.start_date}>{busy === "date" ? "Recalculating..." : "Recalculate case"}</button>
+              </div>
+            </div>
+            <div className="demo-controls">
+              <span>Demo controls</span>
+              <button className="button primary" onClick={startFlow} disabled={busy !== null}>{busy === "start" ? "Preparing case..." : run ? "Reset and prepare again" : "Prepare demo"}</button>
+            </div>
+          </div>
+        </header>
 
-      <footer><span>ATHENA / QUILSTEAD</span><span>Mock systems only. No persistence. No live integrations.</span></footer>
-    </main>
+        {error && <div className="error-banner" role="alert">{error}</div>}
+
+        <main className="work">
+          {!run && (
+            <section className="panel empty-card">
+              <h2>Prepare the demo to open Aisha&apos;s case</h2>
+              <p>Loads the J-004 case, inspects the equipment ETA against the start date, and holds one proposed Slack nudge for approval. Buddy support and the activity trace open once the case is prepared. Nothing is sent without a named approval.</p>
+              <div className="empty-facts"><Tag>UK · London</Tag><Tag>14 planned tasks</Tag><Tag tone="violet">Simulated systems</Tag></div>
+              <div><button className="button primary" onClick={startFlow} disabled={busy !== null}>{busy === "start" ? "Preparing case..." : "Prepare demo"}</button></div>
+            </section>
+          )}
+          {run && section === "overview" && renderOverview(run)}
+          {run && section === "equipment" && renderEquipment(run)}
+          {run && section === "buddy" && renderBuddy(run)}
+          {run && section === "activity" && renderActivity(run)}
+        </main>
+
+        <footer className="app-foot">Athena for Quilstead · mock systems only · no persistence · no live integrations</footer>
+      </div>
+    </div>
   );
 }
