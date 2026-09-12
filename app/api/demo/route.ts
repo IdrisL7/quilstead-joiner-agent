@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 let activeRun: DemoPreparation | null = null;
+let mutationInFlight = false;
 
 function caseSummary(run: DemoPreparation) {
   const buddyTask = run.case.tasks.find((task) => task.type === "buddy_allocation");
@@ -138,6 +139,10 @@ function preparationResponse(run: DemoPreparation) {
 }
 
 export async function POST(request: Request) {
+  if (mutationInFlight) {
+    return NextResponse.json({ error: "Another demo mutation is in progress. Retry with the current run." }, { status: 409 });
+  }
+  mutationInFlight = true;
   try {
     const body = await request.json() as {
       run_id?: unknown;
@@ -256,5 +261,7 @@ export async function POST(request: Request) {
     }
     const message = error instanceof Error ? error.message : "Demo flow failed";
     return NextResponse.json({ error: message }, { status: 500 });
+  } finally {
+    mutationInFlight = false;
   }
 }

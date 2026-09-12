@@ -28,6 +28,12 @@ type BuddyRequestView = {
   response?: string;
 };
 
+type BuddyCandidateView = {
+  candidate: { id: string; active_buddies: number };
+  eligibility: { eligible: boolean; reasons: string[] };
+  availability: { status: string };
+};
+
 type BuddyPayload = {
   run_id: string;
   case: {
@@ -44,6 +50,7 @@ type BuddyPayload = {
     after_approval?: { status: string; summary: string };
     availability: {
       recommendation: { candidate_id: string; candidate_name: string } | null;
+      candidates: BuddyCandidateView[];
     };
   };
   date_change?: { superseded_buddy_request_id?: string };
@@ -294,5 +301,141 @@ describe("checkpoint-B buddy flow", () => {
       decision: "approve",
     }));
     expect(stale.status).toBe(409);
+  });
+
+  it("reserves confirmed capacity, revalidates duplicate confirmation, and releases a replaced reservation", async () => {
+    const prepared = await (await POST(request())).json() as BuddyPayload;
+    const buddyPrepared = await (await POST(request({
+      run_id: prepared.run_id,
+      action: "buddy_prepare",
+      candidate_id: "b-01",
+    }))).json() as BuddyPayload;
+    const buddyRequest = buddyPrepared.buddy.request!;
+
+    const approved = await (await POST(request({
+      run_id: buddyPrepared.run_id,
+      action: "buddy_decision",
+      request_id: buddyRequest.id,
+      draft_id: buddyRequest.draft_id,
+      decision: "approve",
+    }))).json() as BuddyPayload;
+    const accepted = await (await POST(request({
+      run_id: approved.run_id,
+      action: "buddy_response",
+      request_id: buddyRequest.id,
+      response: "accepted",
+    }))).json() as BuddyPayload;
+    const confirmed = await (await POST(request({
+      run_id: accepted.run_id,
+      action: "buddy_confirm",
+      request_id: buddyRequest.id,
+    }))).json() as BuddyPayload;
+
+    const confirmedAmara = confirmed.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")!;
+    expect(confirmedAmara.candidate.active_buddies).toBe(2);
+    expect(confirmedAmara.eligibility.eligible).toBe(true);
+    expect(confirmed.case.buddy_task_status).toBe("done");
+
+    const otherCaseAvailability = await findAction("buddy_directory.get_availability")!.action.run({
+      joiner_id: "J-004",
+      start_date: "2026-10-12",
+      case_id: "CASE-OTHER",
+    });
+    const otherCaseAmara = (otherCaseAvailability.data as { candidates: BuddyCandidateView[] }).candidates.find(({ candidate }) => candidate.id === "b-01")!;
+    expect(otherCaseAmara.candidate.active_buddies).toBe(2);
+    expect(otherCaseAmara.eligibility.eligible).toBe(false);
+
+    const duplicate = await POST(request({
+      run_id: confirmed.run_id,
+      action: "buddy_confirm",
+      request_id: buddyRequest.id,
+    }));
+    expect(duplicate.status).toBe(200);
+    const duplicateBody = await duplicate.json() as BuddyPayload;
+    expect(duplicateBody.case.buddy_task_status).toBe("done");
+    expect(duplicateBody.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")?.candidate.active_buddies).toBe(2);
+
+    const snapshot = BUDDY_CALENDARS.find((calendar) => calendar.buddy_id === "b-01")!;
+    setSimulatedBuddyCalendar({ ...snapshot, read_status: "unknown" });
+    const invalidated = await POST(request({
+      run_id: duplicateBody.run_id,
+      action: "buddy_confirm",
+      request_id: buddyRequest.id,
+    }));
+    expect(invalidated.status).toBe(409);
+    const invalidatedBody = await invalidated.json() as BuddyPayload & { error: string };
+    expect(invalidatedBody.error).toContain("availability changed");
+    expect(invalidatedBody.buddy.request?.status).toBe("superseded");
+    expect(invalidatedBody.case.buddy_id).toBe("b-01");
+    expect(invalidatedBody.case.buddy_task_status).toBe("open");
+    expect(invalidatedBody.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")?.availability.status).toBe("unknown");
+
+    setSimulatedBuddyCalendar(snapshot);
+    const replacementPrepared = await (await POST(request({
+      run_id: invalidatedBody.run_id,
+      action: "buddy_prepare",
+      candidate_id: "b-06",
+    }))).json() as BuddyPayload;
+    const replacementRequest = replacementPrepared.buddy.request!;
+    const replacementApproved = await (await POST(request({
+      run_id: replacementPrepared.run_id,
+      action: "buddy_decision",
+      request_id: replacementRequest.id,
+      draft_id: replacementRequest.draft_id,
+      decision: "approve",
+    }))).json() as BuddyPayload;
+    const replacementAccepted = await (await POST(request({
+      run_id: replacementApproved.run_id,
+      action: "buddy_response",
+      request_id: replacementRequest.id,
+      response: "accepted",
+    }))).json() as BuddyPayload;
+    const replaced = await (await POST(request({
+      run_id: replacementAccepted.run_id,
+      action: "buddy_confirm",
+      request_id: replacementRequest.id,
+    }))).json() as BuddyPayload;
+
+    expect(replaced.case.buddy_id).toBe("b-06");
+    const afterReplacement = await findAction("buddy_directory.get_availability")!.action.run({
+      joiner_id: "J-004",
+      start_date: "2026-10-12",
+      case_id: "CASE-OTHER",
+    });
+    const otherCandidates = (afterReplacement.data as { candidates: BuddyCandidateView[] }).candidates;
+    const releasedAmara = otherCandidates.find(({ candidate }) => candidate.id === "b-01")!;
+    const reservedEwan = otherCandidates.find(({ candidate }) => candidate.id === "b-06")!;
+    expect(releasedAmara.candidate.active_buddies).toBe(1);
+    expect(releasedAmara.eligibility.eligible).toBe(true);
+    expect(reservedEwan.candidate.active_buddies).toBe(1);
+  });
+
+  it("rejects overlapping reset, date-change, and buddy mutations", async () => {
+    const prepared = await (await POST(request())).json() as BuddyPayload;
+    const buddyMutation = {
+      run_id: prepared.run_id,
+      action: "buddy_prepare",
+      candidate_id: "b-01",
+    };
+    const buddyResponses = await Promise.all([POST(request(buddyMutation)), POST(request(buddyMutation))]);
+    expect(buddyResponses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const buddyBodies = await Promise.all(buddyResponses.map((response) => response.json() as Promise<BuddyPayload & { error?: string }>));
+    const buddyWinner = buddyBodies.find((body) => body.buddy?.request);
+    const buddyConflict = buddyBodies.find((body) => body.error);
+    expect(buddyWinner?.buddy.request?.candidate_id).toBe("b-01");
+    expect(buddyConflict?.error).toContain("Another demo mutation is in progress");
+
+    const resetResponses = await Promise.all([POST(request()), POST(request())]);
+    expect(resetResponses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const resetBodies = await Promise.all(resetResponses.map((response) => response.json() as Promise<BuddyPayload & { error?: string }>));
+    const resetWinner = resetBodies.find((body) => body.case?.id === "CASE-J-004");
+    expect(resetWinner?.run_id).toBeTruthy();
+
+    const dateMutation = { run_id: resetWinner!.run_id, action: "start_date_change", start_date: "2026-10-19" };
+    const dateResponses = await Promise.all([POST(request(dateMutation)), POST(request(dateMutation))]);
+    expect(dateResponses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const dateBodies = await Promise.all(dateResponses.map((response) => response.json() as Promise<BuddyPayload & { error?: string; facts?: { start_date: string } }>));
+    const dateWinner = dateBodies.find((body) => body.facts?.start_date === "2026-10-19");
+    expect(dateWinner?.facts?.start_date).toBe("2026-10-19");
   });
 });

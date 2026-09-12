@@ -21,20 +21,21 @@ export interface BuddyEligibility {
   reasons: string[];
 }
 
-export function assessBuddyEligibility(joiner: Joiner, candidate: BuddyCandidate): BuddyEligibility {
+export function assessBuddyEligibility(joiner: Joiner, candidate: BuddyCandidate, capacityExemptions: ReadonlySet<string> = new Set()): BuddyEligibility {
   const reasons: string[] = [];
   if (!candidate.opted_in) reasons.push("Not opted in to buddy support.");
   if (candidate.on_leave) reasons.push("Currently on leave.");
   if (candidate.tenure_months < MIN_TENURE_MONTHS) reasons.push(`Tenure is ${candidate.tenure_months} months; minimum is ${MIN_TENURE_MONTHS}.`);
-  if (candidate.active_buddies >= MAX_ACTIVE_BUDDIES) reasons.push(`At capacity with ${candidate.active_buddies} active buddies.`);
+  const capacityCount = candidate.active_buddies - (capacityExemptions.has(candidate.id) ? 1 : 0);
+  if (capacityCount >= MAX_ACTIVE_BUDDIES) reasons.push(`At capacity with ${candidate.active_buddies} active buddies.`);
   if (joiner.work_mode === "remote" && candidate.country !== joiner.country) reasons.push("Different country from a remote joiner.");
   if (joiner.work_mode !== "remote" && candidate.office !== joiner.office) reasons.push("Different office from the joiner.");
   return { eligible: reasons.length === 0, reasons };
 }
 
-export function eligibleBuddies(joiner: Joiner, candidates: BuddyCandidate[]): BuddyCandidate[] {
+export function eligibleBuddies(joiner: Joiner, candidates: BuddyCandidate[], capacityExemptions: ReadonlySet<string> = new Set()): BuddyCandidate[] {
   const base = candidates.filter(
-    (b) => assessBuddyEligibility(joiner, b).eligible,
+    (b) => assessBuddyEligibility(joiner, b, capacityExemptions).eligible,
   );
   const sameOffice = base.filter((b) => b.office === joiner.office);
   const pool =

@@ -263,13 +263,14 @@ export function assessBuddyAvailability(
   candidates: BuddyCandidate[],
   snapshots: BuddyCalendarSnapshot[],
   startDate = joiner.start_date,
+  capacityExemptions: ReadonlySet<string> = new Set(),
 ): BuddyAvailabilityResult {
   const snapshotById = new Map(snapshots.map((snapshot) => [snapshot.buddy_id, snapshot]));
-  const eligible = eligibleBuddies(joiner, candidates);
+  const eligible = eligibleBuddies(joiner, candidates, capacityExemptions);
   const eligibleIds = new Set(eligible.map((candidate) => candidate.id));
   const orderedCandidates = [...eligible, ...candidates.filter((candidate) => !eligibleIds.has(candidate.id))];
   const assessments = orderedCandidates.map((candidate) => {
-    const eligibility = assessBuddyEligibility(joiner, candidate);
+    const eligibility = assessBuddyEligibility(joiner, candidate, capacityExemptions);
     return {
       candidate: candidateSummary(candidate),
       eligibility,

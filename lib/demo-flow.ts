@@ -7,6 +7,10 @@ import { authorize } from "@/lib/permissions";
 import { findAction } from "@/lib/connectors/registry";
 import { loadKb } from "@/lib/connectors/simulated/policy-kb";
 import {
+  releaseBuddyCapacity,
+  reserveBuddyCapacity,
+} from "@/lib/connectors/simulated/buddy-directory";
+import {
   approveDraft,
   rejectDraft,
   registerDraft,
@@ -211,11 +215,11 @@ function readBuddyResult(result: ToolResult): BuddyAvailabilityResult {
   return result.data as BuddyAvailabilityResult;
 }
 
-async function readBuddyAvailability(joiner: Joiner, startDate: string, excludedBuddyIds: string[] = []): Promise<BuddyAvailabilityResult> {
+async function readBuddyAvailability(joiner: Joiner, startDate: string, excludedBuddyIds: string[] = [], caseId?: string): Promise<BuddyAvailabilityResult> {
   const tool = "buddy_directory.get_availability";
   if (authorize(tool).mode !== "automatic") throw new Error(`${tool} is not automatic`);
   const action = requireAction(tool);
-  const result = await action.action.run({ joiner_id: joiner.id, start_date: startDate, exclude_buddy_ids: excludedBuddyIds });
+  const result = await action.action.run({ joiner_id: joiner.id, start_date: startDate, exclude_buddy_ids: excludedBuddyIds, case_id: caseId });
   if (result.status === "error" || result.status === "denied") throw new Error(result.summary);
   return readBuddyResult(result);
 }
@@ -461,7 +465,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
   trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
   const facts = buildDemoFacts(c, event, joiner, equipment);
   const generated = await createDraftForCurrentState(c, joiner, equipment, facts, now, mode);
-  const availability = await readBuddyAvailability(joiner, c.start_date);
+  const availability = await readBuddyAvailability(joiner, c.start_date, [], c.id);
   const availabilitySummary = availability.recommendation
     ? `Recommended ${availability.recommendation.candidate_name} from the current first-week calendar snapshot.`
     : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
@@ -532,7 +536,7 @@ export async function changeDemoStartDate(
   const updatedJoiner = currentJoinerById(preparation.joiner.id) ?? { ...currentJoiner, start_date: newStartDate };
   const facts = buildDemoFacts(recomputed.case, preparation.event, updatedJoiner, preparation.equipment);
   const generated = await createDraftWithRecovery(recomputed.case, updatedJoiner, preparation.equipment, facts, now, mode);
-  const availability = await readBuddyAvailability(updatedJoiner, newStartDate, declinedBuddyIds(recomputed.case));
+  const availability = await readBuddyAvailability(updatedJoiner, newStartDate, declinedBuddyIds(recomputed.case), recomputed.case.id);
   const dateChange: DemoDateChange = {
     previous_start_date: previousStartDate,
     new_start_date: newStartDate,
@@ -659,7 +663,7 @@ export async function prepareBuddyRequest(
     throw new BuddyFlowConflict(`Buddy request ${existing.id} is already ${existing.status}. Await its next decision before preparing another request.`);
   }
 
-  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
   const selectedId = candidateId ?? availability.recommendation?.candidate_id;
   const selected = selectedId
     ? availability.candidates.find((assessment) => assessment.candidate.id === selectedId)
@@ -773,7 +777,7 @@ export async function resolveBuddyApproval(
     throw new BuddyFlowConflict(`Buddy draft ${draftId} is ${preparation.buddy.draft.status} and cannot receive another approval decision.`);
   }
 
-  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
   if (!availabilityMatchesRequest(availability, request)) {
     return invalidateBuddyForAvailabilityChange(
       preparation,
@@ -862,7 +866,7 @@ export async function recordBuddyResponse(
     candidate_id: request.candidate_id,
     response,
   });
-  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
   return {
     preparation: {
       ...preparation,
@@ -887,17 +891,15 @@ export async function confirmBuddy(
   if (!request || preparation.buddy.request?.id !== requestId) {
     throw new BuddyFlowConflict("This People confirmation does not match the current request.");
   }
-  if (request.status === "confirmed" && preparation.case.buddy_id === request.candidate_id) {
-    return { preparation, duplicate: true };
-  }
-  if (request.status !== "accepted") {
-    throw new BuddyFlowConflict(`Buddy request ${request.id} is ${request.status}; buddy acceptance must precede People confirmation.`);
-  }
   if (personById(confirmedBy)?.function !== "people") {
     throw new BuddyFlowConflict("Buddy allocation must be confirmed by a named People actor.");
   }
 
-  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case));
+  if (request.status !== "accepted" && !(request.status === "confirmed" && preparation.case.buddy_id === request.candidate_id)) {
+    throw new BuddyFlowConflict(`Buddy request ${request.id} is ${request.status}; buddy acceptance must precede People confirmation.`);
+  }
+
+  const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
   if (!availabilityMatchesRequest(availability, request)) {
     return invalidateBuddyForAvailabilityChange(
       preparation,
@@ -908,10 +910,29 @@ export async function confirmBuddy(
     );
   }
 
+  if (request.status === "confirmed" && preparation.case.buddy_id === request.candidate_id) {
+    const refreshed: DemoPreparation = {
+      ...preparation,
+      run_id: nextRunId(),
+      buddy: buddyState(availability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
+      trace: [
+        ...preparation.trace,
+        { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: `Revalidated ${buddyName(request.candidate_id)} before suppressing a duplicate confirmation.` },
+      ],
+    };
+    return { preparation: refreshed, duplicate: true };
+  }
+
+  const previousBuddyId = preparation.case.buddy_id;
   request.status = "confirmed";
   request.confirmed_at = now;
   request.confirmed_by = confirmedBy;
+  if (previousBuddyId && previousBuddyId !== request.candidate_id) {
+    releaseBuddyCapacity(preparation.case.id, previousBuddyId);
+  }
+  reserveBuddyCapacity(preparation.case.id, request.candidate_id);
   preparation.case.buddy_id = request.candidate_id;
+  const refreshedAvailability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
   updateBuddyTask(preparation.case, "done", `Buddy allocation confirmed for ${buddyName(request.candidate_id)}.`, confirmedBy, now);
   recordCaseStep(preparation.case, "human", "buddy.allocation.confirmed", `${buddyName(request.candidate_id)} confirmed for ${preparation.joiner.preferred_name} by ${confirmedBy}.`, now, {
     request_id: request.id,
@@ -923,7 +944,7 @@ export async function confirmBuddy(
     preparation: {
       ...preparation,
       run_id: nextRunId(),
-      buddy: buddyState(availability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
+      buddy: buddyState(refreshedAvailability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
       trace: [...preparation.trace, { actor: "human", kind: "buddy.allocation.confirmed", summary: `${buddyName(request.candidate_id)} confirmed by ${confirmedBy}.` }],
     },
   };
