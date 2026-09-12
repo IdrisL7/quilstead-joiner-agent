@@ -1,0 +1,20 @@
+{
+  "note": "Permission ladder. The model proposes, this policy authorises, the connector executes, the trail records. Unknown tools are prohibited by default.",
+  "rules": [
+    { "tool": "hris.get_joiner", "mode": "automatic", "note": "Reads the minimum fields for the task. Identity document contents are never returned." },
+    { "tool": "hris.verify_webhook", "mode": "automatic" },
+    { "tool": "hris.write", "mode": "prohibited", "note": "v1 reads only. In production the token would not carry private:write." },
+    { "tool": "policy_kb.search", "mode": "automatic" },
+    { "tool": "policy_kb.cite", "mode": "automatic", "requires": ["verbatim_substring"] },
+    { "tool": "buddy_directory.list_eligible", "mode": "automatic" },
+    { "tool": "tasks.create", "mode": "automatic", "requires": ["diff_recorded"] },
+    { "tool": "tasks.update", "mode": "automatic", "requires": ["diff_recorded"] },
+    { "tool": "identity.request_access", "mode": "automatic", "requires": ["matrix_row", "approver_named"] },
+    { "tool": "identity.grant_access", "mode": "prohibited", "note": "No such tool exists. Listed so the boundary is explicit." },
+    { "tool": "equipment.order", "mode": "automatic", "requires": ["policy_default_or_preference"] },
+    { "tool": "esign.send_pack", "mode": "approval_required", "requires": ["final_content_preview"] },
+    { "tool": "slack.send_message", "mode": "approval_required", "requires": ["final_content_preview"] },
+    { "tool": "email.send", "mode": "approval_required", "requires": ["final_content_preview"] },
+    { "tool": "compliance.mark_complete", "mode": "prohibited", "note": "Only a named human can evidence a compliance item." }
+  ]
+}
