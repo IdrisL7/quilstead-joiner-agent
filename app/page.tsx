@@ -148,6 +148,14 @@ export interface ExecutionStep {
 
 type ExecutionSummaryRun = Pick<DemoResponse, "case" | "facts" | "equipment" | "draft" | "buddy" | "trace">;
 
+export function initialExecutionFor(
+  current: ExecutionSummaryRun | null,
+  next: ExecutionSummaryRun,
+  replace: boolean,
+): ExecutionSummaryRun {
+  return current === null || replace ? next : current;
+}
+
 function traceEvidence(run: ExecutionSummaryRun, kind: string) {
   return run.trace.find((step) => step.kind === kind);
 }
@@ -195,8 +203,8 @@ export function executionStepsFor(run: ExecutionSummaryRun): ExecutionStep[] {
       label: "Equipment approval required",
       status: run.draft ? "attention" : "complete",
       detail: run.draft
-        ? `Draft ${run.draft.id} is pending approval. Nothing was sent.`
-        : "No equipment action is required from the current facts.",
+        ? "Draft prepared for approval during initial checks."
+        : "No equipment action was required during initial checks.",
     },
   ];
 }
@@ -387,7 +395,7 @@ function ExecutionSummary({ run }: { run: ExecutionSummaryRun }) {
       <div className="panel-head">
         <div className="trigger-heading">
           <p className="eyebrow">Initial trigger run</p>
-          <h3>Onboarding flow completed</h3>
+          <h3>Initial onboarding checks completed</h3>
         </div>
         <Tag tone="positive">Evidence returned</Tag>
       </div>
@@ -435,14 +443,16 @@ async function postDemo(body: Record<string, string> = {}) {
 
 export default function Home() {
   const [run, setRun] = useState<DemoResponse | null>(null);
+  const [initialExecution, setInitialExecution] = useState<ExecutionSummaryRun | null>(null);
   const [section, setSection] = useState<Section>("overview");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [busy, setBusy] = useState<"start" | "date" | "retry" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function acceptRun(next: DemoResponse) {
+  function acceptRun(next: DemoResponse, replaceInitial = false) {
     setRun(next);
+    setInitialExecution((current) => initialExecutionFor(current, next, replaceInitial));
     setDateDraft(next.joiner.start_date);
     setSelectedCandidateId(activeBuddyRequest(next.buddy.request)
       ? next.buddy.request?.candidate_id ?? null
@@ -454,7 +464,7 @@ export default function Home() {
     setError(null);
     try {
       const next = await postDemo();
-      acceptRun(next);
+      acceptRun(next, true);
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
@@ -647,7 +657,7 @@ export default function Home() {
     const compliance = current.attention.compliance;
     return (
       <>
-        <ExecutionSummary run={current} />
+        <ExecutionSummary run={initialExecution ?? current} />
         <div className="section-title"><h2>Overview</h2><p>Current case state. Rows open their work area.</p></div>
         <section className="panel" aria-label="Attention">
           <div className="panel-head"><h3>Needs attention</h3><span className="meta">{openAttention === 0 ? "Nothing open" : `${openAttention} open`}</span></div>
