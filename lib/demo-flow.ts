@@ -141,6 +141,8 @@ interface DraftState {
 }
 
 const DRAFT_UNAVAILABLE_MESSAGE = "Draft unavailable. The case and dates are current, no message was sent, and you can retry drafting or change the start date.";
+const MAX_DRAFT_SUBJECT_LENGTH = 160;
+const MAX_DRAFT_BODY_LENGTH = 700;
 
 const ACTIVE_BUDDY_REQUEST_STATUSES = new Set<BuddyRequest["status"]>([
   "pending_approval",
@@ -596,6 +598,91 @@ export async function retryDemoDraft(
       ...preparation.trace,
       { actor: "system", kind: "draft.retry", summary: `Retried drafting for the current ${facts.start_date} case state.` },
       ...generated.trace,
+    ],
+  };
+}
+
+function normalizedHumanDraftText(value: unknown, field: "subject" | "body", maxLength: number): string {
+  if (typeof value !== "string") throw new BuddyFlowConflict(`Draft ${field} must be a string.`);
+  const normalized = value.trim();
+  if (!normalized) throw new BuddyFlowConflict(`Draft ${field} cannot be empty.`);
+  if (normalized.length > maxLength) throw new BuddyFlowConflict(`Draft ${field} must be ${maxLength} characters or fewer.`);
+  return normalized;
+}
+
+export async function editDemoEquipmentDraft(
+  preparation: DemoPreparation,
+  draftId: unknown,
+  subject: unknown,
+  body: unknown,
+  editedBy = "pp-1",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const normalizedSubject = normalizedHumanDraftText(subject, "subject", MAX_DRAFT_SUBJECT_LENGTH);
+  const normalizedBody = normalizedHumanDraftText(body, "body", MAX_DRAFT_BODY_LENGTH);
+  if (personById(editedBy)?.function !== "people") throw new BuddyFlowConflict("Equipment draft edits must use a named People actor.");
+  const currentDraft = preparation.draft;
+  if (typeof draftId !== "string" || !draftId) throw new BuddyFlowConflict("draft_id is required for an equipment draft edit.");
+  if (!currentDraft || currentDraft.id !== draftId) throw new BuddyFlowConflict("This equipment draft is no longer the current reviewed action.");
+  if (preparation.decision || currentDraft.kind !== "nudge" || currentDraft.action !== "slack.send_message" || currentDraft.status !== "pending") {
+    throw new BuddyFlowConflict("Only the current pending equipment draft can be edited.");
+  }
+
+  const caseDraft = preparation.case.drafts.find((draft) => draft.id === draftId);
+  if (!caseDraft || caseDraft.kind !== "nudge" || caseDraft.action !== "slack.send_message" || caseDraft.status !== "pending") {
+    throw new BuddyFlowConflict("Only the current pending equipment draft can be edited.");
+  }
+
+  if (normalizedSubject === (currentDraft.subject ?? "").trim() && normalizedBody === currentDraft.body.trim()) {
+    return preparation;
+  }
+
+  const supersedeReason = "Superseded by a People edit before approval.";
+  const nextDraft: Draft = {
+    ...currentDraft,
+    id: `DRAFT-${randomUUID()}`,
+    subject: normalizedSubject,
+    body: normalizedBody,
+    status: "pending",
+    created_at: now,
+    decided_at: undefined,
+    decided_by: undefined,
+    decision_reason: undefined,
+    revision: (currentDraft.revision ?? 0) + 1,
+    edited_by: editedBy,
+    edited_at: now,
+    supersedes_draft_id: currentDraft.id,
+    citations: currentDraft.citations ? [...currentDraft.citations] : undefined,
+  };
+  if (!registerDraft(nextDraft)) throw new Error(`Demo draft was not registered: ${nextDraft.id}`);
+  if (!supersedeDraft(currentDraft.id, now, supersedeReason)) throw new Error(`Demo draft could not be superseded: ${currentDraft.id}`);
+  markCaseDraftSuperseded(preparation.case, currentDraft.id, now, supersedeReason);
+  preparation.case.drafts.push({ ...nextDraft, citations: nextDraft.citations ? [...nextDraft.citations] : undefined });
+
+  const editSummary = `People edited draft ${currentDraft.id} into ${nextDraft.id}.`;
+  recordCaseStep(preparation.case, "human", "draft.edited", editSummary, now, {
+    old_draft_id: currentDraft.id,
+    new_draft_id: nextDraft.id,
+    edited_by: editedBy,
+  });
+  const slackAction = requireAction("slack.send_message");
+  const beforeApproval = await slackAction.action.run({ draft_id: nextDraft.id, now });
+  recordCaseStep(preparation.case, "system", "send.refused", beforeApproval.summary, now, { draft_id: nextDraft.id });
+
+  return {
+    ...preparation,
+    run_id: nextRunId(),
+    draft: nextDraft,
+    beforeApproval,
+    decision: undefined,
+    afterApproval: undefined,
+    draft_unavailable: undefined,
+    trace: [
+      ...preparation.trace,
+      { actor: "human", kind: "draft.edited", summary: editSummary },
+      { actor: "system", kind: "draft.superseded", summary: `Draft ${currentDraft.id} is unavailable after the People edit.` },
+      { actor: "system", kind: "draft.created", summary: `Draft ${nextDraft.id} created from the saved People wording and awaits approval.` },
+      { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
     ],
   };
 }

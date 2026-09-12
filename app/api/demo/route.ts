@@ -5,6 +5,7 @@ import {
   BuddyFlowConflict,
   changeDemoStartDate,
   confirmBuddy,
+  editDemoEquipmentDraft,
   prepareDemo,
   prepareBuddyRequest,
   retryDemoDraft,
@@ -53,6 +54,10 @@ function draftSummary(run: DemoPreparation) {
     subject: run.draft.subject,
     body: run.draft.body,
     status: run.draft.status,
+    revision: run.draft.revision,
+    edited_by: run.draft.edited_by,
+    edited_at: run.draft.edited_at,
+    supersedes_draft_id: run.draft.supersedes_draft_id,
     decided_by: run.draft.decided_by,
     decision_reason: run.draft.decision_reason,
   };
@@ -243,8 +248,13 @@ export async function POST(request: Request) {
       candidate_id?: unknown;
       request_id?: unknown;
       draft_id?: unknown;
+      subject?: unknown;
+      body?: unknown;
       response?: unknown;
     };
+    if (body.action && typeof body.run_id !== "string") {
+      return NextResponse.json({ error: "A current run is required for this demo mutation." }, { status: 409 });
+    }
     if (typeof body.run_id === "string") {
       if (!activeRun || body.run_id !== activeRun.run_id) {
         return NextResponse.json({ error: "This approval run is no longer active. Start a new run." }, { status: 409 });
@@ -260,6 +270,12 @@ export async function POST(request: Request) {
       }
       if (body.action === "retry_draft") {
         const updated = await retryDemoDraft(preparation);
+        activeRun = updated;
+        return NextResponse.json(preparationResponse(updated));
+      }
+
+      if (body.action === "edit_equipment_draft") {
+        const updated = await editDemoEquipmentDraft(preparation, body.draft_id, body.subject, body.body, "pp-1");
         activeRun = updated;
         return NextResponse.json(preparationResponse(updated));
       }

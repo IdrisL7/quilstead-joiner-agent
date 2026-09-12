@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { changeDemoStartDate, prepareDemo, resolveDemoApproval, runDemo } from "@/lib/demo-flow";
+import { changeDemoStartDate, editDemoEquipmentDraft, prepareBuddyRequest, prepareDemo, resolveDemoApproval, runDemo } from "@/lib/demo-flow";
+import { sent, slack } from "@/lib/connectors/simulated/messaging";
 
 describe("single end-to-end demonstration", () => {
   it("runs event to plan to approved send with a trace", async () => {
@@ -117,5 +118,77 @@ describe("single end-to-end demonstration", () => {
       if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = previousKey;
     }
+  });
+
+  it("creates an exact pending People revision without sending and suppresses its duplicate retry", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const oldDraftId = preparation.draft?.id;
+    const edited = await editDemoEquipmentDraft(
+      preparation,
+      oldDraftId,
+      "Equipment delivery needs a plan",
+      "Hi Nadia, please arrange a loaner or earlier delivery for Aisha before her first day.",
+    );
+
+    expect(edited.run_id).not.toBe(preparation.run_id);
+    expect(edited.draft?.id).not.toBe(oldDraftId);
+    expect(edited.draft).toMatchObject({
+      subject: "Equipment delivery needs a plan",
+      body: "Hi Nadia, please arrange a loaner or earlier delivery for Aisha before her first day.",
+      status: "pending",
+      edited_by: "pp-1",
+      revision: 1,
+      supersedes_draft_id: oldDraftId,
+    });
+    expect(edited.beforeApproval?.status).toBe("denied");
+    expect(sent).toHaveLength(0);
+    expect(edited.case.drafts.find((draft) => draft.id === oldDraftId)?.status).toBe("rejected");
+    await expect(resolveDemoApproval(preparation, "approve", "pp-1")).rejects.toThrow("could not be recorded");
+
+    const resolution = await resolveDemoApproval(edited, "approve", "pp-1");
+    expect(resolution.draft.body).toContain("loaner or earlier delivery");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.draft_id).toBe(resolution.draft.id);
+    const duplicate = await slack.actions.send_message.run({ draft_id: resolution.draft.id, now: "2026-09-30T09:00:00Z" });
+    expect(duplicate.summary).toContain("duplicate suppressed");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("leaves the current pending draft intact for unchanged or invalid edits", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const currentDraftId = preparation.draft?.id;
+    const unchanged = await editDemoEquipmentDraft(preparation, currentDraftId, preparation.draft?.subject, preparation.draft?.body);
+
+    expect(unchanged).toBe(preparation);
+    expect(unchanged.draft?.id).toBe(currentDraftId);
+    expect(unchanged.draft?.status).toBe("pending");
+
+    await expect(editDemoEquipmentDraft(preparation, currentDraftId, "", "valid body")).rejects.toThrow("cannot be empty");
+    await expect(editDemoEquipmentDraft(preparation, currentDraftId, "valid subject", "x".repeat(701))).rejects.toThrow("700 characters or fewer");
+    await expect(editDemoEquipmentDraft(preparation, currentDraftId, 42, "valid body")).rejects.toThrow("must be a string");
+    expect(preparation.draft?.id).toBe(currentDraftId);
+    expect(preparation.draft?.status).toBe("pending");
+    expect(preparation.case.drafts.find((draft) => draft.id === currentDraftId)?.status).toBe("pending");
+  });
+
+  it("preserves an active buddy request across an equipment edit", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const withBuddy = await prepareBuddyRequest(preparation, "b-06");
+    const edited = await editDemoEquipmentDraft(withBuddy, withBuddy.draft?.id, "Edited equipment subject", "Edited equipment body");
+
+    expect(edited.buddy.request?.id).toBe(withBuddy.buddy.request?.id);
+    expect(edited.buddy.request?.status).toBe("pending_approval");
+    expect(edited.buddy.draft?.id).toBe(withBuddy.buddy.draft?.id);
+  });
+
+  it("supersedes a saved equipment revision when the start date changes", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const edited = await editDemoEquipmentDraft(preparation, preparation.draft?.id, "Edited subject", "Edited body");
+    const moved = await changeDemoStartDate(edited, "2026-10-19", "mock");
+
+    expect(moved.date_change?.superseded_draft_id).toBe(edited.draft?.id);
+    expect(moved.draft).toBeNull();
+    expect(edited.case.drafts.find((draft) => draft.id === edited.draft?.id)?.status).toBe("rejected");
+    await expect(resolveDemoApproval(edited, "approve", "pp-1")).rejects.toThrow("could not be recorded");
   });
 });

@@ -272,6 +272,10 @@ export interface Draft {
   decided_at?: string;
   decided_by?: string;
   decision_reason?: string;
+  revision?: number;
+  edited_by?: string;
+  edited_at?: string;
+  supersedes_draft_id?: string;
 }
 
 export type StepActor = "system" | "agent" | "human";

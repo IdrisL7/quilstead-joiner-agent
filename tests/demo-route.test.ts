@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { POST } from "@/app/api/demo/route";
 
-function request(body: Record<string, string> = {}) {
+function request(body: Record<string, unknown> = {}) {
   return new Request("http://localhost/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -174,5 +174,151 @@ describe("demo approval route", () => {
     expect(changed.attention.compliance.next_action).toContain("Right to work check evidenced in HRIS");
     expect(changed.attention.compliance.next_action).not.toContain("Start date moved");
     expect(changed.attention.compliance.unresolved_escalations).toBe(0);
+  });
+
+  it("saves a fresh equipment revision and rejects stale or post-send edits", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as { run_id: string; draft: { id: string; body: string } };
+    const editedResponse = await POST(request({
+      run_id: initial.run_id,
+      action: "edit_equipment_draft",
+      draft_id: initial.draft.id,
+      subject: "Equipment delivery needs a plan",
+      body: "Please arrange a loaner or earlier delivery for Aisha before her first day.",
+    }));
+    expect(editedResponse.status).toBe(200);
+    const edited = await editedResponse.json() as {
+      run_id: string;
+      draft: { id: string; body: string; status: string; edited_by: string; revision: number; supersedes_draft_id: string };
+      before_approval: { status: string };
+      buddy: { request: unknown };
+    };
+
+    expect(edited.run_id).not.toBe(initial.run_id);
+    expect(edited.draft.id).not.toBe(initial.draft.id);
+    expect(edited.draft).toMatchObject({
+      body: "Please arrange a loaner or earlier delivery for Aisha before her first day.",
+      status: "pending",
+      edited_by: "pp-1",
+      revision: 1,
+      supersedes_draft_id: initial.draft.id,
+    });
+    expect(edited.before_approval.status).toBe("denied");
+    expect(edited.buddy.request).toBeNull();
+
+    const staleApproval = await POST(request({ run_id: initial.run_id, decision: "approve" }));
+    expect(staleApproval.status).toBe(409);
+    const mismatchedDraft = await POST(request({
+      run_id: edited.run_id,
+      action: "edit_equipment_draft",
+      draft_id: initial.draft.id,
+      subject: "A different subject",
+      body: "A different body",
+    }));
+    expect(mismatchedDraft.status).toBe(409);
+
+    const approvedResponse = await POST(request({ run_id: edited.run_id, decision: "approve" }));
+    expect(approvedResponse.status).toBe(200);
+    const approved = await approvedResponse.json() as { run_id: string; draft: { id: string; status: string; body: string } };
+    expect(approved.draft).toMatchObject({ id: edited.draft.id, status: "approved", body: edited.draft.body });
+
+    const editAfterSend = await POST(request({
+      run_id: approved.run_id,
+      action: "edit_equipment_draft",
+      draft_id: approved.draft.id,
+      subject: "Too late",
+      body: "This must not replace an approved message.",
+    }));
+    expect(editAfterSend.status).toBe(409);
+  });
+
+  it("keeps the current run and draft intact for invalid edit input", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as { run_id: string; draft: { id: string } };
+    const invalidBodies: Record<string, unknown>[] = [
+      { subject: "", body: "Valid body" },
+      { subject: "Valid subject", body: "" },
+      { subject: 42, body: "Valid body" },
+      { subject: "Valid subject", body: "x".repeat(701) },
+    ];
+
+    for (const fields of invalidBodies) {
+      const response = await POST(request({
+        run_id: initial.run_id,
+        action: "edit_equipment_draft",
+        draft_id: initial.draft.id,
+        ...fields,
+      }));
+      expect(response.status).toBe(409);
+    }
+
+    const approval = await POST(request({ run_id: initial.run_id, decision: "approve" }));
+    expect(approval.status).toBe(200);
+  });
+
+  it("rejects a stale save after date change or deliberate replay", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as { run_id: string; draft: { id: string } };
+    const changedResponse = await POST(request({ run_id: initial.run_id, action: "start_date_change", start_date: "2026-10-19" }));
+    expect(changedResponse.status).toBe(200);
+    const changed = await changedResponse.json() as { run_id: string; draft: null };
+    expect(changed.draft).toBeNull();
+
+    const staleAfterDateChange = await POST(request({
+      run_id: initial.run_id,
+      action: "edit_equipment_draft",
+      draft_id: initial.draft.id,
+      subject: "Stale subject",
+      body: "Stale body",
+    }));
+    expect(staleAfterDateChange.status).toBe(409);
+
+    const replayResponse = await POST(request());
+    const replay = await replayResponse.json() as { run_id: string; draft: { id: string } };
+    const staleAfterReplay = await POST(request({
+      run_id: changed.run_id,
+      action: "edit_equipment_draft",
+      draft_id: initial.draft.id,
+      subject: "Another stale subject",
+      body: "Another stale body",
+    }));
+    expect(staleAfterReplay.status).toBe(409);
+    expect(replay.run_id).not.toBe(changed.run_id);
+  });
+
+  it("keeps an active buddy request usable after the equipment draft is edited", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as { run_id: string; draft: { id: string } };
+    const buddyResponse = await POST(request({ run_id: initial.run_id, action: "buddy_prepare", candidate_id: "b-06" }));
+    expect(buddyResponse.status).toBe(200);
+    const withBuddy = await buddyResponse.json() as {
+      run_id: string;
+      draft: { id: string };
+      buddy: { request: { id: string; status: string }; draft: { id: string } };
+    };
+    const editedResponse = await POST(request({
+      run_id: withBuddy.run_id,
+      action: "edit_equipment_draft",
+      draft_id: withBuddy.draft.id,
+      subject: "Edited equipment subject",
+      body: "Edited equipment body",
+    }));
+    expect(editedResponse.status).toBe(200);
+    const edited = await editedResponse.json() as {
+      run_id: string;
+      buddy: { request: { id: string; status: string }; draft: { id: string } };
+    };
+
+    expect(edited.buddy.request).toMatchObject({ id: withBuddy.buddy.request.id, status: "pending_approval" });
+    expect(edited.buddy.draft.id).toBe(withBuddy.buddy.draft.id);
+    const buddyApproval = await POST(request({
+      run_id: edited.run_id,
+      action: "buddy_decision",
+      request_id: edited.buddy.request.id,
+      draft_id: edited.buddy.draft.id,
+      decision: "approve",
+    }));
+    expect(buddyApproval.status).toBe(200);
+    expect((await buddyApproval.json()).buddy.request.status).toBe("awaiting_acceptance");
   });
 });

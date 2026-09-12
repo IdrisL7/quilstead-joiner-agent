@@ -46,6 +46,10 @@ interface DemoDraft {
   subject?: string;
   body: string;
   status: "pending" | "approved" | "rejected";
+  revision?: number;
+  edited_by?: string;
+  edited_at?: string;
+  supersedes_draft_id?: string;
   decided_by?: string;
   decision_reason?: string;
 }
@@ -447,8 +451,11 @@ export default function Home() {
   const [section, setSection] = useState<Section>("overview");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "date" | "retry" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
+  const [busy, setBusy] = useState<"start" | "date" | "retry" | "edit" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingEquipment, setEditingEquipment] = useState(false);
+  const [editSubject, setEditSubject] = useState("");
+  const [editBody, setEditBody] = useState("");
 
   function acceptRun(next: DemoResponse, replaceInitial = false) {
     setRun(next);
@@ -460,11 +467,16 @@ export default function Home() {
   }
 
   async function startFlow() {
+    if (editingEquipment) {
+      setError("Save or cancel your draft edits first.");
+      return;
+    }
     setBusy("start");
     setError(null);
     try {
       const next = await postDemo();
       acceptRun(next, true);
+      setEditingEquipment(false);
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
@@ -474,7 +486,7 @@ export default function Home() {
   }
 
   async function decide(decision: DemoDecision) {
-    if (!run || !run.draft || run.screen_state !== "awaiting_decision") return;
+    if (editingEquipment || !run || !run.draft || run.screen_state !== "awaiting_decision") return;
     setBusy(decision);
     setError(null);
     try {
@@ -487,6 +499,10 @@ export default function Home() {
   }
 
   async function changeStartDate() {
+    if (editingEquipment) {
+      setError("Save or cancel your draft edits first.");
+      return;
+    }
     if (!run || !dateDraft || run.phase !== "pending" || dateDraft === run.joiner.start_date) return;
     setBusy("date");
     setError(null);
@@ -500,7 +516,7 @@ export default function Home() {
   }
 
   async function retryDraft() {
-    if (!run || run.screen_state !== "draft_unavailable") return;
+    if (editingEquipment || !run || run.screen_state !== "draft_unavailable") return;
     setBusy("retry");
     setError(null);
     try {
@@ -513,7 +529,7 @@ export default function Home() {
   }
 
   async function prepareBuddy(candidateId: string) {
-    if (!run) return;
+    if (editingEquipment || !run) return;
     setSelectedCandidateId(candidateId);
     setBusy("buddy_prepare");
     setError(null);
@@ -527,7 +543,7 @@ export default function Home() {
   }
 
   async function simulateAvailability(candidateId: string) {
-    if (!run) return;
+    if (editingEquipment || !run) return;
     setBusy("availability");
     setError(null);
     try {
@@ -540,7 +556,7 @@ export default function Home() {
   }
 
   async function decideBuddy(decision: DemoDecision) {
-    if (!run || !run.buddy.request || !run.buddy.draft || run.buddy.request.status !== "pending_approval") return;
+    if (editingEquipment || !run || !run.buddy.request || !run.buddy.draft || run.buddy.request.status !== "pending_approval") return;
     setBusy(decision === "approve" ? "buddy_approve" : "buddy_reject");
     setError(null);
     try {
@@ -559,7 +575,7 @@ export default function Home() {
   }
 
   async function simulateBuddyResponse(response: "accepted" | "declined") {
-    if (!run || !run.buddy.request || run.buddy.request.status !== "awaiting_acceptance") return;
+    if (editingEquipment || !run || !run.buddy.request || run.buddy.request.status !== "awaiting_acceptance") return;
     setBusy(response === "accepted" ? "buddy_accept" : "buddy_decline");
     setError(null);
     try {
@@ -572,13 +588,47 @@ export default function Home() {
   }
 
   async function confirmBuddyAllocation() {
-    if (!run || !run.buddy.request || run.buddy.request.status !== "accepted") return;
+    if (editingEquipment || !run || !run.buddy.request || run.buddy.request.status !== "accepted") return;
     setBusy("buddy_confirm");
     setError(null);
     try {
       acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_confirm", request_id: run.buddy.request.id }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The buddy confirmation failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function beginEquipmentEdit() {
+    if (!run?.draft || run.screen_state !== "awaiting_decision" || run.draft.status !== "pending") return;
+    setEditSubject(run.draft.subject ?? "");
+    setEditBody(run.draft.body);
+    setError(null);
+    setEditingEquipment(true);
+  }
+
+  function cancelEquipmentEdit() {
+    setEditingEquipment(false);
+    setError(null);
+  }
+
+  async function saveEquipmentEdit() {
+    if (!run?.draft || run.screen_state !== "awaiting_decision" || run.draft.status !== "pending") return;
+    setBusy("edit");
+    setError(null);
+    try {
+      const next = await postDemo({
+        run_id: run.run_id,
+        action: "edit_equipment_draft",
+        draft_id: run.draft.id,
+        subject: editSubject,
+        body: editBody,
+      });
+      acceptRun(next);
+      setEditingEquipment(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The draft edit could not be saved");
     } finally {
       setBusy(null);
     }
@@ -744,16 +794,29 @@ export default function Home() {
                   <div className="draft-meta">
                     <div><span>To</span><strong>{current.draft.recipient}</strong></div>
                     <div><span>Channel</span><strong>{current.draft.channel}</strong></div>
-                    <div><span>Subject</span><strong>{current.draft.subject}</strong></div>
-                    <div><span>Wording</span><Tag tone="violet">{modelLabel(current.model.provider)}</Tag></div>
+                    {!editingEquipment && <div><span>Subject</span><strong>{current.draft.subject}</strong></div>}
+                    <div><span>Wording</span><div className="draft-tags"><Tag tone="violet">{modelLabel(current.model.provider)}</Tag>{current.draft.edited_by && <Tag tone="info">Edited by People</Tag>}</div></div>
                   </div>
-                  <div className="message">
-                    <div className="message-avatar" aria-hidden="true">A</div>
-                    <div>
-                      <div className="message-head"><strong>Athena</strong><span>to {current.draft.recipient}</span></div>
-                      <p>{current.draft.body}</p>
+                  {editingEquipment ? (
+                    <div className="draft-editor">
+                      <label>
+                        <span>Subject</span>
+                        <input aria-label="Draft subject" value={editSubject} onChange={(event) => setEditSubject(event.target.value)} disabled={busy !== null} />
+                      </label>
+                      <label>
+                        <span>Message</span>
+                        <textarea aria-label="Draft message" rows={7} value={editBody} onChange={(event) => setEditBody(event.target.value)} disabled={busy !== null} />
+                      </label>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="message">
+                      <div className="message-avatar" aria-hidden="true">A</div>
+                      <div>
+                        <div className="message-head"><strong>Athena</strong><span>to {current.draft.recipient}</span></div>
+                        <p>{current.draft.body}</p>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : <ApprovalEmptyState run={current} />}
 
@@ -772,10 +835,19 @@ export default function Home() {
                 </div>
               </details>
 
-              {isPending ? (
+              {editingEquipment ? (
+                <div className="actions draft-edit-actions">
+                  <p>Save or cancel your draft edits first. Approval stays disabled while editing.</p>
+                  <div className="action-buttons">
+                    <button className="button secondary" onClick={cancelEquipmentEdit} disabled={busy !== null}>Cancel</button>
+                    <button className="button primary" onClick={saveEquipmentEdit} disabled={busy !== null}>{busy === "edit" ? "Saving..." : "Save changes"}</button>
+                  </div>
+                </div>
+              ) : isPending ? (
                 <div className="actions">
                   <p>Draft awaiting your approval. Nothing is sent until you approve.</p>
                   <div className="action-buttons">
+                    <button className="button ghost" onClick={beginEquipmentEdit} disabled={busy !== null}>Edit draft</button>
                     <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject draft</button>
                     <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}</button>
                   </div>
@@ -783,7 +855,7 @@ export default function Home() {
               ) : current.screen_state === "draft_unavailable" ? (
                 <div className="outcome unavailable" role="alert">
                   <span className="outcome-icon">!</span>
-                  <div><strong>Draft unavailable.</strong><p>{current.draft_unavailable?.message}</p><div style={{ marginTop: 8 }}><button className="button secondary small" onClick={retryDraft} disabled={busy !== null}>{busy === "retry" ? "Retrying..." : "Retry draft"}</button></div></div>
+                  <div><strong>Draft unavailable.</strong><p>{current.draft_unavailable?.message}</p><div style={{ marginTop: 8 }}><button className="button secondary small" onClick={retryDraft} disabled={busy !== null || editingEquipment}>{busy === "retry" ? "Retrying..." : "Retry draft"}</button></div></div>
                 </div>
               ) : current.screen_state === "no_action" ? (
                 <div className="outcome positive" role="status">
@@ -806,7 +878,7 @@ export default function Home() {
   function renderBuddy(current: DemoResponse) {
     const request = buddyRequest;
     const detail = selectedAssessment;
-    const canPrepare = !!detail && !hasActiveBuddy && busy === null && detail.eligibility.eligible && detail.availability.status === "available";
+    const canPrepare = !!detail && !hasActiveBuddy && !editingEquipment && busy === null && detail.eligibility.eligible && detail.availability.status === "available";
     const stepState = (n: 1 | 2 | 3): "todo" | "active" | "done" => {
       if (!request) return n === 1 ? "active" : "todo";
       const s = request.status;
@@ -851,7 +923,7 @@ export default function Home() {
                 <div className="panel-head"><h3>Demo simulation</h3><span className="sim-badge">Simulated calendar</span></div>
                 <div className="panel-body actions">
                   <p>Change {simulationCandidate.candidate.full_name}&apos;s calendar and watch the evidence, status and next action update together.</p>
-                  <button className="button secondary small" onClick={() => simulateAvailability(simulationCandidate.candidate.id)} disabled={busy !== null}>{busy === "availability" ? "Refreshing calendar..." : `Simulate ${simulationCandidate.candidate.full_name} unavailable`}</button>
+                  <button className="button secondary small" onClick={() => simulateAvailability(simulationCandidate.candidate.id)} disabled={busy !== null || editingEquipment}>{busy === "availability" ? "Refreshing calendar..." : `Simulate ${simulationCandidate.candidate.full_name} unavailable`}</button>
                 </div>
               </div>
             )}
@@ -919,7 +991,7 @@ export default function Home() {
                         <div className="step-body">
                           <h4>People approves the exact request</h4>
                           {request.status === "pending_approval" && current.buddy.draft ? (
-                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}</button></div>
+                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null || editingEquipment}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null || editingEquipment}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}</button></div>
                           ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.sent_at ? `Approved and sent ${formatDateTime(request.sent_at)}.${request.status === "superseded" ? ` Superseded afterwards: ${request.invalidation_reason ?? "current facts changed."}` : ""}` : request.status === "superseded" ? request.invalidation_reason ?? "Superseded before approval." : "Waiting."}</p>}
                         </div>
                       </div>
@@ -930,7 +1002,7 @@ export default function Home() {
                           {request.status === "awaiting_acceptance" && current.buddy.after_approval?.status === "ok" ? (
                             <>
                               <p>Message receipt is recorded. No real buddy was contacted. Choose the response for this exact request.</p>
-                              <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
+                              <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null || editingEquipment}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null || editingEquipment}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
                             </>
                           ) : <p>{request.response === "declined" ? `${request.candidate_name} declined this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}. No replacement request was sent automatically; choose another candidate.` : request.response === "accepted" ? `${request.candidate_name} accepted this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}.` : request.sent_at ? "Awaiting response." : "Waiting for approval first."}</p>}
                         </div>
@@ -942,7 +1014,7 @@ export default function Home() {
                           {request.status === "accepted" ? (
                             <>
                               <p>Acceptance is separate from confirmation. The allocation task completes only here.</p>
-                              <div className="action-buttons"><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
+                              <div className="action-buttons"><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null || editingEquipment}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
                             </>
                           ) : <p>{request.confirmed_at ? `Confirmed by ${request.confirmed_by_name ?? "the named People actor"}. ${request.candidate_name} is recorded on this case.` : request.response === "declined" ? "Not reached: buddy declined." : "Waiting for acceptance first."}</p>}
                         </div>
@@ -1040,13 +1112,13 @@ export default function Home() {
             <div className="field">
               <label htmlFor="start-date">Start date</label>
               <div className="field-row">
-                <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={!run || run.phase === "resolved" || busy !== null} />
-                <button className="button secondary" onClick={changeStartDate} disabled={!run || run.phase === "resolved" || busy !== null || !dateDraft || dateDraft === run.joiner.start_date}>{busy === "date" ? "Recalculating..." : "Recalculate case"}</button>
+                <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={!run || run.phase === "resolved" || busy !== null || editingEquipment} />
+                <button className="button secondary" onClick={changeStartDate} disabled={!run || run.phase === "resolved" || busy !== null || editingEquipment || !dateDraft || dateDraft === run.joiner.start_date}>{busy === "date" ? "Recalculating..." : "Recalculate case"}</button>
               </div>
             </div>
             <div className="demo-controls">
               <span>Demo controls</span>
-              <button className="button primary" onClick={startFlow} disabled={busy !== null}>{busy === "start" ? "Preparing case..." : run ? "Reset and prepare again" : "Prepare demo"}</button>
+              <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment}>{busy === "start" ? "Preparing case..." : run ? "Reset and prepare again" : "Prepare demo"}</button>
             </div>
           </div>
         </header>
