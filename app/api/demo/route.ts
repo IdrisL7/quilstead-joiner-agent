@@ -10,7 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const pendingRuns = new Map<string, DemoPreparation>();
+let activeRun: DemoPreparation | null = null;
 
 function caseSummary(run: DemoPreparation) {
   return {
@@ -66,13 +66,15 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as { run_id?: unknown; decision?: unknown };
     if (typeof body.run_id === "string") {
-      const preparation = pendingRuns.get(body.run_id);
-      if (!preparation) return NextResponse.json({ error: "This demo run has expired. Start a new run." }, { status: 404 });
+      if (!activeRun || body.run_id !== activeRun.run_id) {
+        return NextResponse.json({ error: "This approval run is no longer active. Start a new run." }, { status: 409 });
+      }
+      const preparation = activeRun;
       if (body.decision !== "approve" && body.decision !== "reject") {
         return NextResponse.json({ error: "decision must be approve or reject" }, { status: 400 });
       }
+      activeRun = null;
       const resolution = await resolveDemoApproval(preparation, body.decision as DemoDecision, "pp-1");
-      pendingRuns.delete(body.run_id);
       return NextResponse.json({
         ...preparationResponse(preparation),
         phase: "resolved" as const,
@@ -88,9 +90,8 @@ export async function POST(request: Request) {
       });
     }
 
-    pendingRuns.clear();
     const preparation = await prepareDemo();
-    pendingRuns.set(preparation.run_id, preparation);
+    activeRun = preparation;
     return NextResponse.json(preparationResponse(preparation));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Demo flow failed";

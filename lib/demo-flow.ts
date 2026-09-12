@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { EVENTS } from "@/data/events";
 import { joinerById } from "@/data/joiners";
 import { personById } from "@/data/people";
@@ -15,8 +16,6 @@ import type { Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
 
 const DEMO_NOW = "2026-09-30T09:00:00Z";
 const DEMO_EVENT_ID = "EVT-004";
-const DEMO_DRAFT_ID = "DRAFT-DEMO-001";
-const DEMO_RUN_ID = "DEMO-RUN-001";
 
 export type DemoDecision = "approve" | "reject";
 
@@ -79,6 +78,8 @@ function updateCaseDraft(c: Case, draftId: string, decision: DemoDecision, decid
 
 export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?? "mock"): Promise<DemoPreparation> {
   resetDemoState();
+  const runId = `DEMO-RUN-${randomUUID()}`;
+  const draftId = `DRAFT-${randomUUID()}`;
 
   const event = EVENTS.find((candidate) => candidate.event_id === DEMO_EVENT_ID && candidate.type === "contract.signed");
   if (!event) throw new Error(`Demo event is not registered: ${DEMO_EVENT_ID}`);
@@ -127,7 +128,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
   }, mode);
 
   const draft: Draft = {
-    id: DEMO_DRAFT_ID,
+    id: draftId,
     case_id: c.id,
     kind: "nudge",
     action: "slack.send_message",
@@ -148,7 +149,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
   trace.push({ actor: "system", kind: "send.refused", summary: beforeApproval.summary });
 
   return {
-    run_id: DEMO_RUN_ID,
+    run_id: runId,
     case: c,
     event,
     joiner,

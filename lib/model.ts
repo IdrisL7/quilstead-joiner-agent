@@ -17,6 +17,9 @@ export interface NudgeModelDraft {
   body: string;
 }
 
+export const MODEL_TIMEOUT_MS = 15_000;
+export const MODEL_MAX_RETRIES = 0;
+
 const modelName = () => process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001";
 
 function mockDraft(input: NudgeModelInput): NudgeModelDraft {
@@ -58,7 +61,11 @@ async function anthropicDraft(input: NudgeModelInput): Promise<NudgeModelDraft> 
   if (!apiKey) throw new Error("DEMO_MODE=live requires ANTHROPIC_API_KEY");
 
   const model = modelName();
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({
+    apiKey,
+    timeout: MODEL_TIMEOUT_MS,
+    maxRetries: MODEL_MAX_RETRIES,
+  });
   const response = await client.messages.create({
     model,
     max_tokens: 300,

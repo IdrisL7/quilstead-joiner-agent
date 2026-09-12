@@ -36,4 +36,17 @@ describe("single end-to-end demonstration", () => {
     expect(resolution.trace.at(-2)?.kind).toBe("draft.rejected");
     expect(resolution.trace.at(-1)?.kind).toBe("send.refused");
   });
+
+  it("rejects a decision from a superseded preparation", async () => {
+    const oldPreparation = await prepareDemo(undefined, "mock");
+    const currentPreparation = await prepareDemo(undefined, "mock");
+
+    expect(currentPreparation.run_id).not.toBe(oldPreparation.run_id);
+    expect(currentPreparation.draft.id).not.toBe(oldPreparation.draft.id);
+    await expect(resolveDemoApproval(oldPreparation, "approve", "pp-1")).rejects.toThrow("could not be recorded");
+    expect(currentPreparation.draft.status).toBe("pending");
+
+    const resolution = await resolveDemoApproval(currentPreparation, "approve", "pp-1");
+    expect(resolution.afterApproval.status).toBe("ok");
+  });
 });
