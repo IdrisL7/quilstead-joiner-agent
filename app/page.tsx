@@ -85,6 +85,35 @@ function gapLabel(gapDays: number) {
   return `${days} calendar ${days === 1 ? "day" : "days"} ${gapDays > 0 ? "after" : "before"} first day`;
 }
 
+type ApprovalPanelRun = {
+  screen_state: DemoResponse["screen_state"];
+  facts: Pick<DemoFacts, "equipment_late" | "start_date" | "equipment_eta">;
+};
+
+export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
+  if (run.screen_state === "draft_unavailable") {
+    return (
+      <div className="no-action-heading unavailable-heading">
+        <p className="eyebrow">MODEL-PROPOSED ACTION</p>
+        <h2>Draft unavailable. Equipment risk remains</h2>
+        <p>The current ETA is still after the current start date. Retry drafting before any message can be sent.</p>
+      </div>
+    );
+  }
+
+  if (run.screen_state === "no_action" && !run.facts.equipment_late) {
+    return (
+      <div className="no-action-heading">
+        <p className="eyebrow">MODEL-PROPOSED ACTION</p>
+        <h2>No message needed</h2>
+        <p>The current ETA precedes the current start date, so the superseded draft is not available to send.</p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 async function postDemo(body: Record<string, string> = {}) {
   const response = await fetch("/api/demo", {
     method: "POST",
@@ -301,13 +330,7 @@ export default function Home() {
                     <div><strong>{run.draft.recipient}</strong><span className="message-channel"># onboarding-ops</span><p>{run.draft.body}</p></div>
                   </div>
                 </>
-              ) : (
-                <div className="no-action-heading">
-                  <p className="eyebrow">MODEL-PROPOSED ACTION</p>
-                  <h2>No message needed</h2>
-                  <p>The current ETA precedes the current start date, so the superseded draft is not available to send.</p>
-                </div>
-              )}
+              ) : <ApprovalEmptyState run={run} />}
 
               <details className="evidence-panel">
                 <summary><span>Why this?</span><span className="summary-meta">facts + policy source</span></summary>

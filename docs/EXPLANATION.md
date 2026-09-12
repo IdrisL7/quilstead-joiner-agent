@@ -32,6 +32,8 @@ The model does not calculate deadlines, choose recipients, grant access, approve
 
 `lib/model.ts` receives the joiner facts, equipment result, equipment task and owner name. In mock mode it produces deterministic subject and body text. In live mode the Anthropic adapter is bounded to a 15-second timeout, zero SDK retries and a strict JSON shape check. The requested action must mention a loaner or earlier delivery.
 
+The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”** Both modes keep the facts, approval gate and connector permissions outside the model.
+
 The live adapter exists, but live Anthropic execution is not run because credentials remain unresolved.
 
 ## 4. Why the approval boundary is outside the model
