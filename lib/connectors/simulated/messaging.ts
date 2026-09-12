@@ -77,6 +77,18 @@ export const rejectDraft = (draftId: string, decidedBy: string, decidedAt: strin
   return true;
 };
 
+// A state change can make a pending draft unsafe to approve. It is a trusted
+// application transition, not a human decision, so it cannot create an approval
+// record and it leaves the old draft unavailable to every send action.
+export const supersedeDraft = (draftId: string, decidedAt: string, reason: string): boolean => {
+  const draft = drafts.get(draftId);
+  if (!draft || draft.status !== "pending") return false;
+  draft.status = "rejected";
+  draft.decided_at = decidedAt;
+  draft.decision_reason = reason;
+  return true;
+};
+
 const approvedDraftFor = (
   action: DraftAction,
   channel: "slack" | "email",

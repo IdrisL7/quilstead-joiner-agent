@@ -29,7 +29,7 @@ function mockDraft(input: NudgeModelInput): NudgeModelDraft {
     provider: "mock",
     model: "deterministic-demo-model",
     subject: `Day-one laptop plan for ${joiner.preferred_name}`,
-    body: `Hi ${ownerName}, ${joiner.preferred_name}'s ${joiner.equipment_preference.replaceAll("_", " ")} is due ${eta}, four days after the ${joiner.start_date} start. Can you arrange a loaner or earlier delivery so ${joiner.preferred_name} is equipped on day one?`,
+    body: `Hi ${ownerName}, ${joiner.preferred_name}'s ${joiner.equipment_preference.replaceAll("_", " ")} is due ${eta}, after the ${joiner.start_date} start. Can you arrange a loaner or earlier delivery so ${joiner.preferred_name} is equipped on day one?`,
   };
 }
 

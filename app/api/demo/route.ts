@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { personById } from "@/data/people";
 import {
+  changeDemoStartDate,
   prepareDemo,
   resolveDemoApproval,
   type DemoDecision,
@@ -28,6 +29,7 @@ function equipmentSummary(run: DemoPreparation) {
 }
 
 function draftSummary(run: DemoPreparation) {
+  if (!run.draft) return null;
   return {
     id: run.draft.id,
     kind: run.draft.kind,
@@ -45,6 +47,7 @@ function draftSummary(run: DemoPreparation) {
 function preparationResponse(run: DemoPreparation) {
   return {
     phase: "pending" as const,
+    screen_state: run.draft ? "awaiting_decision" as const : "no_action" as const,
     run_id: run.run_id,
     case: caseSummary(run),
     joiner: {
@@ -56,28 +59,42 @@ function preparationResponse(run: DemoPreparation) {
     },
     model: run.model,
     equipment: equipmentSummary(run),
+    facts: run.facts,
     draft: draftSummary(run),
     before_approval: run.beforeApproval,
+    date_change: run.date_change,
     trace: run.trace,
   };
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { run_id?: unknown; decision?: unknown };
+    const body = await request.json() as { run_id?: unknown; decision?: unknown; action?: unknown; start_date?: unknown };
     if (typeof body.run_id === "string") {
       if (!activeRun || body.run_id !== activeRun.run_id) {
         return NextResponse.json({ error: "This approval run is no longer active. Start a new run." }, { status: 409 });
       }
       const preparation = activeRun;
+      if (body.action === "start_date_change") {
+        if (typeof body.start_date !== "string") {
+          return NextResponse.json({ error: "start_date is required for a start-date change" }, { status: 400 });
+        }
+        const updated = await changeDemoStartDate(preparation, body.start_date);
+        activeRun = updated;
+        return NextResponse.json(preparationResponse(updated));
+      }
       if (body.decision !== "approve" && body.decision !== "reject") {
         return NextResponse.json({ error: "decision must be approve or reject" }, { status: 400 });
+      }
+      if (!preparation.draft) {
+        return NextResponse.json({ error: "There is no current draft requiring approval" }, { status: 409 });
       }
       activeRun = null;
       const resolution = await resolveDemoApproval(preparation, body.decision as DemoDecision, "pp-1");
       return NextResponse.json({
         ...preparationResponse(preparation),
         phase: "resolved" as const,
+        screen_state: "resolved" as const,
         decision: resolution.decision,
         draft: {
           ...draftSummary(preparation),
