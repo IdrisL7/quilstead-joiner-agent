@@ -17,7 +17,6 @@
   --red: #b42318;     --red-soft: #fde8e6;
   --blue: #3b4da0;    --blue-soft: #e9ecf8;
   --violet: #4f3b8c;  --violet-soft: #efeaf8;
-  --focus: 0 0 0 3px rgba(16, 7, 43, 0.22);
   --radius: 8px;
   --radius-sm: 6px;
   --sidebar: 190px;
@@ -36,7 +35,8 @@ body {
 }
 h1, h2, h3, h4, p { margin: 0; }
 button { font: inherit; touch-action: manipulation; }
-button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: none; box-shadow: var(--focus); }
+button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.sidebar .nav-button:focus-visible, .topnav .tab:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
 input[type="date"] { font: inherit; }
 
 /* ---------- shell ---------- */

@@ -598,7 +598,7 @@ export default function Home() {
                 <>
                   <div className="draft-meta">
                     <div><span>To</span><strong>{current.draft.recipient}</strong></div>
-                    <div><span>Channel</span><strong>{current.draft.channel} · # onboarding-ops</strong></div>
+                    <div><span>Channel</span><strong>{current.draft.channel}</strong></div>
                     <div><span>Subject</span><strong>{current.draft.subject}</strong></div>
                     <div><span>Wording</span><Tag tone="violet">{modelLabel(current.model.provider)}</Tag></div>
                   </div>
@@ -665,9 +665,11 @@ export default function Home() {
     const stepState = (n: 1 | 2 | 3): "todo" | "active" | "done" => {
       if (!request) return n === 1 ? "active" : "todo";
       const s = request.status;
-      if (n === 1) return s === "pending_approval" ? "active" : ["awaiting_acceptance", "accepted", "confirmed"].includes(s) ? "done" : "active";
-      if (n === 2) return s === "awaiting_acceptance" ? "active" : ["accepted", "confirmed"].includes(s) ? "done" : "todo";
-      return s === "accepted" ? "active" : s === "confirmed" ? "done" : "todo";
+      const sent = !!request.sent_at;
+      const responded = !!request.response;
+      if (n === 1) return sent ? "done" : "active";
+      if (n === 2) return responded ? "done" : sent && s === "awaiting_acceptance" ? "active" : "todo";
+      return request.confirmed_at ? "done" : responded && s === "accepted" ? "active" : "todo";
     };
     return (
       <>
@@ -773,7 +775,7 @@ export default function Home() {
                           <h4>People approves the exact request</h4>
                           {request.status === "pending_approval" && current.buddy.draft ? (
                             <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null}>Reject exact request</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null}>{busy === "buddy_approve" ? "Sending..." : "Approve exact request"}</button></div>
-                          ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.status === "superseded" ? request.invalidation_reason ?? "Superseded by current facts." : stepState(1) === "done" ? `Approved and sent. ${current.buddy.after_approval?.summary ?? ""}` : "Waiting."}</p>}
+                          ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.sent_at ? `Approved and sent ${formatDateTime(request.sent_at)}.${request.status === "superseded" ? ` Superseded afterwards: ${request.invalidation_reason ?? "current facts changed."}` : ""}` : request.status === "superseded" ? request.invalidation_reason ?? "Superseded before approval." : "Waiting."}</p>}
                         </div>
                       </div>
                       <div className={`step ${stepState(2)}`}>
@@ -785,7 +787,7 @@ export default function Home() {
                               <p>Message receipt is recorded. No real buddy was contacted. Choose the response for this exact request.</p>
                               <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
                             </>
-                          ) : <p>{request.status === "declined" ? "Buddy declined in simulation. No replacement request was sent automatically; choose another candidate." : stepState(2) === "done" ? `${request.candidate_name} accepted this request.` : "Waiting for approval first."}</p>}
+                          ) : <p>{request.response === "declined" ? `${request.candidate_name} declined this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}. No replacement request was sent automatically; choose another candidate.` : request.response === "accepted" ? `${request.candidate_name} accepted this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}.` : request.sent_at ? "Awaiting response." : "Waiting for approval first."}</p>}
                         </div>
                       </div>
                       <div className={`step ${stepState(3)}`}>
@@ -797,7 +799,7 @@ export default function Home() {
                               <p>Acceptance is separate from confirmation. The allocation task completes only here.</p>
                               <div className="action-buttons"><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
                             </>
-                          ) : <p>{request.status === "confirmed" ? `Confirmed by ${request.confirmed_by_name ?? "the named People actor"}. ${request.candidate_name} is recorded on this case.` : "Waiting for acceptance first."}</p>}
+                          ) : <p>{request.confirmed_at ? `Confirmed by ${request.confirmed_by_name ?? "the named People actor"}. ${request.candidate_name} is recorded on this case.` : request.response === "declined" ? "Not reached: buddy declined." : "Waiting for acceptance first."}</p>}
                         </div>
                       </div>
                     </div>
