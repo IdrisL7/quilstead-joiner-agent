@@ -60,10 +60,20 @@ export const registerDraft = (draft: Draft): boolean => {
 
 export const approveDraft = (draftId: string, decidedBy: string, decidedAt: string): boolean => {
   const draft = drafts.get(draftId);
-  if (!draft || draft.status === "rejected" || !personById(decidedBy)) return false;
+  if (!draft || draft.status !== "pending" || !personById(decidedBy)) return false;
   draft.status = "approved";
   draft.decided_by = decidedBy;
   draft.decided_at = decidedAt;
+  return true;
+};
+
+export const rejectDraft = (draftId: string, decidedBy: string, decidedAt: string, reason: string): boolean => {
+  const draft = drafts.get(draftId);
+  if (!draft || draft.status !== "pending" || !personById(decidedBy)) return false;
+  draft.status = "rejected";
+  draft.decided_by = decidedBy;
+  draft.decided_at = decidedAt;
+  draft.decision_reason = reason;
   return true;
 };
 

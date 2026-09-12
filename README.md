@@ -14,9 +14,14 @@ See `AGENTS.md` for the map.
 npm install
 npm test                        # vitest
 npm run demo                    # one complete mock-mode event-to-send flow
+npm run dev                     # minimal approval screen at localhost:3000
 npm run prototype -- --all      # every event through the state machine, no model call
 npm run prototype -- J-002      # one joiner
 ```
+
+The approval screen defaults to a deterministic mock model. Set `DEMO_MODE=live` and provide
+`ANTHROPIC_API_KEY` to use the bounded Anthropic drafting path. The draft is still held until a
+human approves or rejects it, and the send remains simulated.
 
 ## What is working, simulated, incomplete
 
@@ -27,8 +32,9 @@ npm run prototype -- J-002      # one joiner
 | Permission ladder; no grant path; outbound messages gated on approval | Working, tested |
 | Webhook HMAC verification, citation guard | Working, tested |
 | HRIS, identity, equipment, Slack, email, e-sign, buddy directory, policy KB | Simulated adapters behind the production interface |
-| One event-to-plan-to-draft-to-approved-send trace | Working in deterministic mock mode, tested |
-| Full model loop, approval queue UI, general drafting | Incomplete |
+| One model-assisted event-to-plan-to-draft trace | Working in mock mode, live adapter available |
+| Minimal approval screen with approve/reject boundary | Working, browser-verified |
+| Persistence, live integrations, general model loop, policy Q&A | Deferred |
 | Case-view UI | Incomplete (Sunday) |
 | Public holidays in working-day maths | Not modelled |
 
