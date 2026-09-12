@@ -6,7 +6,8 @@
 // - The agent cannot complete a compliance item. `ComplianceItem.status` moves to
 //   "evidenced" only through a human action recorded with `evidenced_by`.
 // - Every outbound message is a `Draft` that sits in the approval queue until a human
-//   approves it. There is no send path that bypasses `Draft.status === "approved"`.
+//   approves it. Messaging actions accept a draft id and resolve the approved snapshot
+//   from trusted application state, so caller-supplied status and recipients are ignored.
 
 export type Country = "UK" | "US" | "DE";
 export type EmploymentType = "employee" | "contractor";

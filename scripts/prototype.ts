@@ -57,7 +57,7 @@ for (const e of events) {
     else if (r.case) console.log(`   last step: ${r.case.steps.at(-1)?.summary}`);
   } else if (e.type === "joiner.start_date_changed" && j) {
     const r = store.applyStartDateChange(e, j, NOW);
-    console.log(`\n>> ${e.event_id} ${e.type} ${e.joiner_id}: ${r.changed} re-dated, ${r.unchanged} unchanged, ${r.added} added`);
+    console.log(`\n>> ${e.event_id} ${e.type} ${e.joiner_id}: ${r.deadlineChanged} deadlines moved, ${r.changed} tasks reconciled, ${r.unchanged} unchanged, ${r.added} added`);
     if (r.case) printCase(r.case);
   }
 }

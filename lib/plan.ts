@@ -146,26 +146,62 @@ export function buildPlan(j: Joiner, caseId: string, now: string): PlanResult {
   return { tasks, escalations, steps, manager, manager_effective: effective, eligible_buddy_ids: eligible.map((b) => b.id) };
 }
 
-// Recompute after a start-date change: only tasks whose due date moved are reopened.
-export function rebuildForNewStartDate(existing: Case, j: Joiner, now: string): { changed: Task[]; unchanged: Task[]; added: Task[] } {
+// Recompute after a start-date change: refresh policy-derived fields and deadlines,
+// preserve human decisions, and return the fresh policy risks for reconciliation.
+export function rebuildForNewStartDate(existing: Case, j: Joiner, now: string): { changed: Task[]; unchanged: Task[]; added: Task[]; escalations: Escalation[]; deadlineChanged: number } {
   const fresh = buildPlan({ ...j }, existing.id, now);
   const changed: Task[] = [];
   const unchanged: Task[] = [];
   const added: Task[] = [];
+  const freshTaskIdsToExisting = new Map<string, string>();
+  let deadlineChanged = 0;
   for (const f of fresh.tasks) {
     const match = existing.tasks.find((t) => t.type === f.type && t.system === f.system);
     if (!match) {
       added.push(f);
       continue;
     }
-    if (match.due_at !== f.due_at) {
-      const wasDone = match.status === "done";
-      match.due_at = f.due_at;
-      match.status = wasDone ? "done" : statusAt(f.due_at, now);
+    freshTaskIdsToExisting.set(f.id, match.id);
+
+    const previous = {
+      title: match.title,
+      owner_id: match.owner_id,
+      owner_function: match.owner_function,
+      due_at: match.due_at,
+      sla_hours: match.sla_hours,
+      status: match.status,
+      compliance_code: match.compliance_code,
+      detail: match.detail,
+    };
+    const humanDecision = match.status === "done" || match.status === "cancelled" || match.status === "waiting_approval";
+    match.title = f.title;
+    match.owner_id = f.owner_id;
+    match.owner_function = f.owner_function;
+    match.due_at = f.due_at;
+    match.sla_hours = f.sla_hours;
+    match.compliance_code = f.compliance_code;
+    match.detail = f.detail;
+    if (!humanDecision) match.status = f.status;
+    if (previous.due_at !== match.due_at) deadlineChanged += 1;
+
+    if (
+      previous.title !== match.title ||
+      previous.owner_id !== match.owner_id ||
+      previous.owner_function !== match.owner_function ||
+      previous.due_at !== match.due_at ||
+      previous.sla_hours !== match.sla_hours ||
+      previous.status !== match.status ||
+      previous.compliance_code !== match.compliance_code ||
+      previous.detail !== match.detail
+    ) {
       changed.push(match);
     } else {
       unchanged.push(match);
     }
   }
-  return { changed, unchanged, added };
+  const escalations = fresh.escalations.map((escalation) => ({
+    ...escalation,
+    evidence: escalation.evidence.map((item) => freshTaskIdsToExisting.get(item) ?? item),
+  }));
+  return { changed, unchanged, added, escalations, deadlineChanged };
 }

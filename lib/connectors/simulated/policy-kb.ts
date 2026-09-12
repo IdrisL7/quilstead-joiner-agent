@@ -43,6 +43,8 @@ export function citeIsVerbatim(pageId: string, quote: string, pages = loadKb()):
   return !!p && quote.trim().length >= 20 && p.body.includes(quote.trim());
 }
 
+const MIN_RELEVANT_MATCHES = 2;
+
 export const policyKb: Connector = {
   name: "policy_kb",
   description: "Search and cite Quilstead policy pages.",
@@ -53,8 +55,17 @@ export const policyKb: Connector = {
       description: "Keyword search over policy pages. Returns page ids, titles and bodies.",
       schema: { query: "string" },
       run: async ({ query }) => {
-        const r = searchKb(String(query ?? ""));
-        return ok(`${r.length} pages matched`, r.slice(0, 3), r.length === 0 ? { next_actions: ["Escalate KB_NO_ANSWER"] } : {});
+        const matches = searchKb(String(query ?? ""));
+        const relevant = matches.filter((result) => result.score >= MIN_RELEVANT_MATCHES).slice(0, 3);
+        if (relevant.length === 0) {
+          return {
+            status: "warning",
+            summary: "No policy page met the relevance threshold; no answer drafted.",
+            next_actions: ["Escalate KB_NO_ANSWER"],
+            retryable: false,
+          };
+        }
+        return ok(`${relevant.length} relevant policy pages matched`, relevant);
       },
     },
     cite: {

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { joinerById } from "@/data/joiners";
 import type { Connector } from "../interface";
 import { ok, failed } from "../interface";
+import { currentJoinerById } from "@/lib/store/joiner-store";
 
 // Simulated HRIS, shaped like the Humaans API: bearer token with scopes, HMAC-signed
 // webhooks, minimum-field reads. `get_joiner` never returns identity document contents
@@ -29,7 +30,7 @@ export const hris: Connector = {
       description: "Minimum joiner fields for planning. No document contents, no bank or compensation data.",
       schema: { joiner_id: "string" },
       run: async ({ joiner_id }) => {
-        const j = joinerById(String(joiner_id));
+        const j = currentJoinerById(String(joiner_id)) ?? joinerById(String(joiner_id));
         if (!j) return failed(`No joiner ${joiner_id}`);
         const { demo_note: _demo, right_to_work, personal_email: _email, ...rest } = j;
         void _demo;

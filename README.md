@@ -1,11 +1,12 @@
 # Athena for Quilstead: Day-one readiness
 
-A working AI agent for one of Quilstead Solutions' onboarding pain points, built for the
+A deterministic prototype for one of Quilstead Solutions' onboarding pain points, built for the
 Humaans Athena take-home. The agent turns a "contract signed" event into a compliant,
 equipped, connected first morning without a person chasing every step.
 
-Status: Friday scaffold. Deterministic core, data pack, connectors, permission ladder and
-prototype are in. Agent loop, approvals and UI follow. See `AGENTS.md` for the map.
+Status: deterministic core hardening pass. Data pack, connectors, permission ladder,
+trusted approval checks and prototype are in. Agent loop, approval queue and UI follow.
+See `AGENTS.md` for the map.
 
 ## Run
 
