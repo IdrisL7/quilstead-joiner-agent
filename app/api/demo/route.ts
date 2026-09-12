@@ -112,6 +112,12 @@ function attentionSummary(run: DemoPreparation) {
   const complianceTasks = run.case.tasks.filter((task) => task.compliance_code);
   const openComplianceTasks = complianceTasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
   const unresolvedEscalations = run.case.escalations.filter((escalation) => !escalation.resolved_at);
+  const complianceEscalationCodes = new Set<string>(["RTW_NOT_EVIDENCED", "COMPLIANCE_DEADLINE_AT_RISK"]);
+  const unresolvedComplianceEscalations = unresolvedEscalations.filter((escalation) => complianceEscalationCodes.has(escalation.code));
+  const primaryComplianceTask = openComplianceTasks.find((task) => task.status === "escalated") ?? openComplianceTasks[0];
+  const complianceNextAction = primaryComplianceTask
+    ? `${primaryComplianceTask.status === "escalated" ? "Resolve" : "Complete"} ${primaryComplianceTask.title}.`
+    : unresolvedComplianceEscalations[0]?.summary ?? "No open compliance task is due by the current start date.";
   const screenState = run.decision
     ? "resolved"
     : run.draft
@@ -175,18 +181,16 @@ function attentionSummary(run: DemoPreparation) {
         : run.buddy.availability.recommendation?.candidate_name ?? null,
     },
     compliance: {
-      status: unresolvedEscalations.some((escalation) => escalation.severity === "critical")
+      status: unresolvedComplianceEscalations.some((escalation) => escalation.severity === "critical")
         ? "Blocked"
         : openComplianceTasks.length > 0
         ? "In progress"
         : "Complete",
-      owner_name: personById(openComplianceTasks[0]?.owner_id ?? unresolvedEscalations[0]?.to_person_id ?? "")?.full_name ?? "People",
-      next_action: unresolvedEscalations[0]?.summary ?? (openComplianceTasks.length > 0
-        ? `Review ${openComplianceTasks.length} open compliance task${openComplianceTasks.length === 1 ? "" : "s"}.`
-        : "No open compliance task is due by the current start date."),
+      owner_name: personById(primaryComplianceTask?.owner_id ?? unresolvedComplianceEscalations[0]?.to_person_id ?? "")?.full_name ?? "People",
+      next_action: complianceNextAction,
       open_tasks: openComplianceTasks.length,
       total_tasks: complianceTasks.length,
-      unresolved_escalations: unresolvedEscalations.length,
+      unresolved_escalations: unresolvedComplianceEscalations.length,
     },
   };
 }

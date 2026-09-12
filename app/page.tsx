@@ -190,8 +190,15 @@ function requestLabel(status: BuddyRequest["status"]) {
   return "Allocation confirmed";
 }
 
-function activeBuddyRequest(request: BuddyRequest | null) {
+function activeBuddyRequest(request: Pick<BuddyRequest, "status"> | null) {
   return !!request && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status);
+}
+
+export function simulationTargetFor(
+  request: Pick<BuddyRequest, "status" | "candidate_id"> | null,
+  recommendation: Pick<NonNullable<BuddyAvailability["recommendation"]>, "candidate_id"> | null,
+) {
+  return activeBuddyRequest(request) ? request?.candidate_id ?? null : recommendation?.candidate_id ?? null;
 }
 
 function attentionTone(status: string) {
@@ -475,9 +482,7 @@ export default function Home() {
   const buddyRequest = run?.buddy.request ?? null;
   const hasActiveBuddy = activeBuddyRequest(buddyRequest);
   const recommendedBuddy = run?.buddy.availability.recommendation;
-  const simulationTarget = buddyRequest?.status === "pending_approval" || buddyRequest?.status === "awaiting_acceptance" || buddyRequest?.status === "accepted"
-    ? buddyRequest.candidate_id
-    : recommendedBuddy?.candidate_id;
+  const simulationTarget = simulationTargetFor(buddyRequest, recommendedBuddy ?? null);
   const buddyCandidates = run ? (() => {
     const top = run.buddy.availability.candidates.slice(0, 3);
     const currentRequestCandidate = buddyRequest && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(buddyRequest.status)

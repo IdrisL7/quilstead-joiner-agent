@@ -648,9 +648,24 @@ export async function resolveDemoApproval(
   };
 }
 
+function formatBuddySlot(slot: BuddyRequest["slots"][number]): string {
+  const date = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: slot.timezone,
+  }).format(new Date(slot.start_at)).replace(",", "");
+  const time = (value: string) => new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: slot.timezone,
+  }).format(new Date(value));
+  return `${date}, ${time(slot.start_at)} to ${time(slot.end_at)} (${slot.timezone})`;
+}
+
 function buddyRequestBody(joiner: Joiner, candidateName: string, slots: BuddyRequest["slots"]): string {
   const slotSummary = slots
-    .map((slot) => `${slot.kind} ${slot.start_at} to ${slot.end_at} (${slot.timezone})`)
+    .map((slot) => `${slot.kind[0].toUpperCase()}${slot.kind.slice(1)} ${formatBuddySlot(slot)}`)
     .join("; ");
   return `Hi ${candidateName}, could you support ${joiner.preferred_name} as their onboarding buddy? The proposed commitment is one introduction and one shadowing session during the first working week: ${slotSummary}. Please accept or decline this specific request.`;
 }

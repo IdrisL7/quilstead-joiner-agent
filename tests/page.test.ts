@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ApprovalEmptyState } from "@/app/page";
+import { ApprovalEmptyState, simulationTargetFor } from "@/app/page";
 
 function render(run: { screen_state: "draft_unavailable" | "no_action"; equipment_late: boolean }) {
   return renderToStaticMarkup(createElement(ApprovalEmptyState, {
@@ -29,5 +29,14 @@ describe("approval empty state rendering", () => {
 
     expect(html).toContain("No message needed");
     expect(html).not.toContain("Draft unavailable");
+  });
+});
+
+describe("buddy simulation target", () => {
+  it("keeps the confirmed buddy as the availability simulation target", () => {
+    expect(simulationTargetFor(
+      { status: "confirmed", candidate_id: "b-06" },
+      { candidate_id: "b-01" },
+    )).toBe("b-06");
   });
 });

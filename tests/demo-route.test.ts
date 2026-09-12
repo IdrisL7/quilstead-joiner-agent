@@ -156,4 +156,23 @@ describe("demo approval route", () => {
     expect(changed.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-06")?.availability.status).toBe("unknown");
     expect(changed.trace.some((step) => step.kind === "simulation.buddy_calendar.changed")).toBe(true);
   });
+
+  it("keeps compliance attention on the open compliance task after a date change", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as { run_id: string };
+
+    const changedResponse = await POST(request({
+      run_id: initial.run_id,
+      action: "start_date_change",
+      start_date: "2026-10-19",
+    }));
+    expect(changedResponse.status).toBe(200);
+    const changed = await changedResponse.json() as {
+      attention: { compliance: { next_action: string; unresolved_escalations: number } };
+    };
+
+    expect(changed.attention.compliance.next_action).toContain("Right to work check evidenced in HRIS");
+    expect(changed.attention.compliance.next_action).not.toContain("Start date moved");
+    expect(changed.attention.compliance.unresolved_escalations).toBe(0);
+  });
 });

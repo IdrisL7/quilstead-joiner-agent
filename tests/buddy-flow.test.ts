@@ -45,7 +45,7 @@ type BuddyPayload = {
   draft: { id: string; status: string } | null;
   buddy: {
     request: BuddyRequestView | null;
-    draft: { id: string; status: string } | null;
+    draft: { id: string; status: string; body: string } | null;
     before_approval: { status: string; summary: string } | null;
     after_approval?: { status: string; summary: string };
     availability: {
@@ -74,6 +74,8 @@ describe("checkpoint-B buddy flow", () => {
     expect(buddyPrepared.draft?.status).toBe("pending");
     expect(buddyRequest.status).toBe("pending_approval");
     expect(buddyPrepared.buddy.draft?.status).toBe("pending");
+    expect(buddyPrepared.buddy.draft?.body).toContain("Introduction Mon 12 Oct, 12:00 to 12:30 (Europe/London)");
+    expect(buddyPrepared.buddy.draft?.body).not.toContain("T11:00:00.000Z");
 
     const buddyApproved = await (await POST(request({
       run_id: buddyPrepared.run_id,
