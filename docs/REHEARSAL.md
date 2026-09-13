@@ -1,6 +1,7 @@
 # Athena rehearsal
 
-This is the customer-facing rehearsal for the bounded day-one readiness flow. It uses fictional Quilstead data and mock systems only.
+This is the customer-facing rehearsal for the bounded day-one readiness flow. It uses fictional
+Quilstead data and mock systems only.
 
 ## Before starting
 
@@ -10,44 +11,66 @@ Run:
 DEMO_MODE=mock npm run dev
 ```
 
-Open `http://localhost:3000`. Keep the browser at a laptop-sized viewport for the main rehearsal. The narrow layout keeps the `SIMULATED / NO LIVE SEND` badge visible and is useful for a final readability check.
+Open `http://localhost:3000` at a laptop-sized viewport. Keep the `SIMULATED / NO LIVE SEND`
+badge visible. The real Anthropic probe is not part of this browser rehearsal.
 
-This customer flow stays in mock mode. The live Anthropic probe is reserved for Checkpoint C, and
-no live delivery is exercised. Keep that boundary explicit.
-
-## 15-minute customer run-of-show
+## Ten-minute walkthrough
 
 | Time | Action | Point to make |
 |---|---|---|
-| 0:00-1:00 | Set the scene | Athena watches a contract-signed event and looks for one day-one risk. The case is Aisha Okafor, London, hybrid, starting 12 October. |
-| 1:00-2:00 | Click `Simulate contract signed` | The event opens `CASE-J-004`. The deterministic plan creates 14 tasks, then the simulated equipment connector reports an ETA of 16 October. |
-| 2:00-3:00 | Open `Overview`; read `Initial onboarding checks completed` and the timeline | The initial summary is historical. Current approval, send and date status belong in `Needs attention`; the timeline uses current facts. |
-| 3:00-4:00 | Open `Equipment`, then expand `Why this action` | Show the start date, ETA, task deadline, owner, exact equipment policy quote and human approval requirement. Distinguish source facts from generated wording. |
-| 4:00-5:30 | Click `Edit`, change wording, then `Cancel` | Only subject and message are editable. Cancel restores the pending draft and sends nothing. Recipient, channel and evidence remain application-controlled. |
-| 5:30-7:00 | Edit again and click `Save` | Saving creates a fresh pending revision, invalidates the old version and shows `Edited by People`. Approval is still required. |
-| 7:00-8:00 | Click `Approve` | The simulated Slack action uses exactly the saved wording. Result: `Sent with approval. Awaiting IT response.` It does not claim the laptop problem is solved. |
-| 8:00-10:00 | Open `Buddy support`, review the assistant-prepared Ewan request, approve the exact request, accept and confirm | The request preview is the exact fixed mock draft. Simulated buddy acceptance remains separate from `Confirm allocation as People`. |
-| 10:00-11:00 | Click `Simulate Ewan Grant unavailable` | The confirmed buddy remains the target. Availability becomes unknown, the request is superseded and Amara is offered. The trace records the simulated response. |
-| 11:00-12:00 | Use `Reset / simulate contract signed again`, open `Buddy support`, approve the assistant-prepared Ewan request, then `Simulate buddy declines` | The decline control appears only after the exact request is approved and sent. Decline is labelled simulated and the assistant prepares a fresh pending request from current availability. |
-| 12:00-13:30 | Change the start date to 19 October and click `Recalculate case` | The same case remains active, deadlines recompute, the chronological timeline updates and the compliance next action stays tied to the real compliance task. |
-| 13:30-15:00 | Open `Activity`, read the trace and close on boundaries | People owns approvals and confirmation, IT owns the equipment response, calendars remain mock read-only snapshots, and one live Anthropic draft probe does not equal live integration proof. |
+| 0:00-0:45 | Click `Simulate contract signed` | The visible event opens Aisha's case. Deterministic code creates the plan and the simulated equipment connector reports an ETA of 16 October against the 12 October start. |
+| 0:45-1:30 | Stay on `Overview` and read the timeline | The timeline is built from current case facts. The initial execution summary is historical and does not rewrite itself after later approval or date changes. |
+| 1:30-2:30 | Open `Equipment`, then expand `Why this action` | Show the start date, ETA, task deadline, owner, policy evidence and the approval requirement. Code calculates the risk; the model contributes a bounded proposal. |
+| 2:30-3:30 | Open `Activity` and read the trace | Point to the deliberate prohibited access call, the visible guard refusal and the later finished step. Then show the corresponding permission rule in `config/permissions.json`. |
+| 3:30-4:30 | Approve the equipment draft | People approves the exact pending draft. The simulated Slack receipt means only that the request was sent by the demo; it does not mean IT accepted it. |
+| 4:30-6:00 | Click `Reset`, then `Simulate contract signed`; open `Buddy support`, select Ewan and prepare the request | Reset and trigger are separate demo controls. Candidate eligibility and London-time slots come from the simulated calendar; selecting a row sends nothing. |
+| 6:00-7:00 | Click `Approve` for the exact Ewan request, then `Simulate buddy declines` | Buddy acceptance is a simulated response after approval. The decline creates a new pending proposal from current facts and does not send a replacement automatically. |
+| 7:00-8:00 | Change the start date to 19 October and recalculate | Deadlines and risk are recomputed from current state. The chronological timeline changes, and the compliance next action remains the actual open compliance task. |
+| 8:00-9:15 | Point to `docs/evals/README.md` | The mock golden set is 20/20 at pass^3 across three passes, with mean tool calls and zero terminal-state flapping. Live cost and reliability are deliberately not claimed because the provider probe is not run. |
+| 9:15-10:00 | Close on boundaries and the case Activity ledger | The case trail stays complete even though the UI trace is thinned. People owns approvals and confirmation, IT owns the equipment response, calendars are read-only snapshots, and no tool can send without approval. |
+
+## Spoken model distinction
+
+Say explicitly: “This mock run uses a fixed draft; the live adapter generates wording from the same
+facts.” The mock model is deterministic so the golden set can be repeated. The live adapter uses
+the same loop, tool schemas and guards, but its wording and tool choices require a real provider
+run before they can be described as measured.
+
+## Recovery lines
+
+- If the assistant is unavailable, point to `Draft unavailable`, keep the current case facts visible,
+  and click `Run assistant again`. No draft is approvable while the run is unavailable.
+- If the start date changes to 9 October, explain that the equipment risk remains and a new draft
+  can be prepared. If drafting fails, the case and returned facts still use the requested date.
+- If a stale tab tries to approve, explain that the old run or draft is rejected and the current
+  pending version must be reviewed.
+- If a buddy becomes unavailable, show that the confirmed buddy remains the simulation target until
+  the changed availability is recorded, then explain that the request is superseded and another
+  candidate can be proposed.
 
 ## What to avoid saying
 
-- Do not say the equipment was delivered or that IT accepted the request. The receipt only confirms the simulated send.
+- Do not say the equipment was delivered or that IT accepted the request. The receipt only confirms
+  the simulated send.
 - Do not describe this as a general autonomous agent or a full onboarding dashboard.
-- Do not imply that the model calculated deadlines or selected a recipient.
-- Do not claim live Slack delivery, a real IT response or production reliability. One local Anthropic draft-generation probe passed, but live delivery was not exercised.
-- Do not describe the one live draft probe as a complete live integration.
-- Say explicitly: “This mock run uses a fixed draft; the live adapter generates wording from the same facts.”
+- Do not imply that the model calculated deadlines, selected an ineligible recipient or completed a
+  compliance task.
+- Do not claim live Slack delivery, a real IT response or production reliability. The live provider
+  probe and live golden evaluation remain NOT RUN.
 
-## Rehearsal checkpoints
+## Technical explanation order
 
-The visible sequence should be:
+When asked how it works, use this order:
 
-```text
-contract signed -> deterministic plan -> equipment observation -> model draft
--> evidence -> human approval -> simulated Slack receipt -> current-state date change
-```
+1. `lib/agent/loop.ts`: bounded steps, tool calls, timeout, retries and commit-on-finish.
+2. `config/permissions.json`: every tool call is authorized, including the visible refusal.
+3. `lib/agent/guards.ts`: recipients, dates, slots, message purpose and approval boundaries are
+   checked in application code.
+4. `docs/evals/README.md`: the measured mock table, price source, cost boundary and failure
+   classification.
+5. The case trail and `Activity`: complete evidence remains available even when presentation rows
+   are reduced to the decisions a reviewer needs.
 
-If a click fails, stop the customer demonstration and use the trace and test output to explain the boundary. Do not improvise a second workflow.
+The correct close is: one bounded mock flow, one fake-client verification of the Anthropic adapter,
+and a clearly stated live-provider gap. Persistence, live integrations and broader orchestration
+remain deferred.

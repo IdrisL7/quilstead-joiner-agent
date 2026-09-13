@@ -22,4 +22,4 @@ Browser checks ran headless in Chrome (playwright-core) at 1440x900 and 390x844 
 | Keyboard order | nav, start date, recalculate, demo controls, candidate rows, actions; `:focus-visible` outline on all controls, white outline in the sidebar independent of the indigo selection marker |
 | Simulation label visible on desktop and mobile | yes |
 
-Captures: `01-overview.png`, `02-equipment-pending.png`, `07-buddy-request-pending.png`, `14-equipment-after-date-change.png` (desktop 1440), `21-mobile-overview.png` (390). Live Anthropic execution was not part of this pass.
+Captures: `01-overview.png`, `02-equipment-pending.png`, `07-buddy-request-pending.png`, `14-equipment-after-date-change.png` (desktop 1440), `21-mobile-overview.png` (390). The real live Anthropic browser probe remains NOT RUN because no key is configured; the fake-client adapter test is covered by the local suite.
