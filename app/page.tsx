@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
+import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 
 type ToolResult = { status: "ok" | "warning" | "error" | "denied"; summary: string };
 type DemoDecision = "approve" | "reject";
@@ -63,6 +64,16 @@ interface BuddySlot {
   duration_minutes: number;
 }
 
+interface BuddyBusyInterval {
+  start_at: string;
+  end_at: string;
+}
+
+interface BuddyWorkingHours {
+  start_local: string;
+  end_local: string;
+}
+
 interface BuddyCandidateAssessment {
   candidate: {
     id: string;
@@ -79,6 +90,10 @@ interface BuddyCandidateAssessment {
     reason: string;
     snapshot_at?: string;
     timezone?: string;
+    working_hours?: BuddyWorkingHours;
+    coverage_start_date?: string;
+    coverage_end_date?: string;
+    busy_intervals?: BuddyBusyInterval[];
     slots: BuddySlot[];
   };
 }
@@ -272,6 +287,149 @@ function formatSlot(slot: BuddySlot) {
     minute: "2-digit",
     timeZone: slot.timezone,
   }).format(new Date(slot.end_at))}`;
+}
+
+function localTimeParts(value: string, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: timezone,
+  }).formatToParts(new Date(value));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = Number(values.hour);
+  const minute = Number(values.minute);
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    minutes: hour * 60 + minute,
+    time: `${values.hour}:${values.minute}`,
+  };
+}
+
+function minutesFromLocalTime(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function calendarDayLabel(date: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function WeekStrip({
+  assessment,
+  startDate,
+  request,
+  joinerName,
+}: {
+  assessment: BuddyCandidateAssessment;
+  startDate: string;
+  request: BuddyRequest | null;
+  joinerName: string;
+}) {
+  const { candidate, availability } = assessment;
+  const dates = firstWorkingWeek(startDate);
+  const timezone = availability.timezone ?? candidate.timezone;
+  const workingHours = availability.working_hours ?? { start_local: "09:00", end_local: "17:30" };
+  const workdayStart = minutesFromLocalTime(workingHours.start_local);
+  const workdayEnd = minutesFromLocalTime(workingHours.end_local);
+  const trackHeight = ((workdayEnd - workdayStart) / 30) * 8;
+  const currentRequest = request
+    && request.candidate_id === candidate.id
+    && !["rejected", "superseded"].includes(request.status)
+    ? request
+    : null;
+  const proposedSlots = currentRequest?.slots.length ? currentRequest.slots : availability.slots;
+  const confirmed = currentRequest?.status === "confirmed";
+  const busyIntervals = availability.busy_intervals ?? [];
+  const isCalendarState = availability.status === "unknown" || availability.status === "error";
+  const stateTitle = availability.status === "error" ? "Calendar read failed" : "Calendar not read for this candidate";
+
+  const blocksForDate = (date: string) => {
+    const busy = busyIntervals
+      .map((interval) => ({
+        key: `busy-${interval.start_at}`,
+        label: "Busy",
+        tone: "busy",
+        start: localTimeParts(interval.start_at, timezone),
+        end: localTimeParts(interval.end_at, timezone),
+      }))
+      .filter((block) => block.start.date === date);
+    const slots = proposedSlots
+      .map((slot) => ({
+        key: slot.id,
+        label: slot.kind,
+        tone: confirmed ? "confirmed" : "proposed",
+        start: localTimeParts(slot.start_at, timezone),
+        end: localTimeParts(slot.end_at, timezone),
+      }))
+      .filter((block) => block.start.date === date);
+    return [...busy, ...slots];
+  };
+
+  const blockStyle = (start: number, end: number): CSSProperties => ({
+    top: `${Math.max(0, ((start - workdayStart) / 30) * 8)}px`,
+    height: `${Math.max(8, ((Math.min(end, workdayEnd) - Math.max(start, workdayStart)) / 30) * 8)}px`,
+  });
+
+  return (
+    <div
+      className="week-strip"
+      role="group"
+      aria-label={`First working week for ${candidate.full_name}, ${busyIntervals.length} busy blocks, ${proposedSlots.length} proposed slots`}
+    >
+      <div className="week-strip-head">
+        <div>
+          <strong>First working week</strong>
+          <span>{workingHours.start_local} to {workingHours.end_local} · {timezone}</span>
+        </div>
+        <span className="sim-badge">Simulated calendar</span>
+      </div>
+      <div className={`week-calendar ${isCalendarState ? "state" : ""}`} style={{ "--week-track-height": `${trackHeight}px` } as CSSProperties}>
+        <div className="week-time-axis" aria-hidden="true"><span>{workingHours.start_local}</span><span>{workingHours.end_local}</span></div>
+        <div className="week-strip-grid">
+          {dates.map((date, index) => {
+            const blocks = isCalendarState ? [] : blocksForDate(date);
+            return (
+              <div className="week-day" key={date}>
+                <strong className="week-day-head">{calendarDayLabel(date)}</strong>
+                <div className="week-day-track">
+                  {blocks.map((block) => (
+                    <span
+                      className={`week-block ${block.tone}`}
+                      key={block.key}
+                      style={blockStyle(block.start.minutes, block.end.minutes)}
+                      title={`${block.label} ${block.start.time} to ${block.end.time}`}
+                    >
+                      <b>{block.label === "introduction" ? "Intro" : block.label === "shadowing" ? "Shadow" : block.label}</b><small>{block.start.time}</small>
+                    </span>
+                  ))}
+                  {!isCalendarState && index === 0 && (
+                    <span className="week-arrival" style={{ top: `${((570 - workdayStart) / 30) * 8}px` }}>
+                      <b>{joinerName.split(" ")[0]} arrives 09:30</b>
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {isCalendarState && (
+          <div className="week-calendar-note">
+            <strong>{stateTitle}</strong>
+            <span>{availability.reason}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function initials(name: string) {
@@ -999,6 +1157,7 @@ export default function Home() {
                     </div>
                     <p className="muted small">{detail.availability.reason}</p>
                     {detail.eligibility.reasons.length > 0 && <ul className="reasons">{detail.eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+                    {detail.availability.status !== "unavailable" && <WeekStrip assessment={detail} startDate={current.buddy.availability.start_date} request={request} joinerName={current.joiner.full_name} />}
                     {detail.availability.slots.length > 0 && (
                       <div className="slots">
                         {detail.availability.slots.map((slot) => <div className="slot" key={slot.id}><span className="kind">{slot.kind}</span><span className="when">{formatSlot(slot)}</span><span className="tz">{slot.duration_minutes} min · {slot.timezone}</span></div>)}

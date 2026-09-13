@@ -258,6 +258,31 @@ blockquote.quote { margin: 0; padding: 8px 10px; border-left: 3px solid var(--ac
 .slot .kind { font-weight: 600; text-transform: capitalize; }
 .slot .when { font-weight: 500; }
 .slot .tz { color: var(--muted); text-align: right; }
+.week-strip { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--row); }
+.week-strip-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.week-strip-head > div { display: grid; gap: 2px; min-width: 0; }
+.week-strip-head strong { font-size: 12px; font-weight: 600; }
+.week-strip-head span:not(.sim-badge) { color: var(--muted); font-size: 11px; }
+.week-calendar { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 8px; min-width: 0; }
+.week-time-axis { position: relative; height: var(--week-track-height); color: var(--muted); font-size: 10px; }
+.week-time-axis span { position: absolute; right: 0; white-space: nowrap; }
+.week-time-axis span:first-child { top: -6px; }
+.week-time-axis span:last-child { bottom: -6px; }
+.week-strip-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; min-width: 0; }
+.week-day { display: grid; gap: 5px; min-width: 0; }
+.week-day-head { overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.week-day-track { position: relative; height: var(--week-track-height); min-height: 40px; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 7px, var(--line-2) 7px, var(--line-2) 8px), var(--panel); }
+.week-block { position: absolute; right: 3px; left: 3px; display: flex; align-items: center; justify-content: space-between; gap: 3px; min-height: 8px; overflow: hidden; padding: 1px 4px; border: 1px solid transparent; border-radius: 3px; font-size: 9px; line-height: 1.1; }
+.week-block b { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.week-block small { flex: 0 0 auto; font-size: 9px; }
+.week-block.busy { border-color: #d2d1cd; background: var(--line); color: var(--muted); }
+.week-block.proposed { border-color: var(--accent-strong); background: #ecebff; color: var(--accent-strong); }
+.week-block.confirmed { border-color: var(--green); background: var(--green-soft); color: var(--green); }
+.week-arrival { position: absolute; right: 0; left: 0; display: block; border-top: 2px solid #c93b3b; color: #c93b3b; font-size: 9px; line-height: 1; }
+.week-arrival b { position: absolute; top: 2px; left: 3px; padding: 0 2px; background: var(--panel); font-size: 8px; font-weight: 600; letter-spacing: -0.1px; white-space: nowrap; }
+.week-calendar-note { position: absolute; inset: 26px 0 0 50px; display: grid; align-content: center; justify-items: center; gap: 3px; padding: 10px; border-radius: 4px; background: color-mix(in srgb, var(--panel) 86%, transparent); color: var(--muted); text-align: center; }
+.week-calendar-note strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.week-calendar-note span { max-width: 560px; font-size: 11px; }
 .steps { display: grid; gap: 10px; }
 .step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .step.active { border-color: var(--accent); }
@@ -325,6 +350,17 @@ footer.app-foot { padding: 12px 24px 20px; color: var(--faint); font-size: 11px;
   .cand-tags { flex-direction: row; align-items: center; }
   .slot { grid-template-columns: 1fr; gap: 2px; }
   .slot .tz { text-align: left; }
+  .week-calendar { grid-template-columns: 1fr; gap: 0; }
+  .week-time-axis { display: none; }
+  .week-strip-grid { grid-template-columns: 1fr; gap: 0; }
+  .week-day { grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line-2); }
+  .week-day:last-child { border-bottom: 0; }
+  .week-day-head { padding-top: 7px; }
+  .week-day-track { height: auto; min-height: 32px; padding: 2px; background: var(--panel); }
+  .week-block { position: static; display: inline-flex; width: auto; min-height: 24px; height: auto !important; margin: 2px; padding: 3px 5px; vertical-align: top; }
+  .week-arrival { position: static; display: inline-flex; width: auto; min-height: 24px; margin: 2px; padding: 3px 5px; border: 0; border-radius: 3px; background: #ffe6e6; vertical-align: top; }
+  .week-arrival b { position: static; padding: 0; background: transparent; }
+  .week-calendar-note { position: static; grid-column: 1; margin: 8px 0 0; }
   .trace-row { grid-template-columns: 8px minmax(0, 1fr); gap: 4px 10px; }
   .trace-actor, .trace-kind, .trace-summary { grid-column: 2; }
   .action-buttons { width: 100%; flex-direction: column; }

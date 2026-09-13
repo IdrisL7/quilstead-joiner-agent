@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { buddyById } from "@/data/buddies";
+import { buddyCalendarById } from "@/data/buddy-calendars";
 import { personById } from "@/data/people";
 import { attentionSummary } from "@/lib/attention";
+import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 import {
   BuddyFlowConflict,
   changeDemoStartDate,
@@ -103,9 +105,49 @@ function buddyRequestSummary(request: BuddyRequest | null) {
   };
 }
 
+function localDateFor(timestamp: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function buddyAvailabilitySummary(run: DemoPreparation) {
+  const requestedWeek = new Set(firstWorkingWeek(run.buddy.availability.start_date));
+  return {
+    ...run.buddy.availability,
+    candidates: run.buddy.availability.candidates.map((assessment) => {
+      const snapshot = buddyCalendarById(assessment.candidate.id);
+      if (!snapshot) return assessment;
+
+      const canShowBusyIntervals = snapshot.read_status === "known"
+        && ["available", "busy"].includes(assessment.availability.status);
+      const busyIntervals = canShowBusyIntervals
+        ? snapshot.busy_intervals.filter((interval) => requestedWeek.has(localDateFor(interval.start_at, snapshot.timezone)))
+        : [];
+
+      return {
+        ...assessment,
+        availability: {
+          ...assessment.availability,
+          timezone: assessment.availability.timezone ?? snapshot.timezone,
+          working_hours: snapshot.working_hours,
+          coverage_start_date: snapshot.coverage_start_date,
+          coverage_end_date: snapshot.coverage_end_date,
+          busy_intervals: busyIntervals,
+        },
+      };
+    }),
+  };
+}
+
 function buddySummary(run: DemoPreparation) {
   return {
-    availability: run.buddy.availability,
+    availability: buddyAvailabilitySummary(run),
     request: buddyRequestSummary(run.buddy.request),
     draft: buddyDraftSummary(run),
     before_approval: run.buddy.beforeApproval,

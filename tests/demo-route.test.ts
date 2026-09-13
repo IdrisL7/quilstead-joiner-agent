@@ -42,6 +42,43 @@ describe("demo approval route", () => {
     expect(run.trace.some((entry) => entry.kind === "agent.finished")).toBe(true);
   });
 
+  it("projects only known first-week busy intervals into the UI summary", async () => {
+    const initialResponse = await POST(request());
+    const initial = await initialResponse.json() as {
+      run_id: string;
+      buddy: {
+        availability: {
+          candidates: Array<{
+            candidate: { id: string };
+            availability: {
+              status: string;
+              busy_intervals: Array<{ start_at: string; end_at: string }>;
+              working_hours: { start_local: string; end_local: string };
+              coverage_start_date: string;
+              coverage_end_date: string;
+            };
+          }>;
+        };
+      };
+    };
+
+    const ewan = initial.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-06")!;
+    expect(ewan.availability.status).toBe("available");
+    expect(ewan.availability.busy_intervals).toHaveLength(2);
+    expect(ewan.availability.working_hours).toEqual({ start_local: "09:00", end_local: "17:30" });
+    expect(ewan.availability.coverage_start_date).toBe("2026-10-09");
+    expect(ewan.availability.coverage_end_date).toBe("2026-10-23");
+
+    const movedResponse = await POST(request({
+      run_id: initial.run_id,
+      action: "start_date_change",
+      start_date: "2026-10-19",
+    }));
+    const moved = await movedResponse.json() as typeof initial;
+    const movedEwan = moved.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-06")!;
+    expect(movedEwan.availability.busy_intervals).toEqual([]);
+  });
+
   it("recalculates the active case and invalidates the old approval run", async () => {
     const pendingResponse = await POST(request());
     const pending = await pendingResponse.json() as { run_id: string; draft: { id: string } };
