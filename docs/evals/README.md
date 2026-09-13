@@ -75,16 +75,27 @@ expected value. No miss was fixed by re-running until it passed.
 | contract-j005-repeat | 3/3 | finished | Approve the pending nudge to Sarah Mitchell about the overdue HRIS profile. |
 | contract-j009-repeat | 3/3 | no run, rejected | none |
 
-## Three sentences for the panel
+## Panel wording
 
-- Reliability: twenty live scenarios, three passes each, every pass reached the expected proposals,
-  escalations and case state, with no terminal-state flapping; the model's wording varied, its
-  decisions did not.
-- Cost: USD 0.027 per case run on Haiku 4.5, about 23k input tokens across five tool calls; at 30
-  joiners a week with three triggers each, roughly USD 2.50 a week before any caching.
+"All 20 evaluation scenarios passed three times. Eighteen exercised the live model; two tested
+contractor rejection. Expected outcomes stayed consistent across those passes."
+
+Two qualifications, said in the same breath:
+
+- These scenarios also guided development. The number demonstrates repeatability on the development
+  set, not reliability on unseen cases. Unseen-case reliability comes from a shadow run on a real
+  cohort, which has not happened.
+- The report verifies recorded API costs from each response's `usage` block (USD 0.027 per executed
+  run, USD 1.48 for the final run). It does not reconcile the account's total spend for the day,
+  roughly USD 5 across five runs and reruns.
+
+Supporting lines if asked:
+
+- Cost at scale: about 23k input tokens across five tool calls per run; at 30 joiners a week with three
+  triggers each, roughly USD 2.50 a week before any caching.
 - Harness learning: the first live run scored 2/20; every miss was classified and fixed in the tool
-  contract, the guards or the harness, never by re-running until it passed, and two of the fixes
-  were guards that contradicted the SOP the model had been told to follow.
+  contract, the guards or the harness, never by re-running until it passed, and two of the fixes were
+  guards that contradicted the SOP the model had been told to follow.
 
 ## Reproduce
 

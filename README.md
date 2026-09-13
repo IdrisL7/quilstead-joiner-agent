@@ -5,8 +5,10 @@ Humaans Athena take-home. The agent turns a "contract signed" event into a compl
 equipped, connected first morning without a person chasing every step.
 
 Status: bounded agent loop, verified. Mock golden set 20/20 pass^3. Live Anthropic
-(`claude-haiku-4-5-20251001`) golden set 20/20 pass^3, zero terminal-state flapping, USD 0.027 per
-case run, measured 2026-09-13 (`docs/evals/README.md`). The model chooses what to check, what to
+(`claude-haiku-4-5-20251001`): all 20 evaluation scenarios passed three times, eighteen exercising the
+live model and two testing contractor rejection, USD 0.027 per case run, measured 2026-09-13
+(`docs/evals/README.md`). The scenarios also guided development, so this is repeatability on the
+development set, not unseen-case reliability. The model chooses what to check, what to
 propose and to whom; code owns every date, permission and send; a named person approves. Persistence
 and live integrations remain deferred; every connector is simulated behind its production interface.
 See `AGENTS.md` for the map.
