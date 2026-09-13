@@ -19,7 +19,7 @@ Pricing was verified on 2026-09-13 against the [official Claude pricing page](ht
 | flapping | 0 | NOT RUN |
 | mean cost per run | $0.000000 | NOT RUN |
 | mean tool calls | 5.40 | NOT RUN |
-| mean wall time | 2 ms | NOT RUN |
+| mean wall time | 1 ms | NOT RUN |
 
 The live run was not attempted because `ANTHROPIC_API_KEY` was not configured in the workspace.
 No provider spend, live wording result or live reliability number is inferred from the mock run.

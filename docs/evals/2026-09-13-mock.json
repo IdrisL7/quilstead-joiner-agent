@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T11:15:52.702Z",
+  "generated_at": "2026-09-13T11:21:44.236Z",
   "mode": "mock",
   "model": "claude-haiku-4-5-20251001",
   "passes": 3,
@@ -130,7 +130,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           }
         },
         {
@@ -152,7 +152,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           }
         },
         {
@@ -218,28 +218,6 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [],
-            "proposal_recipients": [],
-            "escalation_codes": [
-              "MANAGER_UNAVAILABLE",
-              "NO_ELIGIBLE_BUDDY"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
             "wall_ms": 0
           }
         },
@@ -263,6 +241,28 @@
             "output_tokens": 0,
             "cost_usd": 0,
             "wall_ms": 1
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
           }
         }
       ]
@@ -312,7 +312,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 15
+            "wall_ms": 14
           }
         },
         {
@@ -337,7 +337,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 2
           }
         },
         {
@@ -404,49 +404,49 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
+            "wall_ms": 0
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
             "wall_ms": 1
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [],
-            "proposal_recipients": [],
-            "escalation_codes": [
-              "NO_ELIGIBLE_BUDDY"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 0
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [],
-            "proposal_recipients": [],
-            "escalation_codes": [
-              "NO_ELIGIBLE_BUDDY"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 0
           }
         }
       ]
@@ -488,7 +488,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           }
         },
         {
@@ -622,7 +622,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 2
+            "wall_ms": 1
           }
         }
       ]
@@ -664,49 +664,49 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [],
-            "proposal_recipients": [],
-            "escalation_codes": [
-              "NO_ELIGIBLE_BUDDY"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 0
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [],
-            "proposal_recipients": [],
-            "escalation_codes": [
-              "NO_ELIGIBLE_BUDDY"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
             "wall_ms": 1
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
           }
         }
       ]
@@ -853,7 +853,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           }
         },
         {
@@ -1050,7 +1050,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           }
         }
       ]
@@ -1206,6 +1206,33 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
+            "wall_ms": 3
+          }
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher.",
+            "model_steps": 7,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
             "wall_ms": 4
           }
         },
@@ -1233,34 +1260,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 6
-          }
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [
-              "nudge",
-              "buddy_intro"
-            ],
-            "proposal_recipients": [
-              "it-1",
-              "b-02"
-            ],
-            "escalation_codes": [
-              "START_DATE_CHANGED"
-            ],
-            "terminal_case_state": "in_progress",
-            "next_action": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher.",
-            "model_steps": 7,
-            "tool_calls": 8,
-            "refused": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 5
+            "wall_ms": 3
           }
         }
       ]
@@ -1329,7 +1329,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 5
           }
         },
         {
