@@ -129,6 +129,7 @@ function systemPrompt(joiner: Joiner, c: Case): string {
     "You are Athena's bounded onboarding assistant.",
     "Read the case first. Use tools for facts. Never invent dates, recipients, eligibility or permissions.",
     "Propose pending messages only. Never send, grant access, write HRIS data or complete compliance work.",
+    "Recipients: a nudge goes to the equipment task owner_id from check_equipment; a buddy_request goes to a candidate_id from get_buddy_availability. Quote dates exactly as tool results show them.",
     `Day-one readiness SOP:\n${readiness}`,
     `Country SOP:\n${country}`,
     `Task contract:\n${JSON.stringify(contract)}`,
@@ -250,6 +251,7 @@ export async function runAgent(
   let outputTokens = 0;
   let stopReason: StopReason = "model_error";
   let modelError: string | null = null;
+  let reminded = false;
 
   while (modelSteps < MAX_STEPS && toolCalls < MAX_TOOL_CALLS && Date.now() - Date.parse(startedAt) < MAX_RUN_MS) {
     modelSteps += 1;
@@ -266,6 +268,23 @@ export async function runAgent(
     messages.push({ role: "assistant", content: turn.content });
     const calls = toolBlocks(turn.content);
     if (calls.length === 0) {
+      // A text-only turn. Once: remind the model that every turn is a tool call. Twice: if the
+      // run already proposed or escalated something, close it as an implicit finish using the
+      // model's own text as the next action; otherwise it is a model error.
+      const text = turn.content.find((block) => block.type === "text")?.text?.trim() ?? "";
+      if (!reminded) {
+        reminded = true;
+        trace.push(traceEntry("agent.reminded", "Model replied with text only; reminded to call a tool or finish."));
+        messages.push({ role: "user", content: "Every turn must call a tool. If the case is handled, call finish with next_action." });
+        continue;
+      }
+      if (runtime.state.proposals.length > 0 || runtime.state.escalations_recorded > 0) {
+        runtime.state.finished = true;
+        runtime.state.next_action = runtime.state.next_action ?? (text.slice(0, 200) || "Review the pending proposals.");
+        trace.push(traceEntry("agent.implicit_finish", "Model ended with text after proposing; run closed as finished."));
+        stopReason = "finished";
+        break;
+      }
       modelError = "Agent model returned no tool call.";
       trace.push(traceEntry("agent.unavailable", modelError));
       break;

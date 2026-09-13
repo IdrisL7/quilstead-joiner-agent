@@ -19,7 +19,7 @@ import type {
 export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: "get_case_state",
-    description: "Read the current joiner case, tasks, escalations, drafts, buddy status and contract completion criteria.",
+    description: "Read the current joiner case, tasks, escalations, drafts, buddy status and contract completion criteria. Task owner ids here are task owners, not buddy candidates.",
     input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
   },
   {
@@ -29,7 +29,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: "get_buddy_availability",
-    description: "Read eligible buddy candidates, capacity, calendar coverage and proposed slots.",
+    description: "Read eligible buddy candidates with their candidate_id, capacity, calendar coverage and proposed slots. Use candidate_id as the buddy_request recipient.",
     input_schema: {
       type: "object",
       properties: { exclude_buddy_ids: { type: "array", items: { type: "string" } } },
@@ -54,18 +54,18 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: "propose_message",
-    description: "Create one pending message draft for People approval. This tool cannot send.",
+    description: "Create one pending message draft for People approval. This tool cannot send. For kind=nudge, `to` must be the equipment task owner_id from check_equipment (for example it-1). For kind=buddy_request, `to` must be a candidate_id from get_buddy_availability (for example b-06), never a People partner or manager id. Write dates exactly as they appear in tool results.",
     input_schema: {
       type: "object",
       properties: {
         kind: { type: "string", enum: ["nudge", "buddy_request"] },
-        to: { type: "string" },
+        to: { type: "string", description: "owner_id from check_equipment (nudge) or candidate_id from get_buddy_availability (buddy_request)" },
         subject: { type: "string" },
         body: { type: "string" },
         reason: { type: "string" },
         evidence: { type: "array", items: { type: "string" } },
       },
-      required: ["kind", "to", "subject", "body", "reason", "evidence"],
+      required: ["kind", "to", "subject", "body"],
       additionalProperties: false,
     },
   },
@@ -207,11 +207,12 @@ function messageInput(input: Record<string, unknown>): MessageProposalInput | nu
     || typeof input.to !== "string"
     || typeof input.subject !== "string"
     || typeof input.body !== "string"
-    || typeof input.reason !== "string"
-    || !Array.isArray(input.evidence)
-    || input.evidence.some((item) => typeof item !== "string")
   ) return null;
-  return input as unknown as MessageProposalInput;
+  const reason = typeof input.reason === "string" ? input.reason : "";
+  const evidence = Array.isArray(input.evidence)
+    ? input.evidence.filter((item): item is string => typeof item === "string")
+    : typeof input.evidence === "string" ? [input.evidence] : [];
+  return { kind: input.kind, to: input.to.trim(), subject: input.subject, body: input.body, reason, evidence } as MessageProposalInput;
 }
 
 function proposalBeforeApproval(draftId: string): ToolResult {
@@ -229,6 +230,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
     guard_refusals: new Map(),
     next_action: null,
     finished: false,
+    escalations_recorded: 0,
   };
 
   const dispatch = async (name: string, input: Record<string, unknown>): Promise<ToolResult> => {
@@ -294,7 +296,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
 
     if (name === "propose_message") {
       const parsed = messageInput(input);
-      if (!parsed) return failed("Message refused: proposal shape is invalid.");
+      if (!parsed) return failed(`Message refused: proposal shape is invalid. Received keys: ${Object.keys(input).join(", ") || "none"}; kind=${String(input.kind)}. Required: kind (nudge|buddy_request), to, subject, body.`);
       const existingProposal = state.proposals.find((proposal) => proposal.draft.kind === (parsed.kind === "nudge" ? "nudge" : "buddy_intro"));
       if (existingProposal) return failed(`Message refused: ${parsed.kind} already has a pending proposal in this run.`);
       const equipmentTask = taskFor(context.case, "equipment_order");
@@ -385,6 +387,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         raised_at: context.now,
       };
       context.case.escalations.push(escalation);
+      state.escalations_recorded += 1;
       return ok(`Escalation ${escalation.id} recorded for People.`, { escalation_id: escalation.id });
     }
 

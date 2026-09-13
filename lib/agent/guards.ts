@@ -49,20 +49,28 @@ function formatBuddySlot(slot: { kind: string; start_at: string; end_at: string;
   return `${slot.kind[0].toUpperCase()}${slot.kind.slice(1)} ${date}, ${time(slot.start_at)} to ${time(slot.end_at)} (${slot.timezone})`;
 }
 
-function readableDate(date: string): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
-    .format(new Date(`${date}T00:00:00Z`))
-    .replace(",", "");
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+function monthIndex(name: string): number {
+  return MONTHS.indexOf(name.slice(0, 3).toLowerCase());
 }
 
-function dateTokens(text: string): string[] {
-  return [
-    ...(text.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? []),
-    ...(text.match(/\b\d{1,2}\s+[A-Z][a-z]{2,9}\b/g) ?? []).map((value) => value.replace(/\s+/g, " ")),
-  ];
+// Every date mention the model can write, normalised to ISO. Day-month forms take the year
+// from the run's allowed dates; if more than one year is allowed, all are tried.
+export function dateTokens(text: string, years: string[]): string[] {
+  const found: string[] = [];
+  for (const iso of text.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? []) found.push(iso);
+  const pad = (n: string) => n.padStart(2, "0");
+  const dayMonth = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\b/g;
+  const monthDay = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\b/g;
+  const numeric = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g;
+  for (const m of text.matchAll(dayMonth)) for (const y of years) found.push(`${y}-${pad(String(monthIndex(m[2]) + 1))}-${pad(m[1])}`);
+  for (const m of text.matchAll(monthDay)) for (const y of years) found.push(`${y}-${pad(String(monthIndex(m[1]) + 1))}-${pad(m[2])}`);
+  for (const m of text.matchAll(numeric)) found.push(`${m[3]}-${pad(m[2])}-${pad(m[1])}`);
+  return found;
 }
 
-function allAllowedDateTokens(context: MessageGuardContext): Set<string> {
+function allAllowedDates(context: MessageGuardContext): Set<string> {
   const dates = new Set(context.allowed_dates);
   dates.add(context.case.start_date);
   dates.add(context.joiner.start_date);
@@ -74,7 +82,20 @@ function allAllowedDateTokens(context: MessageGuardContext): Set<string> {
       dates.add(slot.end_at.slice(0, 10));
     }
   }
-  return new Set([...dates].flatMap((date) => [date, readableDate(date)]));
+  return dates;
+}
+
+// A day-month mention is invented only if it matches no allowed date in any allowed year.
+export function inventedDate(body: string, allowed: Set<string>): string | null {
+  const years = [...new Set([...allowed].map((d) => d.slice(0, 4)))];
+  const mentions = new Map<string, string[]>();
+  const record = (raw: string, iso: string) => mentions.set(raw, [...(mentions.get(raw) ?? []), iso]);
+  for (const iso of body.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? []) record(iso, iso);
+  for (const m of body.matchAll(/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\b/g)) for (const iso of dateTokens(m[0], years)) record(m[0], iso);
+  for (const m of body.matchAll(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b/g)) for (const iso of dateTokens(m[0], years)) record(m[0], iso);
+  for (const m of body.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g)) for (const iso of dateTokens(m[0], years)) record(m[0], iso);
+  for (const [raw, isos] of mentions) if (!isos.some((iso) => allowed.has(iso))) return raw;
+  return null;
 }
 
 export function validateMessageProposal(input: MessageProposalInput, context: MessageGuardContext): GuardResult {
@@ -112,8 +133,7 @@ export function validateMessageProposal(input: MessageProposalInput, context: Me
   }
 
   if (body.length > 700) return { ok: false, summary: "Message refused: body must be 700 characters or fewer after trusted slots are appended." };
-  const allowed = allAllowedDateTokens(context);
-  const invented = dateTokens(body).find((date) => !allowed.has(date));
+  const invented = inventedDate(body, allAllowedDates(context));
   if (invented) return { ok: false, summary: `Message refused: date ${invented} was not present in this run's facts.` };
 
   return {

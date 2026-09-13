@@ -92,3 +92,54 @@ describe("bounded agent loop", () => {
     expect(preparation.case.drafts.filter((draft) => draft.status === "pending")).toHaveLength(2);
   });
 });
+
+describe("live-model tolerance without weakening the boundary", () => {
+  it("accepts every written form of a date that is in the facts, and still refuses one that is not", async () => {
+    const { inventedDate } = await import("@/lib/agent/guards");
+    const allowed = new Set(["2026-10-12", "2026-10-16", "2026-10-06"]);
+    for (const body of ["due 12 October", "due 12 Oct", "due October 12", "due 12th October", "due 2026-10-12", "due 12/10/2026", "ETA 16 October, start 12 October"]) {
+      expect(inventedDate(body, allowed), body).toBeNull();
+    }
+    expect(inventedDate("due 13 October", allowed)).toBe("13 October");
+    expect(inventedDate("due 2026-10-13", allowed)).toBe("2026-10-13");
+  });
+});
+
+describe("text-only model turns", () => {
+  it("reminds once, then closes as an implicit finish when something was proposed or escalated", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    let turn = 0;
+    const model: AgentModel = {
+      provider: "mock",
+      model: "text-then-tool",
+      async complete(messages) {
+        turn += 1;
+        const seen = new Set(messages.flatMap((m) => Array.isArray(m.content) ? m.content.flatMap((b) => b.type === "tool_result" ? [b.name] : []) : []));
+        if (!seen.has("get_case_state")) return { content: [{ type: "tool_use" as const, id: "t1", name: "get_case_state", input: {} }] };
+        if (!seen.has("escalate")) return { content: [{ type: "tool_use" as const, id: "t2", name: "escalate", input: { code: "OWNER_SLA_BREACHED", summary: "Equipment owner is late against SLA.", evidence: ["EQ-0001"] } }] };
+        return { content: [{ type: "text" as const, text: "Chase the equipment owner." }] };
+      },
+    };
+
+    const run = await runAgent(preparation.case, preparation.joiner, "availability_changed", "2026-09-30T09:00:00Z", "mock", { model });
+
+    expect(run.stop_reason).toBe("finished");
+    expect(run.next_action).toBe("Chase the equipment owner.");
+    expect(run.trace.some((entry) => entry.kind === "agent.reminded")).toBe(true);
+    expect(run.trace.some((entry) => entry.kind === "agent.implicit_finish")).toBe(true);
+    expect(turn).toBe(4);
+  });
+
+  it("treats a text-only turn with nothing proposed as a model error", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const model: AgentModel = {
+      provider: "mock",
+      model: "text-only",
+      async complete() {
+        return { content: [{ type: "text" as const, text: "All good." }] };
+      },
+    };
+    const run = await runAgent(preparation.case, preparation.joiner, "availability_changed", "2026-09-30T09:00:00Z", "mock", { model });
+    expect(run.stop_reason).toBe("model_error");
+  });
+});

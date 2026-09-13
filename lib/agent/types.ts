@@ -114,6 +114,7 @@ export interface AgentRuntimeState {
   guard_refusals: Map<string, number>;
   next_action: string | null;
   finished: boolean;
+  escalations_recorded: number;
 }
 
 export interface RunAgentOptions {
