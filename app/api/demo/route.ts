@@ -9,7 +9,7 @@ import {
   editDemoEquipmentDraft,
   prepareDemo,
   prepareBuddyRequest,
-  retryDemoDraft,
+  retryAgent,
   recordBuddyResponse,
   resolveBuddyApproval,
   resolveDemoApproval,
@@ -123,12 +123,26 @@ function agentSummary(run: DemoPreparation) {
     steps: run.agent.model_steps,
     tool_calls: run.agent.tool_calls,
     refused: run.agent.refused,
+    proposed: run.agent.proposals.length,
+    escalated: run.agent.trace.filter((entry) => entry.kind === "agent.escalated").length,
     stop_reason: run.agent.stop_reason,
     next_action: run.agent.next_action,
     cost_usd: run.agent.cost_usd,
     started_at: run.agent.started_at,
     finished_at: run.agent.finished_at,
   };
+}
+
+const UI_AGENT_TRACE_KINDS = new Set([
+  "agent.tool_result",
+  "agent.guard.refused",
+  "agent.proposed",
+  "agent.escalated",
+  "agent.finished",
+]);
+
+function traceForUi(run: DemoPreparation) {
+  return run.trace.filter((entry) => !entry.kind.startsWith("agent.") || UI_AGENT_TRACE_KINDS.has(entry.kind));
 }
 
 function preparationResponse(run: DemoPreparation) {
@@ -162,7 +176,7 @@ function preparationResponse(run: DemoPreparation) {
     buddy: buddySummary(run),
     date_change: run.date_change,
     draft_unavailable: run.draft_unavailable,
-    trace: run.trace,
+    trace: traceForUi(run),
   };
 }
 
@@ -200,8 +214,8 @@ export async function POST(request: Request) {
         activeRun = updated;
         return NextResponse.json(preparationResponse(updated));
       }
-      if (body.action === "retry_draft") {
-        const updated = await retryDemoDraft(preparation);
+      if (body.action === "retry_agent") {
+        const updated = await retryAgent(preparation);
         activeRun = updated;
         return NextResponse.json(preparationResponse(updated));
       }

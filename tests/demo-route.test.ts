@@ -27,6 +27,19 @@ describe("demo approval route", () => {
     expect((await currentDecision.json()).after_approval.status).toBe("ok");
   });
 
+  it("thins internal agent calls from the Activity trace while keeping decisions", async () => {
+    const response = await POST(request());
+    const run = await response.json() as {
+      trace: Array<{ kind: string }>;
+    };
+
+    expect(run.trace.some((entry) => entry.kind === "agent.tool_call")).toBe(false);
+    expect(run.trace.some((entry) => entry.kind === "agent.tool_result")).toBe(true);
+    expect(run.trace.some((entry) => entry.kind === "agent.guard.refused")).toBe(true);
+    expect(run.trace.some((entry) => entry.kind === "agent.proposed")).toBe(true);
+    expect(run.trace.some((entry) => entry.kind === "agent.finished")).toBe(true);
+  });
+
   it("recalculates the active case and invalidates the old approval run", async () => {
     const pendingResponse = await POST(request());
     const pending = await pendingResponse.json() as { run_id: string; draft: { id: string } };
@@ -108,7 +121,7 @@ describe("demo approval route", () => {
       expect(failed.draft_unavailable.message).toContain("retry drafting");
 
       process.env.DEMO_MODE = "mock";
-      const retryResponse = await POST(request({ run_id: failed.run_id, action: "retry_draft" }));
+      const retryResponse = await POST(request({ run_id: failed.run_id, action: "retry_agent" }));
       expect(retryResponse.status).toBe(200);
       const retried = await retryResponse.json() as { screen_state: string; facts: { start_date: string }; draft: { status: string } | null };
       expect(retried.screen_state).toBe("awaiting_decision");

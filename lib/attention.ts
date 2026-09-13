@@ -51,7 +51,7 @@ export function attentionSummary(run: AttentionRunProjection) {
     : run.decision === "approve"
     ? "Wait for IT to arrange a loaner or earlier delivery."
     : screenState === "draft_unavailable"
-    ? "Retry the draft before any message can be sent."
+    ? "Run the assistant again before any message can be sent."
     : "Review the current equipment nudge.";
 
   let buddyStatus = "Ready for review";
@@ -72,7 +72,9 @@ export function attentionSummary(run: AttentionRunProjection) {
     buddyNextAction = "People confirmation is recorded for this case.";
   } else if (run.buddy.request?.status === "declined" || run.buddy.request?.status === "rejected") {
     buddyStatus = "Needs replacement";
-    buddyNextAction = "Choose another candidate. No request was sent automatically.";
+    buddyNextAction = run.buddy.request?.status === "declined"
+      ? "The assistant prepared a replacement request from current availability."
+      : "Choose another current candidate and prepare an exact request.";
   } else if (run.buddy.request?.status === "superseded") {
     buddyStatus = "Needs revalidation";
     buddyNextAction = "Prepare a fresh request from the current availability.";

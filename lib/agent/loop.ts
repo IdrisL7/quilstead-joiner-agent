@@ -159,7 +159,7 @@ async function commitRuntime(
 
 function buildModel(mode: AgentMode, context: AgentContext, options?: RunAgentOptions): AgentModel {
   if (options?.model) return options.model;
-  if (mode === "mock") return createMockModel({ case: context.case, joiner: context.joiner });
+  if (mode === "mock") return createMockModel({ case: context.case, joiner: context.joiner, trigger: context.trigger });
   throw new Error("Live agent model is deferred until checkpoint C.");
 }
 
@@ -209,7 +209,7 @@ export async function runAgent(
 ): Promise<AgentRun> {
   const stateHash = inputStateHash(c);
   const key = runKey(c, trigger, stateHash);
-  const previous = priorRuns.get(key);
+  const previous = options?.force ? undefined : priorRuns.get(key);
   if (previous) return previous;
 
   const startedAt = new Date().toISOString();
@@ -275,7 +275,8 @@ export async function runAgent(
         if (result.status === "error" && (call.name === "propose_message" || call.name === "escalate")) refused += 1;
       }
       const elapsed = Date.now() - callStarted;
-      const guardRefused = permission.mode !== "automatic" || result.status === "error" && call.name === "propose_message";
+      const guardRefused = permission.mode !== "automatic"
+        || result.status === "error" && (call.name === "propose_message" || call.name === "escalate");
       const step: AgentStep = {
         n: steps.length + 1,
         kind: guardRefused ? "guard.refused" : "tool",

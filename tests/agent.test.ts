@@ -26,6 +26,8 @@ describe("bounded agent loop", () => {
     expect(preparation.buddy.beforeApproval?.status).toBe("denied");
     expect(orders).toHaveLength(1);
     expect(preparation.agent?.trace.some((entry) => entry.kind === "agent.guard.refused")).toBe(true);
+    expect(preparation.agent?.trace.some((entry) => entry.kind === "agent.guard.refused" && entry.summary.includes("identity.grant_access"))).toBe(true);
+    expect(preparation.agent?.stop_reason).toBe("finished");
     expect(preparation.case.steps.some((step) => step.kind === "guard.refused")).toBe(true);
   });
 

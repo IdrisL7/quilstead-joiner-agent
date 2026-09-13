@@ -116,4 +116,5 @@ export interface AgentRuntimeState {
 
 export interface RunAgentOptions {
   model?: AgentModel;
+  force?: boolean;
 }

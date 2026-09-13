@@ -4,12 +4,14 @@ import type {
   AgentMessage,
   AgentModel,
   ModelTurn,
+  AgentTrigger,
 } from "./types";
 import type { Case, Joiner, ToolResult } from "@/lib/types";
 
 interface MockModelContext {
   case: Case;
   joiner: Joiner;
+  trigger: AgentTrigger;
 }
 
 function toolUse(name: string, input: Record<string, unknown> = {}): AgentContentBlock {
@@ -72,10 +74,21 @@ export function createMockModel(context: MockModelContext): AgentModel {
       call += 1;
       const seen = new Set(resultsFrom(messages).map((entry) => entry.name));
       if (!seen.has("get_case_state")) return { content: [toolUse("get_case_state")] };
-      if (!seen.has("check_equipment")) return { content: [toolUse("check_equipment")] };
+
+      const buddyOnly = context.trigger === "buddy_declined" || context.trigger === "availability_changed";
+      const hasActiveBuddy = context.case.buddy_requests.some((request) => ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status));
+      const hasSupersededBuddy = context.case.buddy_requests.some((request) => ["declined", "superseded", "rejected"].includes(request.status));
+      const shouldProposeBuddy = !hasActiveBuddy && (
+        context.trigger === "contract.signed"
+        || context.trigger === "buddy_declined"
+        || context.trigger === "availability_changed"
+        || (context.trigger === "start_date_changed" && hasSupersededBuddy)
+      );
+
+      if (!buddyOnly && !seen.has("check_equipment")) return { content: [toolUse("check_equipment")] };
 
       const equipment = equipmentData(latestResult(messages, "check_equipment"));
-      if (equipment?.late && !seen.has("search_policy")) {
+      if (!buddyOnly && equipment?.late && !seen.has("search_policy")) {
         return {
           content: [
             toolUse("search_policy", { query: "equipment order" }),
@@ -86,7 +99,7 @@ export function createMockModel(context: MockModelContext): AgentModel {
           ],
         };
       }
-      if (equipment?.late && !successfulProposal(messages, "nudge")) {
+      if (!buddyOnly && equipment?.late && !successfulProposal(messages, "nudge")) {
         return {
           content: [toolUse("propose_message", {
             kind: "nudge",
@@ -99,12 +112,12 @@ export function createMockModel(context: MockModelContext): AgentModel {
         };
       }
       if (!seen.has("get_buddy_availability")) return { content: [toolUse("get_buddy_availability")] };
-      if (!seen.has("identity.grant_access")) {
+      if (context.trigger === "contract.signed" && !seen.has("identity.grant_access")) {
         return { content: [toolUse("identity.grant_access", { joiner_id: context.joiner.id })] };
       }
 
       const availability = availabilityRecommendation(latestResult(messages, "get_buddy_availability"));
-      if (availability && !successfulProposal(messages, "buddy_request")) {
+      if (shouldProposeBuddy && availability && !successfulProposal(messages, "buddy_request")) {
         return {
           content: [toolUse("propose_message", {
             kind: "buddy_request",
@@ -116,7 +129,7 @@ export function createMockModel(context: MockModelContext): AgentModel {
           })],
         };
       }
-      if (!availability && !hasSuccessful(messages, "escalate")) {
+      if (shouldProposeBuddy && !availability && !hasSuccessful(messages, "escalate")) {
         return {
           content: [toolUse("escalate", {
             code: "NO_ELIGIBLE_BUDDY",
@@ -126,13 +139,15 @@ export function createMockModel(context: MockModelContext): AgentModel {
         };
       }
       if (!seen.has("finish")) {
-        const nextAction = equipment?.late && availability
+        const nextAction = !buddyOnly && equipment?.late && availability
           ? "Approve the equipment nudge and buddy request."
-          : equipment?.late
+          : !buddyOnly && equipment?.late
           ? "Review the equipment nudge and People escalation."
-          : availability
+          : shouldProposeBuddy && availability
           ? "Approve the buddy request."
-          : "Review the People escalation.";
+          : shouldProposeBuddy
+          ? "Review the People escalation."
+          : "Review the current case state.";
         return { content: [toolUse("finish", { next_action: nextAction })] };
       }
       return { content: [{ type: "text", text: `Agent already finished on mock call ${call}.` }] };

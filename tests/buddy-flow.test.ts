@@ -182,20 +182,12 @@ describe("checkpoint-B buddy flow", () => {
       response: "declined",
     }))).json() as BuddyPayload;
 
-    expect(declined.buddy.request?.status).toBe("declined");
+    expect(declined.buddy.request?.status).toBe("pending_approval");
     expect(declined.buddy.availability.recommendation?.candidate_id).not.toBe(firstRequest.candidate_id);
     expect(declined.buddy.availability.recommendation?.candidate_id).toBe("b-01");
+    expect(declined.buddy.request?.candidate_id).toBe("b-01");
+    expect(declined.buddy.draft?.status).toBe("pending");
     expect(declined.case.buddy_id).toBeNull();
-    expect(sent).toHaveLength(2);
-
-    const replacement = await (await POST(request({
-      run_id: declined.run_id,
-      action: "buddy_prepare",
-    }))).json() as BuddyPayload;
-
-    expect(replacement.buddy.request?.candidate_id).toBe("b-01");
-    expect(replacement.buddy.request?.id).not.toBe(firstRequest.id);
-    expect(replacement.buddy.before_approval?.status).toBe("denied");
     expect(sent).toHaveLength(2);
   });
 
@@ -292,8 +284,8 @@ describe("checkpoint-B buddy flow", () => {
 
     expect(changed.facts.start_date).toBe("2026-10-19");
     expect(changed.date_change?.superseded_buddy_request_id).toBe(buddyRequest.id);
-    expect(changed.buddy.request?.status).toBe("superseded");
-    expect(changed.buddy.draft).toBeNull();
+    expect(changed.buddy.request?.status).toBe("pending_approval");
+    expect(changed.buddy.draft?.status).toBe("pending");
 
     const stale = await POST(request({
       run_id: buddyPrepared.run_id,

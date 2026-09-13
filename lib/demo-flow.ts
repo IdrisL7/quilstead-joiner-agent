@@ -18,7 +18,7 @@ import {
   registerDraft,
   supersedeDraft,
 } from "@/lib/connectors/simulated/messaging";
-import { draftEquipmentNudge, type NudgeModelDraft } from "@/lib/model";
+import type { NudgeModelDraft } from "@/lib/model";
 import { CaseStore } from "@/lib/store/case-store";
 import { currentJoinerById } from "@/lib/store/joiner-store";
 import { resetDemoState } from "@/lib/store/demo-state";
@@ -135,15 +135,6 @@ export interface DemoRun extends Omit<DemoPreparation, "draft" | "beforeApproval
   retry: ToolResult;
 }
 
-interface DraftState {
-  model: Pick<NudgeModelDraft, "provider" | "model">;
-  draft: Draft | null;
-  beforeApproval: ToolResult | null;
-  unavailable?: DemoDraftUnavailable;
-  trace: DemoTraceEntry[];
-}
-
-const DRAFT_UNAVAILABLE_MESSAGE = "Draft unavailable. The case and dates are current, no message was sent, and you can retry drafting or change the start date.";
 const MAX_DRAFT_SUBJECT_LENGTH = 160;
 const MAX_DRAFT_BODY_LENGTH = 700;
 
@@ -169,6 +160,57 @@ function requireAction(tool: string) {
 
 function nextRunId(): string {
   return `DEMO-RUN-${randomUUID()}`;
+}
+
+function agentTraceEntries(agent: AgentRun, availability: BuddyAvailabilityResult): DemoTraceEntry[] {
+  let proposalIndex = 0;
+  const availabilitySummary = availability.recommendation
+    ? `Recommended ${availability.recommendation.candidate_name} from the current first-week calendar snapshot.`
+    : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
+  return agent.trace.flatMap((entry) => {
+    const entries: DemoTraceEntry[] = [entry];
+    if (entry.kind === "agent.tool_result" && (entry.summary.startsWith("Recommended") || entry.summary.startsWith("No suitable buddy"))) {
+      entries.push({ actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availabilitySummary });
+    }
+    if (entry.kind === "agent.proposed") {
+      const proposal = agent.proposals[proposalIndex++];
+      if (proposal) {
+        entries.push({ actor: "agent", kind: proposal.request ? "buddy.request.prepared" : "draft.created", summary: proposal.request
+          ? `Prepared a fixed buddy request for ${proposal.request.candidate_id} with two proposed first-week slots.`
+          : `Draft ${proposal.draft.id} created for ${proposal.draft.action} and awaits approval.` });
+        if (proposal.request) entries.push({ actor: "agent", kind: "draft.created", summary: `Draft ${proposal.draft.id} created for the buddy request and awaits People approval.` });
+        entries.push({ actor: "system", kind: "send.refused", summary: proposal.before_approval.summary });
+      }
+    }
+    return entries;
+  });
+}
+
+function agentUnavailableMessage(agent: AgentRun): DemoDraftUnavailable {
+  return { message: `Assistant unavailable (${agent.stop_reason}). The case and dates are current, no message was sent, and you can run assistant again to retry drafting.` };
+}
+
+function applyAgentRun(preparation: DemoPreparation, agent: AgentRun): DemoPreparation {
+  const availability = agent.availability ?? preparation.buddy.availability;
+  const equipmentProposal = agent.proposals.find((proposal) => proposal.draft.kind === "nudge");
+  const buddyProposal = agent.proposals.find((proposal) => proposal.draft.kind === "buddy_intro");
+  const latestRequest = latestBuddyRequest(preparation.case);
+  const preservesCurrentBuddy = latestRequest?.id === preparation.buddy.request?.id;
+  const buddyDraft = buddyProposal?.draft ?? (preservesCurrentBuddy ? preparation.buddy.draft : null);
+  const buddyBeforeApproval = buddyProposal?.before_approval ?? (preservesCurrentBuddy ? preparation.buddy.beforeApproval : null);
+  const buddyAfterApproval = preservesCurrentBuddy ? preparation.buddy.afterApproval : undefined;
+
+  return {
+    ...preparation,
+    run_id: nextRunId(),
+    agent,
+    model: { provider: agent.provider, model: agent.model },
+    draft: equipmentProposal?.draft ?? preparation.draft,
+    beforeApproval: equipmentProposal?.before_approval ?? preparation.beforeApproval,
+    buddy: buddyState(availability, buddyProposal?.request ?? latestRequest, buddyDraft, buddyBeforeApproval, buddyAfterApproval),
+    draft_unavailable: agent.stop_reason === "finished" ? undefined : agentUnavailableMessage(agent),
+    trace: [...preparation.trace, ...agentTraceEntries(agent, availability)],
+  };
 }
 
 function recordCaseStep(c: Case, actor: "system" | "agent" | "human", kind: string, summary: string, at: string, data?: Record<string, unknown>): void {
@@ -355,97 +397,6 @@ function modelMetadata(mode: string): Pick<NudgeModelDraft, "provider" | "model"
     : { provider: "mock", model: "deterministic-demo-model" };
 }
 
-async function createDraftForCurrentState(
-  c: Case,
-  joiner: Joiner,
-  equipment: ToolResult,
-  facts: DemoFacts,
-  now: string,
-  mode: string,
-  draftId = `DRAFT-${randomUUID()}`,
-): Promise<DraftState> {
-  const model = modelMetadata(mode);
-  if (!facts.equipment_late) {
-    return {
-      model,
-      draft: null,
-      beforeApproval: null,
-      trace: [{ actor: "system", kind: "risk.cleared", summary: `Equipment ETA ${facts.equipment_eta} is before the ${facts.start_date} start. No nudge is required.` }],
-    };
-  }
-
-  const equipmentTask = c.tasks.find((task) => task.type === "equipment_order");
-  if (!equipmentTask) throw new Error("Demo equipment task is missing from the plan");
-  const modelDraft = await draftEquipmentNudge({
-    joiner: {
-      full_name: joiner.full_name,
-      preferred_name: joiner.preferred_name,
-      title: joiner.title,
-      start_date: joiner.start_date,
-      office: joiner.office,
-      work_mode: joiner.work_mode,
-      equipment_preference: joiner.equipment_preference,
-    },
-    equipment: {
-      status: equipment.status,
-      summary: equipment.summary,
-      data: equipmentData(equipment),
-    },
-    equipmentTask,
-    ownerName: facts.equipment_owner_name,
-  }, mode);
-
-  const draft: Draft = {
-    id: draftId,
-    case_id: c.id,
-    kind: "nudge",
-    action: "slack.send_message",
-    channel: "slack",
-    to: equipmentTask.owner_id,
-    subject: modelDraft.subject,
-    body: modelDraft.body,
-    status: "pending",
-    created_at: now,
-  };
-  if (!registerDraft(draft)) throw new Error(`Demo draft was not registered: ${draft.id}`);
-  c.drafts.push({ ...draft });
-
-  const slackAction = requireAction("slack.send_message");
-  const beforeApproval = await slackAction.action.run({ draft_id: draft.id, now });
-  return {
-    model: { provider: modelDraft.provider, model: modelDraft.model },
-    draft,
-    beforeApproval,
-    trace: [
-      { actor: "agent", kind: "model.draft", summary: `${modelDraft.provider} produced a bounded Slack nudge.` },
-      { actor: "agent", kind: "draft.created", summary: `Draft ${draft.id} created for ${draft.action} and awaits approval.` },
-      { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
-    ],
-  };
-}
-
-async function createDraftWithRecovery(
-  c: Case,
-  joiner: Joiner,
-  equipment: ToolResult,
-  facts: DemoFacts,
-  now: string,
-  mode: string,
-): Promise<DraftState> {
-  try {
-    return await createDraftForCurrentState(c, joiner, equipment, facts, now, mode);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown drafting failure";
-    return {
-      model: modelMetadata(mode),
-      draft: null,
-      beforeApproval: null,
-      unavailable: { message: DRAFT_UNAVAILABLE_MESSAGE },
-      trace: [{ actor: "system", kind: "draft.unavailable", summary: `Draft generation failed after the state change: ${detail}` }],
-    };
-  }
-}
-
 export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?? "mock"): Promise<DemoPreparation> {
   resetDemoState();
   const runId = nextRunId();
@@ -473,62 +424,23 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
   trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
   const facts = buildDemoFacts(c, event, joiner, equipment);
   const agent = await runAgent(c, joiner, "contract.signed", now, mode === "live" ? "live" : "mock");
-  const generatedDraft = agent.proposals.find((proposal) => proposal.draft.kind === "nudge");
-  const buddyProposal = agent.proposals.find((proposal) => proposal.draft.kind === "buddy_intro");
   const availability = agent.availability ?? await readBuddyAvailability(joiner, c.start_date, [], c.id);
-  const availabilitySummary = availability.recommendation
-    ? `Recommended ${availability.recommendation.candidate_name} from the current first-week calendar snapshot.`
-    : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
-  const generated = agent.stop_reason === "finished"
-    ? {
-      model: { provider: agent.provider, model: agent.model } as Pick<NudgeModelDraft, "provider" | "model">,
-      draft: generatedDraft?.draft ?? null,
-      beforeApproval: generatedDraft?.before_approval ?? null,
-      unavailable: undefined,
-      trace: agent.trace,
-    }
-    : {
-      model: { provider: agent.provider, model: agent.model } as Pick<NudgeModelDraft, "provider" | "model">,
-      draft: null,
-      beforeApproval: null,
-      unavailable: { message: `Assistant unavailable (${agent.stop_reason}). The case is unchanged; run assistant again.` },
-      trace: agent.trace,
-    };
-  let proposalIndex = 0;
-  const agentTrace = agent.trace.flatMap((entry) => {
-    const entries = [entry];
-    if (entry.kind === "agent.tool_result" && (entry.summary.startsWith("Recommended") || entry.summary.startsWith("No suitable buddy"))) {
-      entries.push({ actor: "agent" as const, kind: "tool.buddy_directory.get_availability", summary: availabilitySummary });
-    }
-    if (entry.kind === "agent.proposed") {
-      const proposal = agent.proposals[proposalIndex++];
-      if (proposal) {
-        entries.push({ actor: "agent" as const, kind: proposal.request ? "buddy.request.prepared" : "draft.created", summary: proposal.request
-          ? `Prepared a fixed buddy request for ${proposal.request.candidate_id} with two proposed first-week slots.`
-          : `Draft ${proposal.draft.id} created for ${proposal.draft.action} and awaits approval.` });
-        if (proposal.request) entries.push({ actor: "agent" as const, kind: "draft.created", summary: `Draft ${proposal.draft.id} created for the buddy request and awaits People approval.` });
-        entries.push({ actor: "system" as const, kind: "send.refused", summary: proposal.before_approval.summary });
-      }
-    }
-    return entries;
-  });
-
-  return {
+  const base: DemoPreparation = {
     run_id: runId,
     case: c,
     event,
     joiner,
     agent,
-    model: generated.model,
-    draft: generated.draft,
+    model: { provider: agent.provider, model: agent.model },
+    draft: null,
     equipment,
-    beforeApproval: generated.beforeApproval,
+    beforeApproval: null,
     facts,
-    buddy: buddyState(availability, buddyProposal?.request ?? latestBuddyRequest(c), buddyProposal?.draft ?? null, buddyProposal?.before_approval),
-    draft_unavailable: generated.unavailable,
-    trace: [...trace, ...agentTrace],
+    buddy: buddyState(availability, null),
+    trace,
     store,
   };
+  return applyAgentRun(base, agent);
 }
 
 export async function changeDemoStartDate(
@@ -543,7 +455,7 @@ export async function changeDemoStartDate(
   const previousStartDate = preparation.case.start_date;
   if (newStartDate === previousStartDate) {
     if (!preparation.draft_unavailable) throw new Error("Choose a different start date to recalculate the case");
-    return retryDemoDraft(preparation, mode, now);
+    return retryAgent(preparation, mode, now);
   }
 
   const supersededDraftId = preparation.draft?.id;
@@ -573,7 +485,6 @@ export async function changeDemoStartDate(
   if (!recomputed.case) throw new Error(`Demo case was not found for ${preparation.joiner.id}`);
   const updatedJoiner = currentJoinerById(preparation.joiner.id) ?? { ...currentJoiner, start_date: newStartDate };
   const facts = buildDemoFacts(recomputed.case, preparation.event, updatedJoiner, preparation.equipment);
-  const generated = await createDraftWithRecovery(recomputed.case, updatedJoiner, preparation.equipment, facts, now, mode);
   const availability = await readBuddyAvailability(updatedJoiner, newStartDate, declinedBuddyIds(recomputed.case), recomputed.case.id);
   const dateChange: DemoDateChange = {
     previous_start_date: previousStartDate,
@@ -592,48 +503,55 @@ export async function changeDemoStartDate(
     { actor: "system" as const, kind: "start_date.changed", summary: `Start date ${previousStartDate} -> ${newStartDate}; ${recomputed.deadlineChanged} deadlines moved and ${recomputed.changed} tasks reconciled.` },
     ...(supersededDraftId ? [{ actor: "system" as const, kind: "draft.superseded", summary: `Draft ${supersededDraftId} is unavailable after the start-date change.` }] : []),
     ...(supersededBuddyRequestId ? [{ actor: "system" as const, kind: "buddy.request.superseded", summary: `Buddy request ${supersededBuddyRequestId} is unavailable after the start-date change.` }] : []),
-    { actor: "agent" as const, kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} for the revised first week.` : availability.escalation?.summary ?? "No buddy recommendation is available for the revised first week." },
-    ...generated.trace,
   ];
 
-  return {
+  const base: DemoPreparation = {
     ...preparation,
-    run_id: `DEMO-RUN-${randomUUID()}`,
+    run_id: nextRunId(),
     case: recomputed.case,
     joiner: updatedJoiner,
-    model: generated.model,
-    draft: generated.draft,
-    beforeApproval: generated.beforeApproval,
+    model: modelMetadata(mode),
+    draft: null,
+    beforeApproval: null,
+    decision: undefined,
+    afterApproval: undefined,
     facts,
     buddy: buddyState(availability, latestBuddyRequest(recomputed.case)),
     date_change: dateChange,
-    draft_unavailable: generated.unavailable,
+    draft_unavailable: undefined,
     trace,
   };
+  const agent = await runAgent(recomputed.case, updatedJoiner, "start_date_changed", now, mode === "live" ? "live" : "mock");
+  return applyAgentRun(base, agent);
 }
 
-export async function retryDemoDraft(
+export async function retryAgent(
   preparation: DemoPreparation,
   mode = process.env.DEMO_MODE ?? "mock",
   now = DEMO_NOW,
 ): Promise<DemoPreparation> {
-  if (!preparation.draft_unavailable) throw new Error("Demo has no unavailable draft to retry");
+  if (!preparation.draft_unavailable) throw new Error("Demo has no unavailable agent run to retry");
   const facts = buildDemoFacts(preparation.case, preparation.event, preparation.joiner, preparation.equipment);
-  const generated = await createDraftWithRecovery(preparation.case, preparation.joiner, preparation.equipment, facts, now, mode);
-  return {
+  const base: DemoPreparation = {
     ...preparation,
-    run_id: `DEMO-RUN-${randomUUID()}`,
-    model: generated.model,
-    draft: generated.draft,
-    beforeApproval: generated.beforeApproval,
+    run_id: nextRunId(),
+    model: modelMetadata(mode),
     facts,
-    draft_unavailable: generated.unavailable,
+    draft_unavailable: undefined,
     trace: [
       ...preparation.trace,
-      { actor: "system", kind: "draft.retry", summary: `Retried drafting for the current ${facts.start_date} case state.` },
-      ...generated.trace,
+      { actor: "system", kind: "agent.retry", summary: `Ran the assistant again for the current ${facts.start_date} case state.` },
     ],
   };
+  const agent = await runAgent(
+    preparation.case,
+    preparation.joiner,
+    preparation.agent?.trigger ?? "contract.signed",
+    now,
+    mode === "live" ? "live" : "mock",
+    { force: true },
+  );
+  return applyAgentRun(base, agent);
 }
 
 function normalizedHumanDraftText(value: unknown, field: "subject" | "body", maxLength: number): string {
@@ -898,6 +816,7 @@ export async function simulateBuddyAvailabilityChange(
   preparation: DemoPreparation,
   candidateId: string,
   now = DEMO_NOW,
+  mode = process.env.DEMO_MODE ?? "mock",
 ): Promise<DemoPreparation> {
   const snapshot = buddyCalendarById(candidateId);
   if (!snapshot) throw new BuddyFlowConflict(`No simulated calendar is available for ${buddyName(candidateId)}.`);
@@ -918,15 +837,11 @@ export async function simulateBuddyAvailabilityChange(
     declinedBuddyIds(preparation.case),
     preparation.case.id,
   );
-  const candidate = availability.candidates.find((assessment) => assessment.candidate.id === candidateId);
-  const availabilitySummary = candidate
-    ? `${candidate.candidate.full_name} is now ${candidate.availability.status}: ${candidate.availability.reason}`
-    : `${buddyName(candidateId)} is no longer in the current comparison.`;
   const requestSummary = affectsCurrentRequest && request
     ? `Request ${request.id} was invalidated because its simulated calendar changed.`
     : undefined;
 
-  return {
+  const updated: DemoPreparation = {
     ...preparation,
     run_id: nextRunId(),
     buddy: buddyState(
@@ -940,9 +855,10 @@ export async function simulateBuddyAvailabilityChange(
       ...preparation.trace,
       { actor: "human", kind: "simulation.buddy_calendar.changed", summary: `Simulated ${buddyName(candidateId)} calendar availability changed to unknown.` },
       ...(requestSummary ? [{ actor: "system" as const, kind: "buddy.request.invalidated", summary: requestSummary }] : []),
-      { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availabilitySummary },
     ],
   };
+  const agent = await runAgent(updated.case, updated.joiner, "availability_changed", now, mode === "live" ? "live" : "mock");
+  return applyAgentRun(updated, agent);
 }
 
 export async function resolveBuddyApproval(
@@ -1035,6 +951,7 @@ export async function recordBuddyResponse(
   requestId: string,
   response: BuddyResponseDecision,
   now = DEMO_NOW,
+  mode = process.env.DEMO_MODE ?? "mock",
 ): Promise<DemoBuddyActionResult> {
   const request = preparation.case.buddy_requests.find((candidate) => candidate.id === requestId);
   if (!request || preparation.buddy.request?.id !== requestId) {
@@ -1049,7 +966,7 @@ export async function recordBuddyResponse(
   request.responded_at = now;
   const summary = response === "accepted"
     ? `${buddyName(request.candidate_id)} accepted request ${request.id}; People confirmation is still required.`
-    : `${buddyName(request.candidate_id)} declined request ${request.id}; no replacement request was sent.`;
+    : `${buddyName(request.candidate_id)} declined request ${request.id}; the assistant will re-evaluate the current candidates.`;
   updateBuddyTask(preparation.case, "open", response === "accepted" ? `Awaiting People confirmation of ${buddyName(request.candidate_id)}.` : `Buddy request ${request.id} declined; People must choose another candidate.`);
   recordCaseStep(preparation.case, "system", "buddy.response.simulated", summary, now, {
     request_id: request.id,
@@ -1057,8 +974,7 @@ export async function recordBuddyResponse(
     response,
   });
   const availability = await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id);
-  return {
-    preparation: {
+  const updated: DemoPreparation = {
       ...preparation,
       run_id: nextRunId(),
       buddy: buddyState(availability, request, preparation.buddy.draft, preparation.buddy.beforeApproval, preparation.buddy.afterApproval),
@@ -1067,8 +983,12 @@ export async function recordBuddyResponse(
         { actor: "system", kind: "buddy.response.simulated", summary },
         { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} as the next candidate.` : availability.escalation?.summary ?? "No replacement buddy recommendation is available." },
       ],
-    },
   };
+  if (response === "declined") {
+    const agent = await runAgent(updated.case, updated.joiner, "buddy_declined", now, mode === "live" ? "live" : "mock");
+    return { preparation: applyAgentRun(updated, agent) };
+  }
+  return { preparation: updated };
 }
 
 export async function confirmBuddy(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeDemoStartDate, editDemoEquipmentDraft, prepareBuddyRequest, prepareDemo, resolveDemoApproval, runDemo } from "@/lib/demo-flow";
+import { changeDemoStartDate, editDemoEquipmentDraft, prepareBuddyRequest, prepareDemo, recordBuddyResponse, resolveBuddyApproval, resolveDemoApproval, runDemo, simulateBuddyAvailabilityChange } from "@/lib/demo-flow";
 import { sent, slack } from "@/lib/connectors/simulated/messaging";
 
 describe("single end-to-end demonstration", () => {
@@ -100,7 +100,7 @@ describe("single end-to-end demonstration", () => {
       expect(failed.facts.equipment_late).toBe(true);
       expect(failed.draft).toBeNull();
       expect(failed.draft_unavailable?.message).toContain("case and dates are current");
-      expect(failed.trace.at(-1)?.kind).toBe("draft.unavailable");
+      expect(failed.trace.at(-1)?.kind).toBe("agent.unavailable");
       expect(failed.case.drafts[0]?.status).toBe("rejected");
       await expect(resolveDemoApproval(failed, "approve", "pp-1")).rejects.toThrow("no current draft");
 
@@ -190,5 +190,38 @@ describe("single end-to-end demonstration", () => {
     expect(moved.draft).toBeNull();
     expect(edited.case.drafts.find((draft) => draft.id === edited.draft?.id)?.status).toBe("rejected");
     await expect(resolveDemoApproval(edited, "approve", "pp-1")).rejects.toThrow("could not be recorded");
+  });
+
+  it("runs the start-date trigger against the recalculated case", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const updated = await changeDemoStartDate(preparation, "2026-10-09", "mock");
+
+    expect(updated.agent?.trigger).toBe("start_date_changed");
+    expect(updated.agent?.stop_reason).toBe("finished");
+    expect(updated.draft?.status).toBe("pending");
+    expect(updated.facts.equipment_late).toBe(true);
+  });
+
+  it("runs the buddy-declined trigger and prepares a replacement request", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const request = preparation.buddy.request!;
+    const approved = await resolveBuddyApproval(preparation, request.id, preparation.buddy.draft!.id, "approve");
+    const declined = await recordBuddyResponse(approved.preparation, request.id, "declined");
+
+    expect(declined.preparation.agent?.trigger).toBe("buddy_declined");
+    expect(declined.preparation.agent?.stop_reason).toBe("finished");
+    expect(declined.preparation.case.buddy_requests.find((candidate) => candidate.id === request.id)?.status).toBe("declined");
+    expect(declined.preparation.buddy.request?.candidate_id).toBe("b-01");
+    expect(declined.preparation.buddy.request?.status).toBe("pending_approval");
+  });
+
+  it("runs the availability-changed trigger and proposes from refreshed facts", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const changed = await simulateBuddyAvailabilityChange(preparation, "b-06");
+
+    expect(changed.agent?.trigger).toBe("availability_changed");
+    expect(changed.agent?.stop_reason).toBe("finished");
+    expect(changed.buddy.request?.candidate_id).toBe("b-01");
+    expect(changed.buddy.request?.status).toBe("pending_approval");
   });
 });
