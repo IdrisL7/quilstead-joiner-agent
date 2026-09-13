@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buddyById } from "@/data/buddies";
 import type {
   AgentContentBlock,
   AgentMessage,
@@ -63,6 +64,48 @@ function availabilityRecommendation(result: ToolResult | undefined): { candidate
   const candidate_id = (recommendation as Record<string, unknown>).candidate_id;
   const candidate_name = (recommendation as Record<string, unknown>).candidate_name;
   return typeof candidate_id === "string" && typeof candidate_name === "string" ? { candidate_id, candidate_name } : null;
+}
+
+function declinedBuddyName(context: MockModelContext): string | null {
+  const declined = [...context.case.buddy_requests].reverse().find((request) => request.status === "declined");
+  if (!declined) return null;
+  return buddyById(declined.candidate_id)?.full_name ?? declined.candidate_id;
+}
+
+function finishNextAction(
+  context: MockModelContext,
+  equipment: ReturnType<typeof equipmentData>,
+  availability: ReturnType<typeof availabilityRecommendation>,
+  hasSupersededBuddy: boolean,
+  nudgeProposed: boolean,
+  buddyProposed: boolean,
+): string {
+  if (!availability) return "People to arrange a buddy by hand; no eligible candidate in the current snapshot.";
+
+  if (context.trigger === "buddy_declined" && buddyProposed) {
+    const declined = declinedBuddyName(context);
+    if (declined) return `Approve the replacement buddy request to ${availability.candidate_name}; ${declined} declined.`;
+  }
+
+  if (context.trigger === "start_date_changed" && hasSupersededBuddy && buddyProposed) {
+    return `Start date moved to ${context.case.start_date}. Approve the re-proposed buddy request to ${availability.candidate_name}.`;
+  }
+
+  if (context.trigger === "availability_changed" && hasSupersededBuddy && buddyProposed) {
+    return `Approve the refreshed buddy request to ${availability.candidate_name} after availability changed.`;
+  }
+
+  if (!equipment?.late && buddyProposed) {
+    return `No equipment action needed. Approve the buddy request to ${availability.candidate_name}.`;
+  }
+
+  if (equipment?.late && nudgeProposed && buddyProposed) {
+    return `Approve the equipment nudge to ${equipment.owner_name} and the buddy request to ${availability.candidate_name}.`;
+  }
+
+  if (equipment?.late && nudgeProposed) return `Approve the equipment nudge to ${equipment.owner_name}.`;
+  if (buddyProposed) return `Approve the buddy request to ${availability.candidate_name}.`;
+  return "Review the current case state.";
 }
 
 export function createMockModel(context: MockModelContext): AgentModel {
@@ -139,15 +182,14 @@ export function createMockModel(context: MockModelContext): AgentModel {
         };
       }
       if (!seen.has("finish")) {
-        const nextAction = !buddyOnly && equipment?.late && availability
-          ? "Approve the equipment nudge and buddy request."
-          : !buddyOnly && equipment?.late
-          ? "Review the equipment nudge and People escalation."
-          : shouldProposeBuddy && availability
-          ? "Approve the buddy request."
-          : shouldProposeBuddy
-          ? "Review the People escalation."
-          : "Review the current case state.";
+        const nextAction = finishNextAction(
+          context,
+          equipment,
+          availability,
+          hasSupersededBuddy,
+          successfulProposal(messages, "nudge"),
+          successfulProposal(messages, "buddy_request"),
+        );
         return { content: [toolUse("finish", { next_action: nextAction })] };
       }
       return { content: [{ type: "text", text: `Agent already finished on mock call ${call}.` }] };

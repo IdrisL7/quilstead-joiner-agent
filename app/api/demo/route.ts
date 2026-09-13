@@ -127,6 +127,8 @@ function agentSummary(run: DemoPreparation) {
     escalated: run.agent.trace.filter((entry) => entry.kind === "agent.escalated").length,
     stop_reason: run.agent.stop_reason,
     next_action: run.agent.next_action,
+    input_tokens: run.agent.input_tokens,
+    output_tokens: run.agent.output_tokens,
     cost_usd: run.agent.cost_usd,
     started_at: run.agent.started_at,
     finished_at: run.agent.finished_at,
@@ -134,15 +136,44 @@ function agentSummary(run: DemoPreparation) {
 }
 
 const UI_AGENT_TRACE_KINDS = new Set([
-  "agent.tool_result",
   "agent.guard.refused",
   "agent.proposed",
   "agent.escalated",
   "agent.finished",
+  "agent.unavailable",
 ]);
 
+const DRAFT_ID_PATTERN = /DRAFT-[a-z0-9-]+/gi;
+
+function draftIds(summary: string): string[] {
+  return summary.match(DRAFT_ID_PATTERN) ?? [];
+}
+
+function isObservationResult(summary: string): boolean {
+  return [
+    /^Read current state for /,
+    /^Order .* (?:backordered|is on track|placed); ETA /,
+    /^(?:Recommended|No suitable buddy|No eligible buddy)/,
+    /^1 relevant policy pages matched$/,
+    /^Citation verbatim$/,
+    /^Pending (?:nudge|buddy_request) draft /,
+    /^Escalation .* recorded for People\.$/,
+    /^Agent run finished\.$/,
+  ].some((pattern) => pattern.test(summary));
+}
+
 function traceForUi(run: DemoPreparation) {
-  return run.trace.filter((entry) => !entry.kind.startsWith("agent.") || UI_AGENT_TRACE_KINDS.has(entry.kind));
+  const proposedDraftIds = new Set(run.trace
+    .filter((entry) => entry.kind === "agent.proposed")
+    .flatMap((entry) => draftIds(entry.summary)));
+
+  return run.trace.filter((entry) => {
+    if (entry.kind === "agent.tool_call" || entry.kind === "agent.started") return false;
+    if (entry.kind === "agent.tool_result" && isObservationResult(entry.summary)) return false;
+    if ((entry.kind === "draft.created" || entry.kind === "buddy.request.prepared")
+      && draftIds(entry.summary).some((id) => proposedDraftIds.has(id))) return false;
+    return !entry.kind.startsWith("agent.") || UI_AGENT_TRACE_KINDS.has(entry.kind);
+  });
 }
 
 function preparationResponse(run: DemoPreparation) {

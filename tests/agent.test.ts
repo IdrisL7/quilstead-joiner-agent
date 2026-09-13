@@ -19,6 +19,7 @@ describe("bounded agent loop", () => {
     expect(preparation.agent?.tool_calls).toBeLessThanOrEqual(12);
     expect(preparation.agent?.model_steps).toBeLessThanOrEqual(8);
     expect(preparation.agent?.refused).toBe(1);
+    expect(preparation.agent?.next_action).toBe("Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.");
     expect(preparation.draft?.status).toBe("pending");
     expect(preparation.buddy.request?.status).toBe("pending_approval");
     expect(preparation.buddy.draft?.status).toBe("pending");

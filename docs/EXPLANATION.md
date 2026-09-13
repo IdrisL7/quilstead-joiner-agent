@@ -51,9 +51,11 @@ buddy or changed calendar re-reads the current comparison and can create a fresh
 the old request remains history. A failed run leaves the current case installed with a visible
 `Run assistant again` recovery action. Non-finished runs do not commit staged proposals.
 
-The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”**
-The live Anthropic loop remains a separate Checkpoint C probe. Both modes keep facts, approval
-gates and connector permissions outside the model.
+The model proposes the recipient and wording. Code appends the two proposed buddy slots from the
+latest availability observation, validates the proposal against the current facts and guardrails,
+and leaves the draft for a named human to approve. Mock wording is deterministic for repeatable
+evaluation; live wording is generated from the same observations. Both modes keep facts,
+approval gates and connector permissions outside the model.
 
 The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
 policy-eligible candidates, calculates two non-overlapping first-week slots, shows up to three
@@ -61,10 +63,8 @@ comparisons and keeps the exact request in a separate preview. People approves t
 before the simulated send. A clearly labelled simulated response then records acceptance or decline;
 acceptance alone never completes the task. Named People confirmation is the final buddy boundary.
 
-The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”**
-The buddy request itself is deliberately fixed in this mock checkpoint and is not described as live AI
-output. The attention summary is a projection of the current case, task, request and escalation state,
-not a second readiness store. The trace records simulation inputs, connector observations, approvals,
+The attention summary is a projection of the current case, task, request and escalation state, not a
+second readiness store. The trace records simulation inputs, connector observations, approvals,
 responses and confirmation history.
 
 ## 4. Why the approval boundary is outside the model
@@ -95,9 +95,9 @@ The recovery defect fixed in checkpoint C was a partial transition: the old impl
 
 ## 7. What is simulated, tested live and still unknown
 
-Simulated: HRIS state, in-memory case storage, equipment response, policy files, mock agent model, Slack send and receipts. No persistence or live connector is included.
+Simulated: HRIS state, in-memory case storage, equipment response, policy files, mock agent model, Slack send and receipts. Live Anthropic wording uses the same simulated observations; no persistence or live connector is included.
 
-Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, typecheck, lint and production build. The live Anthropic probe remains Checkpoint C and is not claimed by this checkpoint. Production latency, provider availability, real Slack delivery and IT response remain unknown.
+Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, typecheck, lint and production build. The live Anthropic probe and golden-set measurements are recorded separately in `docs/evals/`. Production latency, provider availability, real Slack delivery and IT response remain unknown.
 
 ## 8. Code and AI assistance disclosure
 

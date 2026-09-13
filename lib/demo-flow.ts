@@ -174,9 +174,9 @@ function agentTraceEntries(agent: AgentRun, availability: BuddyAvailabilityResul
     }
     if (entry.kind === "agent.proposed") {
       const proposal = agent.proposals[proposalIndex++];
-      if (proposal) {
-        entries.push({ actor: "agent", kind: proposal.request ? "buddy.request.prepared" : "draft.created", summary: proposal.request
-          ? `Prepared a fixed buddy request for ${proposal.request.candidate_id} with two proposed first-week slots.`
+        if (proposal) {
+          entries.push({ actor: "agent", kind: proposal.request ? "buddy.request.prepared" : "draft.created", summary: proposal.request
+          ? `Prepared a buddy request for ${proposal.request.candidate_id} with two proposed first-week slots (draft ${proposal.draft.id}).`
           : `Draft ${proposal.draft.id} created for ${proposal.draft.action} and awaits approval.` });
         if (proposal.request) entries.push({ actor: "agent", kind: "draft.created", summary: `Draft ${proposal.draft.id} created for the buddy request and awaits People approval.` });
         entries.push({ actor: "system", kind: "send.refused", summary: proposal.before_approval.summary });

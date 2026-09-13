@@ -82,6 +82,7 @@ input[type="date"] { font: inherit; }
 .date-input:disabled { background: var(--row); color: var(--faint); }
 .demo-controls { display: grid; gap: 4px; padding-left: 16px; border-left: 1px solid var(--line); }
 .demo-controls > span { color: var(--muted); font-size: 11px; font-weight: 600; }
+.demo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .error-banner { margin: 16px 24px 0; padding: 10px 12px; border: 1px solid #f0b8b3; border-radius: var(--radius-sm); background: var(--red-soft); color: var(--red); font-size: 13px; }
 
 /* ---------- buttons, tags ---------- */

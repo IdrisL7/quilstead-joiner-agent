@@ -34,7 +34,9 @@ describe("demo approval route", () => {
     };
 
     expect(run.trace.some((entry) => entry.kind === "agent.tool_call")).toBe(false);
-    expect(run.trace.some((entry) => entry.kind === "agent.tool_result")).toBe(true);
+    expect(run.trace.length).toBeLessThanOrEqual(12);
+    expect(run.trace.some((entry) => entry.kind === "draft.created")).toBe(false);
+    expect(run.trace.some((entry) => entry.kind === "buddy.request.prepared")).toBe(false);
     expect(run.trace.some((entry) => entry.kind === "agent.guard.refused")).toBe(true);
     expect(run.trace.some((entry) => entry.kind === "agent.proposed")).toBe(true);
     expect(run.trace.some((entry) => entry.kind === "agent.finished")).toBe(true);

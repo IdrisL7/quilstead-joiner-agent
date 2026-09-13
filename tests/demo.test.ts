@@ -198,6 +198,7 @@ describe("single end-to-end demonstration", () => {
 
     expect(updated.agent?.trigger).toBe("start_date_changed");
     expect(updated.agent?.stop_reason).toBe("finished");
+    expect(updated.agent?.next_action).toBe("Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher.");
     expect(updated.draft?.status).toBe("pending");
     expect(updated.facts.equipment_late).toBe(true);
   });
@@ -210,6 +211,7 @@ describe("single end-to-end demonstration", () => {
 
     expect(declined.preparation.agent?.trigger).toBe("buddy_declined");
     expect(declined.preparation.agent?.stop_reason).toBe("finished");
+    expect(declined.preparation.agent?.next_action).toBe("Approve the replacement buddy request to Amara Osei; Ewan Grant declined.");
     expect(declined.preparation.case.buddy_requests.find((candidate) => candidate.id === request.id)?.status).toBe("declined");
     expect(declined.preparation.buddy.request?.candidate_id).toBe("b-01");
     expect(declined.preparation.buddy.request?.status).toBe("pending_approval");
@@ -221,6 +223,7 @@ describe("single end-to-end demonstration", () => {
 
     expect(changed.agent?.trigger).toBe("availability_changed");
     expect(changed.agent?.stop_reason).toBe("finished");
+    expect(changed.agent?.next_action).toBe("Approve the refreshed buddy request to Amara Osei after availability changed.");
     expect(changed.buddy.request?.candidate_id).toBe("b-01");
     expect(changed.buddy.request?.status).toBe("pending_approval");
   });

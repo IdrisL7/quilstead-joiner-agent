@@ -135,6 +135,8 @@ interface AgentSummary {
   escalated: number;
   stop_reason: string;
   next_action: string | null;
+  input_tokens: number;
+  output_tokens: number;
   cost_usd: number;
   started_at: string;
   finished_at: string;
@@ -159,6 +161,18 @@ interface DemoResponse {
   date_change?: DemoDateChange;
   draft_unavailable?: { message: string };
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
+}
+
+function agentNextAction(run: DemoResponse, fallback: string): string {
+  return run.agent?.stop_reason === "finished" && run.agent.next_action
+    ? run.agent.next_action
+    : fallback;
+}
+
+function overallAttentionNextAction(run: DemoResponse): string {
+  return run.attention.equipment.status !== "On track"
+    ? run.attention.equipment.next_action
+    : run.attention.buddy.next_action;
 }
 
 export interface ExecutionStep {
@@ -469,7 +483,7 @@ export default function Home() {
   const [section, setSection] = useState<Section>("overview");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "date" | "retry" | "edit" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
+  const [busy, setBusy] = useState<"start" | "reset" | "date" | "retry" | "edit" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingEquipment, setEditingEquipment] = useState(false);
   const [editSubject, setEditSubject] = useState("");
@@ -489,6 +503,7 @@ export default function Home() {
       setError("Save or cancel your draft edits first.");
       return;
     }
+    if (run) return;
     setBusy("start");
     setError(null);
     try {
@@ -498,6 +513,25 @@ export default function Home() {
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function resetFlow() {
+    if (editingEquipment) {
+      setError("Save or cancel your draft edits first.");
+      return;
+    }
+    setBusy("reset");
+    setError(null);
+    try {
+      const next = await postDemo();
+      acceptRun(next, true);
+      setEditingEquipment(false);
+      setSection("overview");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The demo reset failed");
     } finally {
       setBusy(null);
     }
@@ -718,6 +752,7 @@ export default function Home() {
   /* ---------- sections ---------- */
 
   function renderOverview(current: DemoResponse) {
+    const nextAction = agentNextAction(current, overallAttentionNextAction(current));
     const rows = [
       { key: "equipment" as Section, label: "Equipment", data: current.attention.equipment, detail: current.facts.equipment_late ? `ETA ${formatDate(current.facts.equipment_eta)}, start ${formatDate(current.facts.start_date)}` : `ETA ${formatDate(current.facts.equipment_eta)} before start` },
       { key: "buddy" as Section, label: "Buddy support", data: current.attention.buddy, detail: current.attention.buddy.candidate_name ?? "No candidate selected" },
@@ -727,6 +762,7 @@ export default function Home() {
       <>
         <ExecutionSummary run={initialExecution ?? current} />
         {current.agent && <div className="agent-run-line" role="status"><strong>Assistant</strong><span>{current.agent.trigger.replaceAll("_", " ")} · {current.agent.steps} model steps · {current.agent.proposed} proposals · {current.agent.refused} refused</span><span>{current.agent.stop_reason === "finished" ? "Finished" : `Stopped: ${current.agent.stop_reason}`}</span></div>}
+        <div className="next-action"><strong>Next:</strong> {nextAction}</div>
         <div className="section-title"><h2>Overview</h2><p>Current case state. Rows open their work area.</p></div>
         <section className="panel" aria-label="Attention">
           <div className="panel-head"><h3>Needs attention</h3><span className="meta">{openAttention === 0 ? "Nothing open" : `${openAttention} open`}</span></div>
@@ -799,7 +835,7 @@ export default function Home() {
                   <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
                   <div><span>Task</span><strong>{current.facts.equipment_task_title}</strong></div>
                 </div>
-                <div className="next-action"><strong>Next:</strong> {current.attention.equipment.next_action}</div>
+                <div className="next-action"><strong>Next:</strong> {agentNextAction(current, current.attention.equipment.next_action)}</div>
                 {dateChangeNote}
               </div>
             </section>
@@ -1058,7 +1094,7 @@ export default function Home() {
     return (
       <>
         <div className="section-title"><h2>Activity</h2><p>Every step on this case, by actor. Source-of-truth history.</p></div>
-        <div className="next-action"><strong>Next:</strong> {current.attention.equipment.status !== "On track" ? current.attention.equipment.next_action : current.attention.buddy.next_action}</div>
+        <div className="next-action"><strong>Next:</strong> {agentNextAction(current, overallAttentionNextAction(current))}</div>
         <section className="panel" aria-label="Activity trace">
           <div className="panel-head"><h3>Trace</h3><span className="meta">{current.trace.length} events · <span className="trace-marker" style={{ display: "inline-block" }} /> system · <span className="trace-marker agent" style={{ display: "inline-block" }} /> agent · <span className="trace-marker human" style={{ display: "inline-block" }} /> human or simulation</span></div>
           <div className="trace">
@@ -1137,7 +1173,10 @@ export default function Home() {
             </div>
             <div className="demo-controls">
               <span>Demo controls</span>
-              <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment}>{busy === "start" ? "Processing event..." : run ? "Reset / simulate contract signed again" : "Simulate contract signed"}</button>
+              <div className="demo-actions">
+                <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment || run !== null}>{busy === "start" ? "Processing event..." : "Simulate contract signed"}</button>
+                <button className="button secondary" onClick={resetFlow} disabled={busy !== null || editingEquipment || run === null}>{busy === "reset" ? "Resetting..." : "Reset"}</button>
+              </div>
             </div>
           </div>
         </header>
