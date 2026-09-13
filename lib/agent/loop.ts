@@ -6,6 +6,7 @@ import { buildContract } from "@/lib/contract";
 import { findAction } from "@/lib/connectors/registry";
 import { discardDraft, registerDraft } from "@/lib/connectors/simulated/messaging";
 import type { Case, Joiner, ToolResult } from "@/lib/types";
+import { createLiveModel } from "./live-model";
 import { createMockModel } from "./mock-model";
 import { AGENT_TOOL_DEFINITIONS, createAgentToolRuntime } from "./tools";
 import type {
@@ -30,6 +31,8 @@ export const MAX_MODEL_CALL_MS = 15_000;
 export const MAX_MODEL_RETRIES = 0;
 export const MODEL_TEMPERATURE = 0;
 export const MODEL_MAX_TOKENS = 600;
+export const HAIKU_INPUT_USD_PER_MILLION = 1;
+export const HAIKU_OUTPUT_USD_PER_MILLION = 5;
 
 const priorRuns = new Map<string, AgentRun>();
 
@@ -111,6 +114,11 @@ function runKey(c: Case, trigger: AgentTrigger, stateHash: string): string {
   return `${c.id}:${trigger}:${stateHash}`;
 }
 
+function costForTokens(inputTokens: number, outputTokens: number): number {
+  return inputTokens * HAIKU_INPUT_USD_PER_MILLION / 1_000_000
+    + outputTokens * HAIKU_OUTPUT_USD_PER_MILLION / 1_000_000;
+}
+
 function systemPrompt(joiner: Joiner, c: Case): string {
   const countrySop = path.join(process.cwd(), "data", "sops", `${joiner.country === "UK" ? "uk" : joiner.country === "US" ? "us" : "de"}-joiner.md`);
   const readinessSop = path.join(process.cwd(), "data", "sops", "day-one-readiness.md");
@@ -160,7 +168,7 @@ async function commitRuntime(
 function buildModel(mode: AgentMode, context: AgentContext, options?: RunAgentOptions): AgentModel {
   if (options?.model) return options.model;
   if (mode === "mock") return createMockModel({ case: context.case, joiner: context.joiner, trigger: context.trigger });
-  throw new Error("Live agent model is deferred until checkpoint C.");
+  return createLiveModel();
 }
 
 function unavailableRun(
@@ -176,6 +184,8 @@ function unavailableRun(
   refused: number,
   trace: AgentTraceEntry[],
   nextAction: string | null = "Run assistant again.",
+  inputTokens = 0,
+  outputTokens = 0,
 ): AgentRun {
   return {
     run_id: `AGENT-RUN-${randomUUID()}`,
@@ -188,7 +198,9 @@ function unavailableRun(
     refused,
     stop_reason: reason,
     next_action: nextAction,
-    cost_usd: 0,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cost_usd: costForTokens(inputTokens, outputTokens),
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     proposals: [],
@@ -234,6 +246,8 @@ export async function runAgent(
   let modelSteps = 0;
   let toolCalls = 0;
   let refused = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
   let stopReason: StopReason = "model_error";
   let modelError: string | null = null;
 
@@ -247,6 +261,8 @@ export async function runAgent(
       trace.push(traceEntry("agent.unavailable", modelError));
       break;
     }
+    inputTokens += turn.usage?.input_tokens ?? 0;
+    outputTokens += turn.usage?.output_tokens ?? 0;
     messages.push({ role: "assistant", content: turn.content });
     const calls = toolBlocks(turn.content);
     if (calls.length === 0) {
@@ -333,6 +349,9 @@ export async function runAgent(
       toolCalls,
       refused,
       trace,
+      "Run assistant again.",
+      inputTokens,
+      outputTokens,
     );
     priorRuns.set(key, result);
     return result;
@@ -353,6 +372,9 @@ export async function runAgent(
       toolCalls,
       refused,
       [...trace, traceEntry("agent.unavailable", error instanceof Error ? error.message : "Agent commit failed.")],
+      "Run assistant again.",
+      inputTokens,
+      outputTokens,
     );
     priorRuns.set(key, result);
     return result;
@@ -370,7 +392,9 @@ export async function runAgent(
     refused,
     stop_reason: "finished",
     next_action: runtime.state.next_action,
-    cost_usd: 0,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cost_usd: costForTokens(inputTokens, outputTokens),
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     proposals: runtime.state.proposals,

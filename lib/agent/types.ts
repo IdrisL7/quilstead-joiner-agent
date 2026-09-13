@@ -85,6 +85,8 @@ export interface AgentRun {
   refused: number;
   stop_reason: StopReason;
   next_action: string | null;
+  input_tokens: number;
+  output_tokens: number;
   cost_usd: number;
   started_at: string;
   finished_at: string;

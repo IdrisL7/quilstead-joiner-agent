@@ -20,12 +20,12 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   {
     name: "get_case_state",
     description: "Read the current joiner case, tasks, escalations, drafts, buddy status and contract completion criteria.",
-    input_schema: { type: "object", properties: {}, additionalProperties: false },
+    input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
   },
   {
     name: "check_equipment",
     description: "Read the existing laptop order. Never place a second order.",
-    input_schema: { type: "object", properties: {}, additionalProperties: false },
+    input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
   },
   {
     name: "get_buddy_availability",
@@ -33,6 +33,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     input_schema: {
       type: "object",
       properties: { exclude_buddy_ids: { type: "array", items: { type: "string" } } },
+      required: [],
       additionalProperties: false,
     },
   },
