@@ -473,6 +473,49 @@ function activeBuddyRequest(request: Pick<BuddyRequest, "status"> | null) {
   return !!request && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status);
 }
 
+type CandidateListAssessment = {
+  candidate: { id: string };
+  eligibility: { eligible: boolean };
+  availability: { status: BuddyCandidateAssessment["availability"]["status"] };
+};
+
+export function candidateRequestTagFor(
+  request: Pick<BuddyRequest, "status" | "candidate_id"> | null,
+  candidateId: string,
+) {
+  if (!request || request.candidate_id !== candidateId) return null;
+  if (request.status === "confirmed") return { label: "Confirmed", tone: "positive" as const };
+  if (request.status === "accepted") return { label: "Awaiting confirmation", tone: "pending" as const };
+  if (request.status === "awaiting_acceptance") return { label: "Awaiting response", tone: "pending" as const };
+  if (request.status === "pending_approval") return { label: "Current request", tone: "info" as const };
+  return null;
+}
+
+export function buddyCandidatesFor<T extends CandidateListAssessment>(
+  candidates: T[],
+  request: Pick<BuddyRequest, "status" | "candidate_id"> | null,
+  recommendation: { candidate_id: string } | null,
+) {
+  const top = candidates.slice(0, 3);
+  const currentRequestCandidate = activeBuddyRequest(request) ? request?.candidate_id : undefined;
+  const requiredId = currentRequestCandidate ?? recommendation?.candidate_id;
+  const base = !requiredId || top.some((assessment) => assessment.candidate.id === requiredId)
+    ? top
+    : (() => {
+        const required = candidates.find((assessment) => assessment.candidate.id === requiredId);
+        return required ? [...top.slice(0, 2), required] : top;
+      })();
+  const alternative = candidates.find((assessment) =>
+    assessment.candidate.id !== requiredId
+      && assessment.eligibility.eligible
+      && assessment.availability.status === "available",
+  );
+  const visible = alternative && !base.some((assessment) => assessment.candidate.id === alternative.candidate.id)
+    ? [...base, alternative]
+    : base;
+  return { candidates: visible, alternativeCandidateId: alternative?.candidate.id ?? null };
+}
+
 export function simulationTargetFor(
   request: Pick<BuddyRequest, "status" | "candidate_id"> | null,
   recommendation: Pick<NonNullable<BuddyAvailability["recommendation"]>, "candidate_id"> | null,
@@ -855,16 +898,11 @@ export default function Home() {
   const hasActiveBuddy = activeBuddyRequest(buddyRequest);
   const recommendedBuddy = run?.buddy.availability.recommendation;
   const simulationTarget = simulationTargetFor(buddyRequest, recommendedBuddy ?? null);
-  const buddyCandidates = run ? (() => {
-    const top = run.buddy.availability.candidates.slice(0, 3);
-    const currentRequestCandidate = buddyRequest && ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(buddyRequest.status)
-      ? buddyRequest.candidate_id
-      : undefined;
-    const requiredId = currentRequestCandidate ?? recommendedBuddy?.candidate_id;
-    if (!requiredId || top.some((assessment) => assessment.candidate.id === requiredId)) return top;
-    const required = run.buddy.availability.candidates.find((assessment) => assessment.candidate.id === requiredId);
-    return required ? [...top.slice(0, 2), required] : top;
-  })() : [];
+  const candidateView = run
+    ? buddyCandidatesFor(run.buddy.availability.candidates, buddyRequest, recommendedBuddy ?? null)
+    : { candidates: [], alternativeCandidateId: null };
+  const buddyCandidates = candidateView.candidates;
+  const alternativeCandidateId = candidateView.alternativeCandidateId;
   const simulationCandidate = run?.buddy.availability.candidates.find((assessment) => assessment.candidate.id === simulationTarget && assessment.availability.status === "available");
   const selectedAssessment = run?.buddy.availability.candidates.find((assessment) => assessment.candidate.id === selectedCandidateId) ?? null;
   const timelineItems = run ? [
@@ -1114,8 +1152,9 @@ export default function Home() {
               <div>
                 {buddyCandidates.map((assessment) => {
                   const { candidate, eligibility, availability } = assessment;
-                  const isRequested = request?.candidate_id === candidate.id;
+                  const requestTag = candidateRequestTagFor(request, candidate.id);
                   const isRecommended = recommendedBuddy?.candidate_id === candidate.id;
+                  const isAlternative = alternativeCandidateId === candidate.id;
                   return (
                     <button type="button" className="cand" key={candidate.id} aria-pressed={selectedCandidateId === candidate.id} onClick={() => setSelectedCandidateId(candidate.id)}>
                       <span className="avatar small" aria-hidden="true">{initials(candidate.full_name)}</span>
@@ -1124,7 +1163,7 @@ export default function Home() {
                       <span className="cand-col"><span>Availability</span><strong className={`availability ${availability.status}`}>{availabilityLabel(availability.status)}{availability.slots.length > 0 ? ` · ${availability.slots.length} slots` : ""}</strong></span>
                       <span className="cand-tags">
                         <Tag tone={eligibility.eligible ? "positive" : "attention"}>{eligibility.eligible ? "Eligible" : "Not eligible"}</Tag>
-                        {isRequested ? <Tag tone="info">Current request</Tag> : isRecommended ? <Tag tone="violet">Recommended</Tag> : null}
+                        {requestTag ? <Tag tone={requestTag.tone}>{requestTag.label}</Tag> : isRecommended ? <Tag tone="violet">Recommended</Tag> : isAlternative ? <Tag tone="violet">Available alternative</Tag> : null}
                       </span>
                     </button>
                   );

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { EVENTS } from "@/data/events";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { JOINERS } from "@/data/joiners";
-import { ApprovalEmptyState, executionStepsFor, initialExecutionFor, simulationTargetFor, WorkflowTriggerCard } from "@/app/page";
+import { ApprovalEmptyState, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, WorkflowTriggerCard } from "@/app/page";
 
 function render(run: { screen_state: "draft_unavailable" | "no_action"; equipment_late: boolean }) {
   return renderToStaticMarkup(createElement(ApprovalEmptyState, {
@@ -142,5 +142,23 @@ describe("buddy simulation target", () => {
       { status: "confirmed", candidate_id: "b-06" },
       { candidate_id: "b-01" },
     )).toBe("b-06");
+  });
+});
+
+describe("buddy candidate comparison", () => {
+  it("labels the confirmed candidate and exposes a selectable available alternative", () => {
+    const candidates = [
+      { candidate: { id: "b-04" }, eligibility: { eligible: true }, availability: { status: "unknown" as const } },
+      { candidate: { id: "b-07" }, eligibility: { eligible: true }, availability: { status: "error" as const } },
+      { candidate: { id: "b-02" }, eligibility: { eligible: true }, availability: { status: "busy" as const } },
+      { candidate: { id: "b-06" }, eligibility: { eligible: true }, availability: { status: "available" as const } },
+      { candidate: { id: "b-01" }, eligibility: { eligible: true }, availability: { status: "available" as const } },
+    ];
+    const view = buddyCandidatesFor(candidates, { status: "confirmed", candidate_id: "b-06" }, { candidate_id: "b-06" });
+
+    expect(view.candidates.map((assessment) => assessment.candidate.id)).toEqual(["b-04", "b-07", "b-06", "b-01"]);
+    expect(view.alternativeCandidateId).toBe("b-01");
+    expect(candidateRequestTagFor({ status: "confirmed", candidate_id: "b-06" }, "b-06")).toEqual({ label: "Confirmed", tone: "positive" });
+    expect(candidateRequestTagFor({ status: "confirmed", candidate_id: "b-06" }, "b-01")).toBeNull();
   });
 });
