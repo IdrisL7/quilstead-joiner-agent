@@ -10,13 +10,12 @@ import {
   recordBuddyResponse,
   resolveBuddyApproval,
   simulateBuddyAvailabilityChange,
-  type DemoPreparation,
 } from "@/lib/demo-flow";
 import { runAgent } from "@/lib/agent/loop";
 import type { AgentMode, AgentRun, AgentTrigger } from "@/lib/agent/types";
 import { CaseStore } from "@/lib/store/case-store";
 import { resetDemoState } from "@/lib/store/demo-state";
-import type { Case, Joiner } from "@/lib/types";
+import type { Case } from "@/lib/types";
 
 const NOW = "2026-09-30T09:00:00Z";
 const GOLDEN_PATH = path.join(process.cwd(), "data", "golden", "cases.json");
