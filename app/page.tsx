@@ -1033,9 +1033,9 @@ export default function Home() {
                       <div className="message">
                         <div className="message-avatar" aria-hidden="true">A</div>
                         <div>
-                          <div className="message-head"><strong>{current.buddy.draft.subject}</strong><span>to {current.buddy.draft.recipient}</span><Tag tone="violet">Fixed mock template</Tag><Tag>{current.buddy.draft.status}</Tag></div>
+                          <div className="message-head"><strong>{current.buddy.draft.subject}</strong><span>to {current.buddy.draft.recipient}</span><Tag tone="violet">{current.model.provider === "anthropic" ? "Anthropic wording" : "Deterministic mock"}</Tag><Tag>{current.buddy.draft.status}</Tag></div>
                           <p>{current.buddy.draft.body}</p>
-                          <p className="muted small">Draft content is fixed for this mock run. The live adapter is not used here.</p>
+                          <p className="muted small">{current.model.provider === "anthropic" ? "The live adapter generated this wording from the current facts. Approval is still required." : "This mock run uses a fixed draft; the live adapter generates wording from the same facts."}</p>
                         </div>
                       </div>
                     )}

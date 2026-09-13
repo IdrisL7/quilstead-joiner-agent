@@ -762,7 +762,7 @@ export async function prepareBuddyRequest(
   preparation.case.drafts.push({ ...draft, citations: draft.citations ? [...draft.citations] : undefined });
   preparation.case.buddy_requests.push(request);
   updateBuddyTask(preparation.case, "waiting_approval", `Buddy request ${request.id} awaits People approval for ${selected.candidate.full_name}.`);
-  recordCaseStep(preparation.case, "agent", "buddy.request.prepared", `Prepared a fixed buddy request for ${selected.candidate.full_name} with two proposed first-week slots.`, now, {
+  recordCaseStep(preparation.case, "agent", "buddy.request.prepared", `Prepared a buddy request for ${selected.candidate.full_name} with two proposed first-week slots.`, now, {
     request_id: request.id,
     draft_id: draft.id,
     candidate_id: request.candidate_id,
@@ -784,7 +784,7 @@ export async function prepareBuddyRequest(
     buddy: buddyState(availability, request, draft, beforeApproval),
     trace: [
       ...preparation.trace,
-      { actor: "agent", kind: "buddy.request.prepared", summary: `Prepared a fixed buddy request for ${selected.candidate.full_name} with two proposed first-week slots.` },
+      { actor: "agent", kind: "buddy.request.prepared", summary: `Prepared a buddy request for ${selected.candidate.full_name} with two proposed first-week slots.` },
       { actor: "agent", kind: "draft.created", summary: `Draft ${draft.id} created for the buddy request and awaits People approval.` },
       { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
     ],
