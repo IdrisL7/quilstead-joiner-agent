@@ -12,7 +12,8 @@ function request(body: Record<string, unknown> = {}) {
 describe("demo approval route", () => {
   it("rejects an approval from a superseded run", async () => {
     const oldResponse = await POST(request());
-    const oldRun = await oldResponse.json() as { run_id: string };
+    const oldRun = await oldResponse.json() as { run_id: string; agent: { trigger: string; stop_reason: string; tool_calls: number; refused: number } };
+    expect(oldRun.agent).toMatchObject({ trigger: "contract.signed", stop_reason: "finished", tool_calls: 9, refused: 1 });
     const currentResponse = await POST(request());
     const currentRun = await currentResponse.json() as { run_id: string };
 
@@ -131,7 +132,7 @@ describe("demo approval route", () => {
     };
 
     expect(initial.attention.equipment.status).toBe("Needs approval");
-    expect(initial.attention.buddy.status).toBe("Ready for review");
+    expect(initial.attention.buddy.status).toBe("Awaiting approval");
     expect(initial.attention.compliance.open_tasks).toBeGreaterThan(0);
     expect(initial.attention.compliance.total_tasks).toBeGreaterThanOrEqual(initial.attention.compliance.open_tasks);
     expect(initial.buddy.availability.recommendation?.candidate_id).toBe("b-06");
@@ -191,7 +192,7 @@ describe("demo approval route", () => {
       run_id: string;
       draft: { id: string; body: string; status: string; edited_by: string; revision: number; supersedes_draft_id: string };
       before_approval: { status: string };
-      buddy: { request: unknown };
+      buddy: { request: { status: string } | null };
     };
 
     expect(edited.run_id).not.toBe(initial.run_id);
@@ -204,7 +205,7 @@ describe("demo approval route", () => {
       supersedes_draft_id: initial.draft.id,
     });
     expect(edited.before_approval.status).toBe("denied");
-    expect(edited.buddy.request).toBeNull();
+    expect(edited.buddy.request?.status).toBe("pending_approval");
 
     const staleApproval = await POST(request({ run_id: initial.run_id, decision: "approve" }));
     expect(staleApproval.status).toBe(409);

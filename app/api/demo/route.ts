@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buddyById } from "@/data/buddies";
 import { personById } from "@/data/people";
+import { attentionSummary } from "@/lib/attention";
 import {
   BuddyFlowConflict,
   changeDemoStartDate,
@@ -112,91 +113,21 @@ function buddySummary(run: DemoPreparation) {
   };
 }
 
-function attentionSummary(run: DemoPreparation) {
-  const buddyTask = run.case.tasks.find((task) => task.type === "buddy_allocation");
-  const complianceTasks = run.case.tasks.filter((task) => task.compliance_code);
-  const openComplianceTasks = complianceTasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
-  const unresolvedEscalations = run.case.escalations.filter((escalation) => !escalation.resolved_at);
-  const complianceEscalationCodes = new Set<string>(["RTW_NOT_EVIDENCED", "COMPLIANCE_DEADLINE_AT_RISK"]);
-  const unresolvedComplianceEscalations = unresolvedEscalations.filter((escalation) => complianceEscalationCodes.has(escalation.code));
-  const primaryComplianceTask = openComplianceTasks.find((task) => task.status === "escalated") ?? openComplianceTasks[0];
-  const complianceNextAction = primaryComplianceTask
-    ? `${primaryComplianceTask.status === "escalated" ? "Resolve" : "Complete"} ${primaryComplianceTask.title}.`
-    : unresolvedComplianceEscalations[0]?.summary ?? "No open compliance task is due by the current start date.";
-  const screenState = run.decision
-    ? "resolved"
-    : run.draft
-    ? "awaiting_decision"
-    : run.draft_unavailable
-    ? "draft_unavailable"
-    : "no_action";
-  const equipmentStatus = !run.facts.equipment_late
-    ? "On track"
-    : run.decision === "approve"
-    ? "Awaiting IT response"
-    : screenState === "draft_unavailable"
-    ? "Draft unavailable"
-    : screenState === "awaiting_decision"
-    ? "Needs approval"
-    : "Needs review";
-  const equipmentNextAction = !run.facts.equipment_late
-    ? "No equipment action required from the current dates."
-    : run.decision === "approve"
-    ? "Wait for IT to arrange a loaner or earlier delivery."
-    : screenState === "draft_unavailable"
-    ? "Retry the draft before any message can be sent."
-    : "Review the current equipment nudge.";
-
-  let buddyStatus = "Ready for review";
-  let buddyNextAction = run.buddy.availability.recommendation
-    ? "Compare candidates and request support."
-    : run.buddy.availability.escalation?.summary ?? "People must review buddy support by hand.";
-  if (run.buddy.request?.status === "pending_approval") {
-    buddyStatus = "Awaiting approval";
-    buddyNextAction = "Approve or reject the exact buddy request.";
-  } else if (run.buddy.request?.status === "awaiting_acceptance") {
-    buddyStatus = "Awaiting buddy acceptance";
-    buddyNextAction = "Use the labelled simulation response control.";
-  } else if (run.buddy.request?.status === "accepted" && buddyTask?.status !== "done") {
-    buddyStatus = "Awaiting People confirmation";
-    buddyNextAction = "Confirm the accepted allocation as People.";
-  } else if (run.buddy.request?.status === "confirmed" && buddyTask?.status === "done") {
-    buddyStatus = "Confirmed";
-    buddyNextAction = "People confirmation is recorded for this case.";
-  } else if (run.buddy.request?.status === "declined" || run.buddy.request?.status === "rejected") {
-    buddyStatus = "Needs replacement";
-    buddyNextAction = "Choose another candidate. No request was sent automatically.";
-  } else if (run.buddy.request?.status === "superseded") {
-    buddyStatus = "Needs revalidation";
-    buddyNextAction = "Prepare a fresh request from the current availability.";
-  }
-
+function agentSummary(run: DemoPreparation) {
+  if (!run.agent) return null;
   return {
-    equipment: {
-      status: equipmentStatus,
-      owner_name: run.facts.equipment_owner_name,
-      next_action: equipmentNextAction,
-    },
-    buddy: {
-      status: buddyStatus,
-      owner_name: personById(buddyTask?.owner_id ?? "")?.full_name ?? buddyTask?.owner_id ?? "People",
-      next_action: buddyNextAction,
-      candidate_name: run.buddy.request
-        ? buddyById(run.buddy.request.candidate_id)?.full_name ?? run.buddy.request.candidate_id
-        : run.buddy.availability.recommendation?.candidate_name ?? null,
-    },
-    compliance: {
-      status: unresolvedComplianceEscalations.some((escalation) => escalation.severity === "critical")
-        ? "Blocked"
-        : openComplianceTasks.length > 0
-        ? "In progress"
-        : "Complete",
-      owner_name: personById(primaryComplianceTask?.owner_id ?? unresolvedComplianceEscalations[0]?.to_person_id ?? "")?.full_name ?? "People",
-      next_action: complianceNextAction,
-      open_tasks: openComplianceTasks.length,
-      total_tasks: complianceTasks.length,
-      unresolved_escalations: unresolvedComplianceEscalations.length,
-    },
+    run_id: run.agent.run_id,
+    trigger: run.agent.trigger,
+    provider: run.agent.provider,
+    model: run.agent.model,
+    steps: run.agent.model_steps,
+    tool_calls: run.agent.tool_calls,
+    refused: run.agent.refused,
+    stop_reason: run.agent.stop_reason,
+    next_action: run.agent.next_action,
+    cost_usd: run.agent.cost_usd,
+    started_at: run.agent.started_at,
+    finished_at: run.agent.finished_at,
   };
 }
 
@@ -220,6 +151,7 @@ function preparationResponse(run: DemoPreparation) {
       start_date: run.joiner.start_date,
     },
     model: run.model,
+    agent: agentSummary(run),
     equipment: equipmentSummary(run),
     attention: attentionSummary(run),
     facts: run.facts,

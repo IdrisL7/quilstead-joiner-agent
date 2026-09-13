@@ -58,6 +58,8 @@ export const registerDraft = (draft: Draft): boolean => {
   return true;
 };
 
+export const discardDraft = (draftId: string): boolean => drafts.delete(draftId);
+
 export const approveDraft = (draftId: string, decidedBy: string, decidedAt: string): boolean => {
   const draft = drafts.get(draftId);
   if (!draft || draft.status !== "pending" || !personById(decidedBy)) return false;

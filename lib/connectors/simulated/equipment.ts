@@ -42,5 +42,16 @@ export const equipment: Connector = {
           : ok(`Order ${id} placed; ETA ${eta}.`, { order_id: id, eta, status: "ordered" });
       },
     },
+    get_order: {
+      description: "Read the current laptop order for a joiner. Never creates or changes an order.",
+      schema: { joiner_id: "string" },
+      run: async ({ joiner_id }) => {
+        const order = [...orders].reverse().find((candidate) => candidate.joiner_id === String(joiner_id));
+        if (!order) return failed(`No equipment order found for ${String(joiner_id)}`);
+        return order.status === "backordered"
+          ? { status: "warning" as const, summary: `Order ${order.id} backordered; ETA ${order.eta} is after the SLA.`, data: { ...order } }
+          : ok(`Order ${order.id} is on track; ETA ${order.eta}.`, { ...order });
+      },
+    },
   },
 };

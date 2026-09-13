@@ -307,8 +307,13 @@ describe("checkpoint-B buddy flow", () => {
 
   it("reserves confirmed capacity, revalidates duplicate confirmation, and releases a replaced reservation", async () => {
     const prepared = await (await POST(request())).json() as BuddyPayload;
-    const buddyPrepared = await (await POST(request({
+    const availabilityChanged = await (await POST(request({
       run_id: prepared.run_id,
+      action: "buddy_availability_change",
+      candidate_id: "b-06",
+    }))).json() as BuddyPayload;
+    const buddyPrepared = await (await POST(request({
+      run_id: availabilityChanged.run_id,
       action: "buddy_prepare",
       candidate_id: "b-01",
     }))).json() as BuddyPayload;
@@ -372,7 +377,7 @@ describe("checkpoint-B buddy flow", () => {
     expect(invalidatedBody.case.buddy_task_status).toBe("open");
     expect(invalidatedBody.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")?.availability.status).toBe("unknown");
 
-    setSimulatedBuddyCalendar(snapshot);
+    setSimulatedBuddyCalendar(BUDDY_CALENDARS.find((calendar) => calendar.buddy_id === "b-06")!);
     const replacementPrepared = await (await POST(request({
       run_id: invalidatedBody.run_id,
       action: "buddy_prepare",
@@ -414,8 +419,13 @@ describe("checkpoint-B buddy flow", () => {
 
   it("rejects overlapping reset, date-change, and buddy mutations", async () => {
     const prepared = await (await POST(request())).json() as BuddyPayload;
-    const buddyMutation = {
+    const availabilityChanged = await (await POST(request({
       run_id: prepared.run_id,
+      action: "buddy_availability_change",
+      candidate_id: "b-06",
+    }))).json() as BuddyPayload;
+    const buddyMutation = {
+      run_id: availabilityChanged.run_id,
       action: "buddy_prepare",
       candidate_id: "b-01",
     };

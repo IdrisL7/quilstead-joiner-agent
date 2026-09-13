@@ -25,6 +25,8 @@ import { resetDemoState } from "@/lib/store/demo-state";
 import { deriveState } from "@/lib/state-machine";
 import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
 import type { BuddyRequest, Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
+import { runAgent } from "@/lib/agent/loop";
+import type { AgentRun } from "@/lib/agent/types";
 
 const DEMO_NOW = "2026-09-30T09:00:00Z";
 const DEMO_EVENT_ID = "EVT-004";
@@ -80,6 +82,7 @@ export interface DemoPreparation {
   event: HrisEvent;
   joiner: Joiner;
   model: Pick<NudgeModelDraft, "provider" | "model">;
+  agent?: AgentRun;
   draft: Draft | null;
   equipment: ToolResult;
   beforeApproval: ToolResult | null;
@@ -466,18 +469,48 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
     ship_to: joiner.work_mode === "remote" ? "home" : "office",
     now,
   });
+  recordCaseStep(c, "agent", "tool.equipment.order", equipment.summary, now, { status: equipment.status });
   trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
   const facts = buildDemoFacts(c, event, joiner, equipment);
-  const generated = await createDraftForCurrentState(c, joiner, equipment, facts, now, mode);
-  const availability = await readBuddyAvailability(joiner, c.start_date, [], c.id);
+  const agent = await runAgent(c, joiner, "contract.signed", now, mode === "live" ? "live" : "mock");
+  const generatedDraft = agent.proposals.find((proposal) => proposal.draft.kind === "nudge");
+  const buddyProposal = agent.proposals.find((proposal) => proposal.draft.kind === "buddy_intro");
+  const availability = agent.availability ?? await readBuddyAvailability(joiner, c.start_date, [], c.id);
   const availabilitySummary = availability.recommendation
     ? `Recommended ${availability.recommendation.candidate_name} from the current first-week calendar snapshot.`
     : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
-  recordCaseStep(c, "agent", "tool.buddy_directory.get_availability", availabilitySummary, now);
-  trace.push({
-    actor: "agent",
-    kind: "tool.buddy_directory.get_availability",
-    summary: availabilitySummary,
+  const generated = agent.stop_reason === "finished"
+    ? {
+      model: { provider: agent.provider, model: agent.model } as Pick<NudgeModelDraft, "provider" | "model">,
+      draft: generatedDraft?.draft ?? null,
+      beforeApproval: generatedDraft?.before_approval ?? null,
+      unavailable: undefined,
+      trace: agent.trace,
+    }
+    : {
+      model: { provider: agent.provider, model: agent.model } as Pick<NudgeModelDraft, "provider" | "model">,
+      draft: null,
+      beforeApproval: null,
+      unavailable: { message: `Assistant unavailable (${agent.stop_reason}). The case is unchanged; run assistant again.` },
+      trace: agent.trace,
+    };
+  let proposalIndex = 0;
+  const agentTrace = agent.trace.flatMap((entry) => {
+    const entries = [entry];
+    if (entry.kind === "agent.tool_result" && (entry.summary.startsWith("Recommended") || entry.summary.startsWith("No suitable buddy"))) {
+      entries.push({ actor: "agent" as const, kind: "tool.buddy_directory.get_availability", summary: availabilitySummary });
+    }
+    if (entry.kind === "agent.proposed") {
+      const proposal = agent.proposals[proposalIndex++];
+      if (proposal) {
+        entries.push({ actor: "agent" as const, kind: proposal.request ? "buddy.request.prepared" : "draft.created", summary: proposal.request
+          ? `Prepared a fixed buddy request for ${proposal.request.candidate_id} with two proposed first-week slots.`
+          : `Draft ${proposal.draft.id} created for ${proposal.draft.action} and awaits approval.` });
+        if (proposal.request) entries.push({ actor: "agent" as const, kind: "draft.created", summary: `Draft ${proposal.draft.id} created for the buddy request and awaits People approval.` });
+        entries.push({ actor: "system" as const, kind: "send.refused", summary: proposal.before_approval.summary });
+      }
+    }
+    return entries;
   });
 
   return {
@@ -485,14 +518,15 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
     case: c,
     event,
     joiner,
+    agent,
     model: generated.model,
     draft: generated.draft,
     equipment,
     beforeApproval: generated.beforeApproval,
     facts,
-    buddy: buddyState(availability, null),
+    buddy: buddyState(availability, buddyProposal?.request ?? latestBuddyRequest(c), buddyProposal?.draft ?? null, buddyProposal?.before_approval),
     draft_unavailable: generated.unavailable,
-    trace: [...trace, ...generated.trace],
+    trace: [...trace, ...agentTrace],
     store,
   };
 }
@@ -764,6 +798,7 @@ export async function prepareBuddyRequest(
 ): Promise<DemoPreparation> {
   const existing = latestBuddyRequest(preparation.case);
   if (existing && ACTIVE_BUDDY_REQUEST_STATUSES.has(existing.status)) {
+    if (!candidateId || candidateId === existing.candidate_id) return preparation;
     throw new BuddyFlowConflict(`Buddy request ${existing.id} is already ${existing.status}. Await its next decision before preparing another request.`);
   }
 
