@@ -97,7 +97,7 @@ The recovery defect fixed in checkpoint C was a partial transition: the old impl
 
 Simulated: HRIS state, in-memory case storage, equipment response, policy files, mock agent model, Slack send and receipts. Live Anthropic wording uses the same simulated observations; no persistence or live connector is included.
 
-Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, the 20-scenario mock golden set at 20/20 pass^3, typecheck, lint and production build. The real Anthropic provider probe remains NOT RUN because no key is configured. Production latency, provider availability, real Slack delivery and IT response remain unknown.
+Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, the 20-scenario mock golden set at 20/20 pass^3, the same 20 scenarios live on `claude-haiku-4-5-20251001` at 20/20 pass^3 with zero terminal-state flapping (USD 0.027 per run, 2026-09-13), typecheck, lint and production build. Real Slack delivery, IT response, persistence and production latency under load remain unknown.
 
 ## 8. Code and AI assistance disclosure
 

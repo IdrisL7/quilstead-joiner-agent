@@ -26,7 +26,7 @@ badge visible. The real Anthropic probe is not part of this browser rehearsal.
 | 4:30-6:00 | Click `Reset`, then `Simulate contract signed`; open `Buddy support`, select Ewan and prepare the request | Reset and trigger are separate demo controls. Candidate eligibility and London-time slots come from the simulated calendar; selecting a row sends nothing. |
 | 6:00-7:00 | Click `Approve` for the exact Ewan request, then `Simulate buddy declines` | Buddy acceptance is a simulated response after approval. The decline creates a new pending proposal from current facts and does not send a replacement automatically. |
 | 7:00-8:00 | Change the start date to 19 October and recalculate | Deadlines and risk are recomputed from current state. The chronological timeline changes, and the compliance next action remains the actual open compliance task. |
-| 8:00-9:15 | Point to `docs/evals/README.md` | The mock golden set is 20/20 at pass^3 across three passes, with mean tool calls and zero terminal-state flapping. Live cost and reliability are deliberately not claimed because the provider probe is not run. |
+| 8:00-9:15 | Point to `docs/evals/README.md` | Mock golden set 20/20 pass^3. Live Haiku 4.5: 20 scenarios, three passes, 20/20 pass^3, zero terminal-state flapping, USD 0.027 per run. Then the run-by-run table: first live run 2/20, every miss classified and fixed in the contract, the guard or the harness, never by re-running until it passed. |
 | 9:15-10:00 | Close on boundaries and the case Activity ledger | The case trail stays complete even though the UI trace is thinned. People owns approvals and confirmation, IT owns the equipment response, calendars are read-only snapshots, and no tool can send without approval. |
 
 ## Spoken model distinction
@@ -55,8 +55,8 @@ run before they can be described as measured.
 - Do not describe this as a general autonomous agent or a full onboarding dashboard.
 - Do not imply that the model calculated deadlines, selected an ineligible recipient or completed a
   compliance task.
-- Do not claim live Slack delivery, a real IT response or production reliability. The live provider
-  probe and live golden evaluation remain NOT RUN.
+- Do not claim live Slack delivery, a real IT response or production reliability. Live reliability is
+  measured on a 20-scenario golden set, not on a customer cohort; say that.
 
 ## Technical explanation order
 

@@ -1,13 +1,14 @@
 # Athena for Quilstead: Day-one readiness
 
-A deterministic prototype for one of Quilstead Solutions' onboarding pain points, built for the
+A working, bounded AI agent for one of Quilstead Solutions' onboarding pain points, built for the
 Humaans Athena take-home. The agent turns a "contract signed" event into a compliant,
 equipped, connected first morning without a person chasing every step.
 
-Status: Checkpoint C mock golden set is 20/20 pass^3 across three passes. The bounded Anthropic
-adapter and fake-client guard test are in; the real live probe remains NOT RUN because this
-workspace has no `ANTHROPIC_API_KEY` configured. Persistence, live integrations and broader
-orchestration remain deferred.
+Status: bounded agent loop, verified. Mock golden set 20/20 pass^3. Live Anthropic
+(`claude-haiku-4-5-20251001`) golden set 20/20 pass^3, zero terminal-state flapping, USD 0.027 per
+case run, measured 2026-09-13 (`docs/evals/README.md`). The model chooses what to check, what to
+propose and to whom; code owns every date, permission and send; a named person approves. Persistence
+and live integrations remain deferred; every connector is simulated behind its production interface.
 See `AGENTS.md` for the map.
 
 ## Run
@@ -44,7 +45,7 @@ reliability is claimed here.
 | Equipment, buddy and compliance attention summary | Working from current case state, browser-verified |
 | Current timeline, evidence panel and start-date interaction | Working in mock mode, browser-verified |
 | Draft failure recovery after a date change | Working, tested with missing-key mode |
-| Live Anthropic execution | Adapter implemented and fake-client verified; real provider run NOT RUN because the key is unavailable |
+| Live Anthropic execution | Working: same loop, tools and guards; 20 scenarios x 3 passes at 20/20, USD 0.027 per run (`docs/evals/README.md`) |
 | Persistence, live integrations, broader orchestration, policy Q&A | Deferred |
 | Broader case-view UI | Deferred |
 | Public holidays in working-day maths | Not modelled |

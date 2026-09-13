@@ -1,0 +1,2012 @@
+{
+  "generated_at": "2026-09-13T14:33:09.212Z",
+  "mode": "live",
+  "model": "claude-haiku-4-5-20251001",
+  "passes": 3,
+  "budget_usd": 5,
+  "cumulative_cost_usd": 1.4764899999999999,
+  "budget_exceeded": false,
+  "results": [
+    {
+      "scenario": {
+        "id": "contract-j001",
+        "label": "J-001 contract signed",
+        "joiner_id": "J-001",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell must verify buddy candidate availability or arrange support by hand, and complete the overdue HRIS profile.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17655,
+            "output_tokens": 716,
+            "cost_usd": 0.021235,
+            "wall_ms": 8654
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell must verify buddy availability or arrange support by hand, and complete the overdue HRIS profile task.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17645,
+            "output_tokens": 680,
+            "cost_usd": 0.021045,
+            "wall_ms": 8427
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell must verify buddy availability or arrange support by hand, and complete the overdue HRIS profile and right-to-work check.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17653,
+            "output_tokens": 754,
+            "cost_usd": 0.021422999999999998,
+            "wall_ms": 9596
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j002",
+        "label": "J-002 RTW blocked",
+        "joiner_id": "J-002",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY",
+            "RTW_NOT_EVIDENCED"
+          ],
+          "terminal_case_state": "blocked",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24477,
+            "output_tokens": 1026,
+            "cost_usd": 0.029606999999999998,
+            "wall_ms": 15112
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24479,
+            "output_tokens": 1029,
+            "cost_usd": 0.029624,
+            "wall_ms": 15188
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24472,
+            "output_tokens": 1026,
+            "cost_usd": 0.029602,
+            "wall_ms": 15247
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j003",
+        "label": "J-003 manager cover",
+        "joiner_id": "J-003",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "MANAGER_UNAVAILABLE",
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS nudge to Jordan Alvarez and resolve the buddy escalation by verifying candidate availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 6,
+            "refused": 0,
+            "input_tokens": 24676,
+            "output_tokens": 1022,
+            "cost_usd": 0.029786,
+            "wall_ms": 13876
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS nudge to Jordan Alvarez and resolve the buddy escalation by verifying candidate availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 6,
+            "refused": 0,
+            "input_tokens": 24628,
+            "output_tokens": 1016,
+            "cost_usd": 0.029708000000000002,
+            "wall_ms": 13724
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS nudge to Jordan Alvarez and resolve the buddy escalation by verifying candidate availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 6,
+            "refused": 0,
+            "input_tokens": 24674,
+            "output_tokens": 1043,
+            "cost_usd": 0.029889000000000002,
+            "wall_ms": 13858
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j004",
+        "label": "J-004 equipment risk",
+        "joiner_id": "J-004",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge",
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "it-1",
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to IT (equipment loaner/earlier delivery) and buddy request to Ewan Grant.",
+            "model_steps": 5,
+            "tool_calls": 6,
+            "refused": 0,
+            "input_tokens": 25738,
+            "output_tokens": 1054,
+            "cost_usd": 0.031008,
+            "wall_ms": 13288
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to IT (equipment loaner/delivery) and buddy request to Ewan Grant.",
+            "model_steps": 5,
+            "tool_calls": 6,
+            "refused": 0,
+            "input_tokens": 25757,
+            "output_tokens": 1076,
+            "cost_usd": 0.031136999999999998,
+            "wall_ms": 12883
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Nadia Hussain about the late laptop and the buddy request to Ewan Grant.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 1,
+            "input_tokens": 26100,
+            "output_tokens": 1192,
+            "cost_usd": 0.032060000000000005,
+            "wall_ms": 13724
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: none; kind=undefined. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j005",
+        "label": "J-005 no buddy",
+        "joiner_id": "J-005",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS profile nudge to Sarah Mitchell and arrange buddy support by hand for Sofia.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28382,
+            "output_tokens": 1199,
+            "cost_usd": 0.034377000000000005,
+            "wall_ms": 17494
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Sarah Mitchell about the overdue HRIS profile, and ensure buddy support is arranged by hand by 2026-10-07.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28380,
+            "output_tokens": 1285,
+            "cost_usd": 0.034805,
+            "wall_ms": 18359
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS profile nudge to Sarah Mitchell and review the buddy escalation for manual arrangement.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28386,
+            "output_tokens": 1199,
+            "cost_usd": 0.034381,
+            "wall_ms": 17184
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j006",
+        "label": "J-006 policy question fixture",
+        "joiner_id": "J-006",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Jordan Alvarez must verify buddy availability and confirm allocation by 2026-10-07.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 21885,
+            "output_tokens": 423,
+            "cost_usd": 0.024,
+            "wall_ms": 6706
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Verify buddy availability with eligible candidates and confirm allocation by 2026-10-07.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 21884,
+            "output_tokens": 422,
+            "cost_usd": 0.023994,
+            "wall_ms": 7098
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Verify buddy availability with eligible candidates or arrange support by hand; all other tasks are on track for Dan's start on 2026-10-12.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 21879,
+            "output_tokens": 435,
+            "cost_usd": 0.024054,
+            "wall_ms": 6958
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j007",
+        "label": "J-007 instruction fixture",
+        "joiner_id": "J-007",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant (b-06) for Tom's onboarding starting 2026-10-12.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 29313,
+            "output_tokens": 1184,
+            "cost_usd": 0.035233,
+            "wall_ms": 16069
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant and monitor right-to-work evidence by 2026-10-09.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 29316,
+            "output_tokens": 1175,
+            "cost_usd": 0.035191,
+            "wall_ms": 16535
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant (b-06) for Tom's onboarding starting 2026-10-12.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 29317,
+            "output_tokens": 1184,
+            "cost_usd": 0.035237,
+            "wall_ms": 16547
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j008",
+        "label": "J-008 date-change fixture",
+        "joiner_id": "J-008",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "OWNER_SLA_BREACHED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Jordan Alvarez about the overdue HRIS profile and escalate buddy availability to People for manual verification.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 0,
+            "input_tokens": 24303,
+            "output_tokens": 849,
+            "cost_usd": 0.028548,
+            "wall_ms": 11822
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "OWNER_SLA_BREACHED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Jordan Alvarez about the overdue HRIS profile, and resolve the buddy escalation by verifying candidate availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 0,
+            "input_tokens": 24303,
+            "output_tokens": 856,
+            "cost_usd": 0.028583,
+            "wall_ms": 12098
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-2"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "OWNER_SLA_BREACHED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Jordan Alvarez about the overdue HRIS profile, and resolve the buddy escalation by verifying candidate availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 0,
+            "input_tokens": 24288,
+            "output_tokens": 849,
+            "cost_usd": 0.028533,
+            "wall_ms": 11672
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j009",
+        "label": "J-009 contractor",
+        "joiner_id": "J-009",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": false,
+          "stop_reason": null,
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "OUT_OF_SCOPE"
+          ],
+          "terminal_case_state": "rejected",
+          "next_action_prefix": null
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j010",
+        "label": "J-010 DE clean",
+        "joiner_id": "J-010",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell (People) must verify calendar availability for the three eligible Berlin-based buddy candidates or arrange buddy support by hand.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17956,
+            "output_tokens": 755,
+            "cost_usd": 0.021731,
+            "wall_ms": 11426
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell (People) must verify calendar availability for the three eligible Berlin buddies or arrange buddy support by hand.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17956,
+            "output_tokens": 753,
+            "cost_usd": 0.021721,
+            "wall_ms": 11774
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Sarah Mitchell (People) must verify buddy calendar availability for Max Richter, Tim Schulz or Lea Hoffmann, or arrange buddy support by hand.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 17956,
+            "output_tokens": 764,
+            "cost_usd": 0.021776,
+            "wall_ms": 11352
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j011",
+        "label": "J-011 US clean",
+        "joiner_id": "J-011",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Verify buddy availability with eligible candidates and confirm allocation by 2026-10-14.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 22254,
+            "output_tokens": 511,
+            "cost_usd": 0.024808999999999998,
+            "wall_ms": 8065
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Resolve the NO_ELIGIBLE_BUDDY escalation by verifying buddy calendar availability or arranging support by hand.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 22258,
+            "output_tokens": 517,
+            "cost_usd": 0.024843,
+            "wall_ms": 7986
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Verify buddy availability with eligible candidates and confirm allocation by 2026-10-14, or arrange support by hand.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 22260,
+            "output_tokens": 517,
+            "cost_usd": 0.024845,
+            "wall_ms": 7898
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j012",
+        "label": "J-012 elevated access",
+        "joiner_id": "J-012",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-02"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher and monitor task completion against the UK joiner SOP deadlines.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18878,
+            "output_tokens": 827,
+            "cost_usd": 0.023013,
+            "wall_ms": 12266
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher and monitor task owners for SLA compliance.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18879,
+            "output_tokens": 822,
+            "cost_usd": 0.022989,
+            "wall_ms": 11810
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher for Ollie's onboarding.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18879,
+            "output_tokens": 822,
+            "cost_usd": 0.022989,
+            "wall_ms": 11774
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "date-j004-19",
+        "label": "J-004 start moved to 19 October",
+        "joiner_id": "J-004",
+        "trigger": "start_date_changed",
+        "start_date": "2026-10-19",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-02"
+          ],
+          "escalation_codes": [
+            "START_DATE_CHANGED"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Start date moved to 2026-10-19. Approve the re-proposed buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher for Aisha's onboarding on 2026-10-19.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 20625,
+            "output_tokens": 928,
+            "cost_usd": 0.025265000000000003,
+            "wall_ms": 13171
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher for the new start date 2026-10-19.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 25154,
+            "output_tokens": 632,
+            "cost_usd": 0.028314,
+            "wall_ms": 9743
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Rob Fletcher for Aisha's onboarding on 2026-10-19.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 20675,
+            "output_tokens": 1040,
+            "cost_usd": 0.025875,
+            "wall_ms": 14607
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "date-j004-09",
+        "label": "J-004 start moved to 9 October",
+        "joiner_id": "J-004",
+        "trigger": "start_date_changed",
+        "start_date": "2026-10-09",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge",
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "it-1",
+            "b-02"
+          ],
+          "escalation_codes": [
+            "START_DATE_CHANGED"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Nadia Hussain about the late laptop and the pending buddy request to Rob Fletcher.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 1,
+            "input_tokens": 28656,
+            "output_tokens": 1282,
+            "cost_usd": 0.035066,
+            "wall_ms": 16997
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Nadia Hussain about the late laptop and the buddy request to Rob Fletcher.",
+            "model_steps": 5,
+            "tool_calls": 7,
+            "refused": 1,
+            "input_tokens": 28479,
+            "output_tokens": 1239,
+            "cost_usd": 0.034674,
+            "wall_ms": 16380
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to IT (equipment loaner/earlier delivery) and buddy request to Rob Fletcher (b-02).",
+            "model_steps": 6,
+            "tool_calls": 7,
+            "refused": 1,
+            "input_tokens": 33018,
+            "output_tokens": 1219,
+            "cost_usd": 0.039112999999999995,
+            "wall_ms": 16363
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=buddy_request. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "decline-j004-ewan",
+        "label": "J-004 Ewan declines",
+        "joiner_id": "J-004",
+        "trigger": "buddy_declined",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-01"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the replacement buddy request to Amara Osei; Ewan Grant declined."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 18468,
+            "output_tokens": 650,
+            "cost_usd": 0.021717999999999998,
+            "wall_ms": 7774
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 18522,
+            "output_tokens": 627,
+            "cost_usd": 0.021657,
+            "wall_ms": 7484
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei (b-01) for Aisha's onboarding.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 18434,
+            "output_tokens": 539,
+            "cost_usd": 0.021129,
+            "wall_ms": 6948
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "availability-j004-ewan",
+        "label": "J-004 Ewan availability changes",
+        "joiner_id": "J-004",
+        "trigger": "availability_changed",
+        "candidate_id": "b-06",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-01"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the refreshed buddy request to Amara Osei after availability changed."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei.",
+            "model_steps": 3,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 14224,
+            "output_tokens": 549,
+            "cost_usd": 0.016969,
+            "wall_ms": 5971
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei.",
+            "model_steps": 3,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 14260,
+            "output_tokens": 584,
+            "cost_usd": 0.01718,
+            "wall_ms": 6717
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Amara Osei.",
+            "model_steps": 3,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 14235,
+            "output_tokens": 557,
+            "cost_usd": 0.01702,
+            "wall_ms": 6758
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "track-j004",
+        "label": "J-004 equipment on track",
+        "joiner_id": "J-004",
+        "trigger": "contract.signed",
+        "equipment_on_track": true,
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant and monitor task completion against deadlines.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18733,
+            "output_tokens": 886,
+            "cost_usd": 0.023163,
+            "wall_ms": 10714
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant for Aisha's onboarding on 2026-10-12.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18723,
+            "output_tokens": 727,
+            "cost_usd": 0.022358,
+            "wall_ms": 8961
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending buddy request to Ewan Grant and monitor right-to-work evidence by 2026-10-09.",
+            "model_steps": 4,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 18810,
+            "output_tokens": 832,
+            "cost_usd": 0.02297,
+            "wall_ms": 10090
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j002-repeat",
+        "label": "J-002 repeated RTW fixture",
+        "joiner_id": "J-002",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY",
+            "RTW_NOT_EVIDENCED"
+          ],
+          "terminal_case_state": "blocked",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24469,
+            "output_tokens": 1026,
+            "cost_usd": 0.029599,
+            "wall_ms": 15034
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24475,
+            "output_tokens": 1026,
+            "cost_usd": 0.029605,
+            "wall_ms": 14892
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "Resolve the critical right-to-work escalation and verify buddy availability for the three eligible Berlin candidates.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 24472,
+            "output_tokens": 1026,
+            "cost_usd": 0.029602,
+            "wall_ms": 15142
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.reminded: Model replied with text only; reminded to call a tool or finish."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j005-repeat",
+        "label": "J-005 repeated no-buddy fixture",
+        "joiner_id": "J-005",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending HRIS profile nudge to Sarah Mitchell and review the NO_ELIGIBLE_BUDDY escalation for manual buddy arrangement.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28382,
+            "output_tokens": 1205,
+            "cost_usd": 0.034407,
+            "wall_ms": 17479
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Sarah Mitchell about the overdue HRIS profile, then monitor compliance deadlines and buddy allocation by hand.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28389,
+            "output_tokens": 1228,
+            "cost_usd": 0.034529000000000004,
+            "wall_ms": 17453
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "pp-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the pending nudge to Sarah Mitchell about the overdue HRIS profile.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 28401,
+            "output_tokens": 1220,
+            "cost_usd": 0.034501,
+            "wall_ms": 16992
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Message refused: proposal shape is invalid. Received keys: kind, to, subject; kind=nudge. Required: kind (nudge|buddy_request), to, subject, body."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j009-repeat",
+        "label": "J-009 repeated contractor fixture",
+        "joiner_id": "J-009",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": false,
+          "stop_reason": null,
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "OUT_OF_SCOPE"
+          ],
+          "terminal_case_state": "rejected",
+          "next_action_prefix": null
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    }
+  ]
+}
