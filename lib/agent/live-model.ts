@@ -93,6 +93,8 @@ function mapResponse(response: Message): AgentContentBlock[] {
   return content;
 }
 
+export const RATE_LIMIT_BACKOFF_MS = 20_000;
+
 export function createLiveModel(client?: LiveAnthropicClient): AgentModel {
   const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const resolvedClient = client ?? (() => {
@@ -110,7 +112,7 @@ export function createLiveModel(client?: LiveAnthropicClient): AgentModel {
     model,
     async complete(messages, tools): Promise<ModelTurn> {
       const mapped = mapMessages(messages);
-      const response = await resolvedClient.messages.create({
+      const request = () => resolvedClient.messages.create({
         model,
         max_tokens: MODEL_MAX_TOKENS,
         temperature: MODEL_TEMPERATURE,
@@ -118,7 +120,23 @@ export function createLiveModel(client?: LiveAnthropicClient): AgentModel {
         messages: mapped.messages,
         tools: tools.map(strictTool),
       });
+      let retried: string | undefined;
+      let response;
+      try {
+        response = await request();
+      } catch (error) {
+        // Rate limit (429) and overload (529) are the only retry-shaped failures. One retry,
+        // after the server's Retry-After or RATE_LIMIT_BACKOFF_MS, then the error surfaces.
+        const status = (error as { status?: number }).status;
+        if (status !== 429 && status !== 529) throw error;
+        const headerWait = Number((error as { headers?: Record<string, string> }).headers?.["retry-after"]);
+        const waitMs = Number.isFinite(headerWait) && headerWait > 0 ? Math.min(headerWait * 1000, 60_000) : RATE_LIMIT_BACKOFF_MS;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        retried = `HTTP ${status}; retried once after ${waitMs} ms`;
+        response = await request();
+      }
       return {
+        retried,
         content: mapResponse(response),
         usage: {
           input_tokens: response.usage.input_tokens,

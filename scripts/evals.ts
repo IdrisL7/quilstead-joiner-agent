@@ -69,6 +69,8 @@ interface ScenarioActual {
 interface AttemptResult {
   pass: boolean;
   actual: ScenarioActual;
+  mismatches: string[];
+  notes: string[]; // guard refusals, reminders, retries, unavailable reasons from the run trace
 }
 
 function parseFlag(name: string, fallback: string): string {
@@ -110,7 +112,9 @@ async function runScenario(scenario: GoldenScenario, mode: AgentMode): Promise<S
   try {
     if (scenario.trigger === "contract.signed") return runContractScenario(scenario.joiner_id, mode);
 
-    const initial = await prepareDemo(NOW, mode);
+    // Fixture setup always uses the deterministic mock so the scenario's trigger is the only
+    // thing the model under test has to handle.
+    const initial = await prepareDemo(NOW, "mock");
     if (scenario.trigger === "start_date_changed") {
       const changed = await changeDemoStartDate(initial, scenario.start_date!, mode, NOW);
       return { case: changed.case, agent: changed.agent };
@@ -173,18 +177,35 @@ function terminalSignature(actual: ScenarioActual): string {
   });
 }
 
-function grade(actual: ScenarioActual, expected: GoldenExpected): boolean {
-  return (expected.run ?? true) === actual.run
-    && (expected.stop_reason === undefined || expected.stop_reason === actual.stop_reason)
-    && (expected.proposal_kinds === undefined || sameArray(actual.proposal_kinds, expected.proposal_kinds))
-    && (expected.proposal_recipients === undefined || sameArray(actual.proposal_recipients, expected.proposal_recipients))
-    && (expected.escalation_codes === undefined || sameArray(actual.escalation_codes, expected.escalation_codes))
-    && (expected.terminal_case_state === undefined || expected.terminal_case_state === actual.terminal_case_state)
-    && (expected.next_action_prefix === undefined
-      ? true
-      : expected.next_action_prefix === null
-      ? actual.next_action === null
-      : actual.next_action?.startsWith(expected.next_action_prefix) === true);
+// Mock grades the exact next_action prefix (it is the golden wording). Live grades that a
+// next action exists and is one sentence; wording is the model's. Everything else is strict.
+function mismatches(actual: ScenarioActual, expected: GoldenExpected, mode: AgentMode): string[] {
+  const out: string[] = [];
+  if ((expected.run ?? true) !== actual.run) out.push(`run: expected ${expected.run ?? true}, got ${actual.run}${actual.error ? ` (${actual.error})` : ""}`);
+  if (expected.stop_reason !== undefined && expected.stop_reason !== actual.stop_reason) out.push(`stop_reason: expected ${expected.stop_reason}, got ${actual.stop_reason}`);
+  if (expected.proposal_kinds !== undefined && !sameArray(actual.proposal_kinds, expected.proposal_kinds)) out.push(`proposal_kinds: expected ${JSON.stringify(expected.proposal_kinds)}, got ${JSON.stringify(actual.proposal_kinds)}`);
+  if (expected.proposal_recipients !== undefined && !sameArray(actual.proposal_recipients, expected.proposal_recipients)) out.push(`proposal_recipients: expected ${JSON.stringify(expected.proposal_recipients)}, got ${JSON.stringify(actual.proposal_recipients)}`);
+  if (expected.escalation_codes !== undefined && !sameArray(actual.escalation_codes, expected.escalation_codes)) out.push(`escalation_codes: expected ${JSON.stringify(expected.escalation_codes)}, got ${JSON.stringify(actual.escalation_codes)}`);
+  if (expected.terminal_case_state !== undefined && expected.terminal_case_state !== actual.terminal_case_state) out.push(`terminal_case_state: expected ${expected.terminal_case_state}, got ${actual.terminal_case_state}`);
+  if (expected.next_action_prefix !== undefined) {
+    if (expected.next_action_prefix === null) {
+      if (actual.next_action !== null) out.push("next_action: expected none");
+    } else if (mode === "mock") {
+      if (actual.next_action?.startsWith(expected.next_action_prefix) !== true) out.push(`next_action: expected prefix "${expected.next_action_prefix}"`);
+    } else if (!actual.next_action || actual.next_action.length > 240) {
+      out.push(`next_action: expected one sentence under 240 chars, got ${actual.next_action?.length ?? 0} chars`);
+    }
+  }
+  return out;
+}
+
+function grade(actual: ScenarioActual, expected: GoldenExpected, mode: AgentMode): boolean {
+  return mismatches(actual, expected, mode).length === 0;
+}
+
+const NOTE_KINDS = new Set(["agent.guard.refused", "agent.unavailable", "agent.reminded", "agent.retried", "agent.implicit_finish"]);
+function notesFor(outcome: ScenarioOutcome): string[] {
+  return outcome.agent?.trace.filter((entry) => NOTE_KINDS.has(entry.kind)).map((entry) => `${entry.kind}: ${entry.summary}`) ?? [];
 }
 
 function printTable(results: Array<{ scenario: GoldenScenario; attempts: AttemptResult[] }>, passes: number, budgetExceeded: boolean): void {
@@ -211,6 +232,17 @@ function printTable(results: Array<{ scenario: GoldenScenario; attempts: Attempt
   console.log(`mean tool calls: ${meanTools.toFixed(2)}`);
   console.log(`mean wall time: ${meanWallMs.toFixed(0)} ms per run`);
   if (budgetExceeded) console.log(`budget: stopped at the USD ${LIVE_BUDGET_USD.toFixed(2)} cap`);
+  const misses = results.filter((result) => result.attempts.some((attempt) => !attempt.pass));
+  if (misses.length > 0) {
+    console.log("\nmisses:");
+    for (const result of misses) {
+      for (const [index, attempt] of result.attempts.entries()) {
+        if (attempt.pass) continue;
+        console.log(`- ${result.scenario.id} #${index + 1}: ${attempt.mismatches.join(" | ")}`);
+        for (const note of attempt.notes) console.log(`    ${note}`);
+      }
+    }
+  }
 }
 
 async function main(): Promise<void> {
@@ -218,6 +250,7 @@ async function main(): Promise<void> {
   const passes = Number.parseInt(parseFlag("--passes", "3"), 10);
   const outputPath = parseFlag("--out", path.join(process.cwd(), "docs", "evals", `${new Date().toISOString().slice(0, 10)}-${mode}.json`));
   const inspect = process.argv.includes("--inspect");
+  const paceMs = Number.parseInt(parseFlag("--pace-ms", "8000"), 10);
   if (mode !== "mock" && mode !== "live") throw new Error("--mode must be mock or live");
   if (!Number.isInteger(passes) || passes < 1) throw new Error("--passes must be a positive integer");
 
@@ -234,9 +267,12 @@ async function main(): Promise<void> {
         break;
       }
       const startedAt = Date.now();
-      const actual = actualFor(await runScenario(scenario, mode), Date.now() - startedAt);
+      const outcome = await runScenario(scenario, mode);
+      const actual = actualFor(outcome, Date.now() - startedAt);
+      const notes = notesFor(outcome);
       cumulativeCost += actual.cost_usd;
-      attempts.push({ pass: inspect || grade(actual, scenario.expected), actual });
+      attempts.push({ pass: inspect || grade(actual, scenario.expected, mode), actual, mismatches: mismatches(actual, scenario.expected, mode), notes });
+      if (mode === "live" && paceMs > 0) await new Promise((resolve) => setTimeout(resolve, paceMs));
     }
     results.push({ scenario, attempts });
     if (budgetExceeded) break;

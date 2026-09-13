@@ -263,6 +263,7 @@ export async function runAgent(
       trace.push(traceEntry("agent.unavailable", modelError));
       break;
     }
+    if (turn.retried) trace.push(traceEntry("agent.retried", turn.retried));
     inputTokens += turn.usage?.input_tokens ?? 0;
     outputTokens += turn.usage?.output_tokens ?? 0;
     messages.push({ role: "assistant", content: turn.content });

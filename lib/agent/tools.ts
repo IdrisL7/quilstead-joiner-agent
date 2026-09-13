@@ -74,15 +74,19 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     description: "Record an unresolved issue for People. This does not complete the issue.",
     input_schema: {
       type: "object",
-      properties: { code: { type: "string" }, summary: { type: "string" }, evidence: { type: "array", items: { type: "string" } } },
-      required: ["code", "summary", "evidence"],
+      properties: {
+        code: { type: "string", enum: ["RTW_NOT_EVIDENCED", "COMPLIANCE_DEADLINE_AT_RISK", "MANAGER_UNAVAILABLE", "OWNER_SLA_BREACHED", "NO_ELIGIBLE_BUDDY", "KB_NO_ANSWER", "UNSAFE_ACTION_ATTEMPT", "START_DATE_CHANGED"], description: "Use only these codes. NO_ELIGIBLE_BUDDY covers no eligible or no available buddy." },
+        summary: { type: "string" },
+        evidence: { type: "array", items: { type: "string" } },
+      },
+      required: ["code", "summary"],
       additionalProperties: false,
     },
   },
   {
     name: "finish",
-    description: "End the run with the next human action.",
-    input_schema: { type: "object", properties: { next_action: { type: "string" } }, required: ["next_action"], additionalProperties: false },
+    description: "End the run. next_action is one sentence, under 200 characters, naming the single next human action (for example: approve the pending nudge and buddy request). Do not summarise the case.",
+    input_schema: { type: "object", properties: { next_action: { type: "string", description: "One sentence, under 200 characters." } }, required: ["next_action"], additionalProperties: false },
   },
 ];
 
@@ -279,7 +283,8 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
       const availability = resultData<BuddyAvailabilityResult>(result);
       if (!availability) return result;
       state.availability = availability;
-      return result;
+      // The model sees the ranked top six; the guard allowlist keeps the full observation.
+      return { ...result, data: { ...availability, candidates: availability.candidates.slice(0, 6), candidates_total: availability.candidates.length } };
     }
 
     if (name === "search_policy") {
@@ -371,8 +376,8 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
     }
 
     if (name === "escalate") {
-      if (!validEscalationCode(input.code) || typeof input.summary !== "string" || !Array.isArray(input.evidence)) {
-        return failed("Escalation refused: code, summary and evidence are required.");
+      if (!validEscalationCode(input.code) || typeof input.summary !== "string") {
+        return failed(`Escalation refused: code must be one of the listed EscalationCode values and summary is required. Received code=${String(input.code)}.`);
       }
       const existing = context.case.escalations.find((escalation) => escalation.code === input.code && !escalation.resolved_at);
       if (existing) return ok(`Escalation ${existing.id} already exists.`, { escalation_id: existing.id });
@@ -383,7 +388,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         severity: input.code === "RTW_NOT_EVIDENCED" ? "critical" as const : "warn" as const,
         to_function: "people" as const,
         summary: input.summary,
-        evidence: input.evidence.filter((item): item is string => typeof item === "string"),
+        evidence: Array.isArray(input.evidence) ? input.evidence.filter((item): item is string => typeof item === "string") : [],
         raised_at: context.now,
       };
       context.case.escalations.push(escalation);
@@ -393,7 +398,11 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
 
     if (name === "finish") {
       state.finished = true;
-      state.next_action = typeof input.next_action === "string" ? input.next_action : null;
+      const raw = typeof input.next_action === "string" ? input.next_action.replace(/\s+/g, " ").trim() : "";
+      // Keep the model's wording when it is already short. Long summaries collapse to the first
+      // sentence so the Overview banner stays one line and the panel reads an action, not a report.
+      const firstSentence = raw.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? raw;
+      state.next_action = !raw ? null : raw.length <= 240 ? raw : firstSentence.length <= 240 ? firstSentence : `${raw.slice(0, 237)}...`;
       return ok("Agent run finished.", { next_action: state.next_action });
     }
 

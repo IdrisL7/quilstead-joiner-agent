@@ -39,6 +39,7 @@ export interface AgentMessage {
 
 export interface ModelTurn {
   content: AgentContentBlock[];
+  retried?: string; // set when the adapter retried once after a rate limit or overload
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
