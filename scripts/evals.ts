@@ -19,7 +19,7 @@ import type { Case } from "@/lib/types";
 
 const NOW = "2026-09-30T09:00:00Z";
 const GOLDEN_PATH = path.join(process.cwd(), "data", "golden", "cases.json");
-const LIVE_BUDGET_USD = 2;
+const DEFAULT_LIVE_BUDGET_USD = 2;
 
 interface GoldenExpected {
   run?: boolean;
@@ -208,7 +208,7 @@ function notesFor(outcome: ScenarioOutcome): string[] {
   return outcome.agent?.trace.filter((entry) => NOTE_KINDS.has(entry.kind)).map((entry) => `${entry.kind}: ${entry.summary}`) ?? [];
 }
 
-function printTable(results: Array<{ scenario: GoldenScenario; attempts: AttemptResult[] }>, passes: number, budgetExceeded: boolean): void {
+function printTable(results: Array<{ scenario: GoldenScenario; attempts: AttemptResult[] }>, passes: number, budgetExceeded: boolean, budgetUsd: number): void {
   console.log("| Scenario | pass count | flapping | stop reason | next action |");
   console.log("|---|---:|:---:|---|---|");
   for (const result of results) {
@@ -231,7 +231,7 @@ function printTable(results: Array<{ scenario: GoldenScenario; attempts: Attempt
   console.log(`mean cost: $${meanCost.toFixed(6)} per run`);
   console.log(`mean tool calls: ${meanTools.toFixed(2)}`);
   console.log(`mean wall time: ${meanWallMs.toFixed(0)} ms per run`);
-  if (budgetExceeded) console.log(`budget: stopped at the USD ${LIVE_BUDGET_USD.toFixed(2)} cap`);
+  if (budgetExceeded) console.log(`budget: stopped at the USD ${budgetUsd.toFixed(2)} cap`);
   const misses = results.filter((result) => result.attempts.some((attempt) => !attempt.pass));
   if (misses.length > 0) {
     console.log("\nmisses:");
@@ -251,6 +251,8 @@ async function main(): Promise<void> {
   const outputPath = parseFlag("--out", path.join(process.cwd(), "docs", "evals", `${new Date().toISOString().slice(0, 10)}-${mode}.json`));
   const inspect = process.argv.includes("--inspect");
   const paceMs = Number.parseInt(parseFlag("--pace-ms", "8000"), 10);
+  const LIVE_BUDGET_USD = Number.parseFloat(parseFlag("--budget-usd", String(DEFAULT_LIVE_BUDGET_USD)));
+  if (!Number.isFinite(LIVE_BUDGET_USD) || LIVE_BUDGET_USD <= 0) throw new Error("--budget-usd must be a positive number");
   if (mode !== "mock" && mode !== "live") throw new Error("--mode must be mock or live");
   if (!Number.isInteger(passes) || passes < 1) throw new Error("--passes must be a positive integer");
 
@@ -290,7 +292,7 @@ async function main(): Promise<void> {
   };
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
-  printTable(results, passes, budgetExceeded);
+  printTable(results, passes, budgetExceeded, LIVE_BUDGET_USD);
   console.log(`output: ${outputPath}`);
 
   const complete = results.length === scenarios.length && results.every((result) => result.attempts.length === passes);
