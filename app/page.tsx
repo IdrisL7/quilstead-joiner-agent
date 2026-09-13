@@ -323,6 +323,8 @@ function calendarDayLabel(date: string) {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+const PX_PER_HALF_HOUR = 14;
+
 function WeekStrip({
   assessment,
   startDate,
@@ -340,7 +342,7 @@ function WeekStrip({
   const workingHours = availability.working_hours ?? { start_local: "09:00", end_local: "17:30" };
   const workdayStart = minutesFromLocalTime(workingHours.start_local);
   const workdayEnd = minutesFromLocalTime(workingHours.end_local);
-  const trackHeight = ((workdayEnd - workdayStart) / 30) * 8;
+  const trackHeight = ((workdayEnd - workdayStart) / 30) * PX_PER_HALF_HOUR;
   const currentRequest = request
     && request.candidate_id === candidate.id
     && !["rejected", "superseded"].includes(request.status)
@@ -375,8 +377,8 @@ function WeekStrip({
   };
 
   const blockStyle = (start: number, end: number): CSSProperties => ({
-    top: `${Math.max(0, ((start - workdayStart) / 30) * 8)}px`,
-    height: `${Math.max(8, ((Math.min(end, workdayEnd) - Math.max(start, workdayStart)) / 30) * 8)}px`,
+    top: `${Math.max(0, ((start - workdayStart) / 30) * PX_PER_HALF_HOUR)}px`,
+    height: `${Math.max(PX_PER_HALF_HOUR, ((Math.min(end, workdayEnd) - Math.max(start, workdayStart)) / 30) * PX_PER_HALF_HOUR)}px`,
   });
 
   return (
@@ -399,7 +401,10 @@ function WeekStrip({
             const blocks = isCalendarState ? [] : blocksForDate(date);
             return (
               <div className="week-day" key={date}>
-                <strong className="week-day-head">{calendarDayLabel(date)}</strong>
+                <strong className="week-day-head">
+                  {calendarDayLabel(date)}
+                  {!isCalendarState && index === 0 && <em className="week-arrival-note">arrives 09:30</em>}
+                </strong>
                 <div className="week-day-track">
                   {blocks.map((block) => (
                     <span
@@ -412,9 +417,7 @@ function WeekStrip({
                     </span>
                   ))}
                   {!isCalendarState && index === 0 && (
-                    <span className="week-arrival" style={{ top: `${((570 - workdayStart) / 30) * 8}px` }}>
-                      <b>{joinerName.split(" ")[0]} arrives 09:30</b>
-                    </span>
+                    <span className="week-arrival" style={{ top: `${((570 - workdayStart) / 30) * PX_PER_HALF_HOUR}px` }} aria-hidden="true" />
                   )}
                 </div>
               </div>
