@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { POST } from "@/app/api/demo/route";
+import { POST, resetDemoRouteState } from "@/app/api/demo/route";
 import { ASK_TOOL_NAMES, ASK_TOOL_DEFINITIONS, askCase, guardAskAnswer } from "@/lib/agent/ask";
 import { changeDemoStartDate, prepareDemo } from "@/lib/demo-flow";
 import { resetDemoState } from "@/lib/store/demo-state";
@@ -15,6 +15,7 @@ function request(body: Record<string, unknown> = {}) {
 describe("Ask Athena", () => {
   beforeEach(() => {
     resetDemoState();
+    resetDemoRouteState();
     process.env.DEMO_MODE = "mock";
   });
 
@@ -106,6 +107,56 @@ describe("Ask Athena", () => {
     const resetResponse = await POST(request());
     const reset = await resetResponse.json() as { trace: Array<{ kind: string }> };
     expect(reset.trace.some((entry) => entry.kind === "agent.asked")).toBe(false);
+  });
+
+  it("opens the existing case from the readiness entry question", async () => {
+    const response = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const payload = await response.json() as {
+      run_id: string;
+      case: { id: string; start_date: string };
+      answer: { answer: string; provider: string };
+      trace: Array<{ kind: string }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.run_id).toMatch(/^DEMO-RUN-/);
+    expect(payload.case.id).toBe("CASE-J-004");
+    expect(payload.case.start_date).toBe("2026-10-12");
+    expect(payload.answer.provider).toBe("mock");
+    expect(payload.answer.answer).toContain("tasks remain");
+    expect(payload.trace.filter((entry) => entry.kind === "agent.asked")).toHaveLength(1);
+  });
+
+  it("reuses the active case for later questions without resetting state", async () => {
+    const initialResponse = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const initial = await initialResponse.json() as { run_id: string; case: { start_date: string } };
+    const followUpResponse = await POST(request({ run_id: initial.run_id, action: "ask", question: "Is the laptop sorted?" }));
+    const followUp = await followUpResponse.json() as {
+      run_id: string;
+      case: { start_date: string };
+      answer: { answer: string };
+      trace: Array<{ kind: string }>;
+    };
+
+    expect(followUpResponse.status).toBe(200);
+    expect(followUp.run_id).toBe(initial.run_id);
+    expect(followUp.case.start_date).toBe(initial.case.start_date);
+    expect(followUp.answer.answer).toContain("Laptop");
+    expect(followUp.trace.filter((entry) => entry.kind === "agent.asked")).toHaveLength(2);
+  });
+
+  it("keeps the date-change suggestion read-only", async () => {
+    const response = await POST(request({ action: "ask", question: "What changes if Aisha starts on 19 October?" }));
+    const payload = await response.json() as {
+      case: { start_date: string };
+      answer: { answer: string };
+      date_change?: unknown;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.case.start_date).toBe("2026-10-12");
+    expect(payload.answer.answer).toContain("I can only answer from this case");
+    expect(payload.date_change).toBeUndefined();
   });
 
   it("rejects an ask from a superseded run", async () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { EVENTS } from "@/data/events";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { JOINERS } from "@/data/joiners";
-import { ApprovalEmptyState, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, WorkflowTriggerCard } from "@/app/page";
+import { ApprovalEmptyState, AskAthenaPanel, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, WorkflowTriggerCard } from "@/app/page";
 
 function render(run: { screen_state: "draft_unavailable" | "no_action"; equipment_late: boolean }) {
   return renderToStaticMarkup(createElement(ApprovalEmptyState, {
@@ -95,6 +95,42 @@ describe("workflow trigger presentation", () => {
     expect(html).toContain("Simulated HRIS event");
     expect(html).toContain("contract.signed");
     expect(html).toContain("Simulate contract signed");
+  });
+
+  it("presents the chat-first entry scope and the three discovery asks", () => {
+    const html = renderToStaticMarkup(createElement(AskAthenaPanel, {
+      history: [],
+      question: "",
+      entry: true,
+      busy: false,
+      onQuestionChange: () => undefined,
+      onAsk: () => undefined,
+      onNavigate: () => undefined,
+    }));
+
+    expect(html).toContain("Chat-first case discovery");
+    expect(html).toContain("Fictional demo");
+    expect(html).toContain("One active onboarding case: Aisha Okafor");
+    expect(html).toContain("Check Aisha’s onboarding readiness.");
+    expect(html).toContain("Find an available buddy for Aisha.");
+    expect(html).toContain("What changes if Aisha starts on 19 October?");
+    expect(html).not.toContain("What&#x27;s left before day one?");
+  });
+
+  it("shows a live processing state while the entry question opens the case", () => {
+    const html = renderToStaticMarkup(createElement(AskAthenaPanel, {
+      history: [],
+      question: "Check Aisha’s onboarding readiness.",
+      entry: true,
+      busy: true,
+      onQuestionChange: () => undefined,
+      onAsk: () => undefined,
+      onNavigate: () => undefined,
+    }));
+
+    expect(html).toContain("Opening Aisha’s case and checking current evidence...");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("disabled");
   });
 
   it("derives the initial execution summary from returned trace evidence", () => {

@@ -114,7 +114,8 @@ input[type="date"] { font: inherit; }
 .panel-head .meta { color: var(--muted); font-size: 12px; }
 .panel-body { padding: 16px; }
 .two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr); gap: 16px; align-items: start; }
-.overview-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 16px; align-items: start; }
+.overview-layout, .entry-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 16px; align-items: start; }
+.entry-main, .entry-side { min-width: 0; }
 .overview-main { display: grid; gap: 16px; min-width: 0; }
 .overview-side { position: sticky; top: 20px; min-width: 0; }
 .stack { display: grid; gap: 16px; }
@@ -132,11 +133,12 @@ input[type="date"] { font: inherit; }
 .trigger-heading h2 { font-size: 18px; font-weight: 600; }
 .trigger-heading h3 { font-size: 15px; font-weight: 600; }
 .trigger-body { display: grid; gap: 16px; }
-.trigger-grid { display: grid; grid-template-columns: minmax(150px, 0.7fr) minmax(240px, 1.3fr); gap: 12px 20px; }
+.trigger-grid { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); gap: 12px 16px; }
 .trigger-grid > div { display: grid; gap: 2px; min-width: 0; }
 .fact-label { color: var(--muted); font-size: 11px; font-weight: 600; }
 .fact-detail { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.trigger-action { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 4px; border-top: 1px solid var(--line-2); }
+.trigger-action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-top: 4px; border-top: 1px solid var(--line-2); }
+.trigger-action p { flex: 1 1 200px; margin: 0; color: var(--muted); font-size: 12px; }
 .trigger-action p { max-width: 620px; color: var(--muted); font-size: 12px; }
 .execution-summary { border-left: 3px solid var(--agent); }
 .execution-summary .panel-head { align-items: flex-start; }
@@ -154,6 +156,11 @@ input[type="date"] { font: inherit; }
 
 /* Ask Athena */
 .ask-panel { overflow: hidden; }
+.ask-entry-panel { min-height: 360px; }
+.ask-entry-subtitle { display: block; margin-top: 3px; }
+.ask-panel-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.ask-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line-2); background: var(--agent-wash); color: var(--muted); font-size: 11px; line-height: 1.4; }
+.ask-processing { padding: 9px 10px; border: 1px solid #c8e7e3; border-radius: var(--radius-sm); background: var(--agent-wash); color: var(--agent); font-size: 11px; line-height: 1.4; }
 .ask-content { display: grid; gap: 12px; padding: 14px 16px 16px; }
 .ask-empty { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .ask-history { display: grid; gap: 14px; max-height: 430px; overflow: auto; padding-right: 2px; }
@@ -357,7 +364,7 @@ footer.app-foot { padding: 12px 24px 20px; color: var(--faint); font-size: 11px;
 /* ---------- responsive ---------- */
 @media (max-width: 960px) {
   .two-col { grid-template-columns: 1fr; }
-  .overview-layout { grid-template-columns: 1fr; }
+  .overview-layout, .entry-layout { grid-template-columns: 1fr; }
   .overview-side { position: static; }
   .row { grid-template-columns: 100px minmax(0, 1fr); }
   .row-side { grid-column: 2; justify-content: flex-start; }

@@ -255,6 +255,19 @@ function preparationResponse(run: DemoPreparation) {
   };
 }
 
+function readAskQuestion(value: unknown): { question: string } | { error: string } {
+  if (typeof value !== "string") return { error: "question is required for Ask Athena" };
+  const question = value.trim();
+  if (!question) return { error: "Ask Athena needs a question" };
+  if (question.length > 300) return { error: "Ask Athena questions must be 300 characters or fewer" };
+  return { question };
+}
+
+export function resetDemoRouteState(): void {
+  activeRun = null;
+  mutationInFlight = false;
+}
+
 export async function POST(request: Request) {
   if (mutationInFlight) {
     return NextResponse.json({ error: "Another demo mutation is in progress. Retry with the current run." }, { status: 409 });
@@ -274,6 +287,27 @@ export async function POST(request: Request) {
       response?: unknown;
       question?: unknown;
     };
+    if (body.action === "ask" && typeof body.run_id !== "string") {
+      const parsed = readAskQuestion(body.question);
+      if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      // An entry question with no active case opens the case exactly as "Simulate contract
+      // signed" does: the assistant runs, proposals land in the approval queue. The answer says so,
+      // because "read-only" is only true once a case is open.
+      const opened = !activeRun;
+      const preparation = activeRun ?? await prepareDemo();
+      const answer = await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock");
+      if (opened) {
+        const agent = preparation.agent;
+        const proposals = agent?.proposals.length ?? 0;
+        const opening = `Opened ${preparation.case.id} for ${preparation.joiner.full_name} and ran the readiness checks: ${proposals} proposal${proposals === 1 ? "" : "s"} now await approval.`;
+        const next = agent?.next_action ? ` Next human action: ${agent.next_action}` : "";
+        answer.answer = `${opening} ${answer.answer}${next}`;
+        answer.links = [...new Set([...answer.links, "activity" as const])];
+      }
+      preparation.trace.push({ actor: "agent", kind: "agent.asked", summary: `Ask Athena answered: ${answer.answer}` });
+      activeRun = preparation;
+      return NextResponse.json({ ...preparationResponse(preparation), answer });
+    }
     if (body.action && typeof body.run_id !== "string") {
       return NextResponse.json({ error: "A current run is required for this demo mutation." }, { status: 409 });
     }
@@ -283,13 +317,9 @@ export async function POST(request: Request) {
       }
       const preparation = activeRun;
       if (body.action === "ask") {
-        if (typeof body.question !== "string") {
-          return NextResponse.json({ error: "question is required for Ask Athena" }, { status: 400 });
-        }
-        const question = body.question.trim();
-        if (!question) return NextResponse.json({ error: "Ask Athena needs a question" }, { status: 400 });
-        if (question.length > 300) return NextResponse.json({ error: "Ask Athena questions must be 300 characters or fewer" }, { status: 400 });
-        const answer = await askCase(preparation.case, preparation.joiner, question, process.env.DEMO_MODE === "live" ? "live" : "mock");
+        const parsed = readAskQuestion(body.question);
+        if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+        const answer = await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock");
         preparation.trace.push({ actor: "agent", kind: "agent.asked", summary: `Ask Athena answered: ${answer.answer}` });
         return NextResponse.json({ ...preparationResponse(preparation), answer });
       }

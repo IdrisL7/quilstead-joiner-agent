@@ -73,7 +73,7 @@ render as a labelled empty week with the same reason text the comparison shows. 
 the model. Confirmed slots turn green after People confirmation; a superseded or rejected request's
 slots are not drawn.
 
-Ask Athena is a read-only Slack-style surface over the same case. Its `question` run uses the same
+Ask Athena is a Slack-style surface over the same case, read-only once a case is open. The first question on an empty workspace opens the case through the same `contract.signed` path as the trigger button and prefixes its answer with what the run proposed. Its `question` run uses the same
 bounded loop, but the tool definitions and runtime allow only current-state and policy reads plus
 `finish`; proposal, escalation, approval, send and write tools are excluded in application code. The
 mock router answers five case intents from current observations and labels each response `Mock

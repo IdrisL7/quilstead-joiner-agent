@@ -78,7 +78,7 @@ export function askIntentFor(question: string): AskIntent {
   if (/(buddy|new starter support)/i.test(text)) return "buddy";
   if (/(laptop|equipment|eta|delivery|loaner|sorted)/i.test(text)) return "equipment";
   if (/(owner|who is responsible|who owns)/i.test(text)) return "owner";
-  if (/(what('?s| is|s)? left|remaining|before day one|tasks?)/i.test(text)) return "status";
+  if (/(what('?s| is|s)? left|remaining|before day one|tasks?|readiness|ready)/i.test(text)) return "status";
   return "unmatched";
 }
 

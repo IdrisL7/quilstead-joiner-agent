@@ -682,6 +682,12 @@ const ASK_SUGGESTIONS = [
   "Any compliance risk?",
 ];
 
+const ENTRY_ASK_SUGGESTIONS = [
+  "Check Aisha’s onboarding readiness.",
+  "Find an available buddy for Aisha.",
+  "What changes if Aisha starts on 19 October?",
+];
+
 const ASK_LINK_LABELS: Record<AskLink, string> = {
   overview: "Open Overview",
   equipment: "Open Equipment",
@@ -693,6 +699,7 @@ export function AskAthenaPanel({
   history,
   question,
   compact,
+  entry,
   busy,
   onQuestionChange,
   onAsk,
@@ -701,11 +708,13 @@ export function AskAthenaPanel({
   history: AskHistoryItem[];
   question: string;
   compact?: boolean;
+  entry?: boolean;
   busy: boolean;
   onQuestionChange: (value: string) => void;
   onAsk: (question: string) => void;
   onNavigate: (section: AskLink) => void;
 }) {
+  const suggestions = entry ? ENTRY_ASK_SUGGESTIONS : ASK_SUGGESTIONS;
   const submit = (value: string) => {
     const trimmed = value.trim();
     if (!busy && trimmed) onAsk(trimmed);
@@ -713,8 +722,9 @@ export function AskAthenaPanel({
 
   const content = (
     <div className="ask-content">
+      {busy && <div className="ask-processing" role="status" aria-live="polite">{entry ? "Opening Aisha’s case and checking current evidence..." : "Reading current case evidence..."}</div>}
       {history.length === 0 ? (
-        <p className="ask-empty">Ask about this case. Athena reads the current evidence and cannot change or send anything.</p>
+        <p className="ask-empty">{entry ? "Ask Athena to open Aisha’s onboarding case, run the checks and show the next human action." : "Ask about this case. Athena reads the current evidence and cannot change or send anything."}</p>
       ) : (
         <div className="ask-history" aria-live="polite">
           {history.map((item) => (
@@ -734,7 +744,7 @@ export function AskAthenaPanel({
         </div>
       )}
       <div className="ask-suggestions" aria-label="Suggested questions">
-        {ASK_SUGGESTIONS.map((suggestion) => <button className="ask-chip" type="button" key={suggestion} onClick={() => submit(suggestion)} disabled={busy}>{suggestion}</button>)}
+        {suggestions.map((suggestion) => <button className="ask-chip" type="button" key={suggestion} onClick={() => submit(suggestion)} disabled={busy}>{suggestion}</button>)}
       </div>
       <form className="ask-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); submit(question); }}>
         <label htmlFor={compact ? "ask-question-drawer" : "ask-question"}>Ask Athena</label>
@@ -772,8 +782,18 @@ export function AskAthenaPanel({
   }
 
   return (
-    <section className="panel ask-panel" aria-label="Ask Athena">
-      <div className="panel-head"><h3>Ask Athena</h3><span className="meta">Read-only case answers</span></div>
+    <section className={`panel ask-panel ${entry ? "ask-entry-panel" : ""}`} aria-label="Ask Athena">
+      <div className="panel-head">
+        <div>
+          <h3>Ask Athena</h3>
+          {entry && <span className="meta ask-entry-subtitle">Chat-first case discovery</span>}
+        </div>
+        <div className="ask-panel-meta">
+          {entry && <Tag tone="info">Fictional demo</Tag>}
+          <span className="meta">{entry ? "One active case" : "Read-only case answers"}</span>
+        </div>
+      </div>
+      {entry && <div className="ask-scope" aria-label="Available demo scope"><Tag tone="info">Available scope</Tag><span>One active onboarding case: Aisha Okafor · mock systems only · no persistence</span></div>}
       {content}
     </section>
   );
@@ -881,15 +901,18 @@ export default function Home() {
   }
 
   async function askAthena(question = askQuestion) {
-    if (!run) return;
     const trimmed = question.trim();
     if (!trimmed || trimmed.length > 300) return;
+    const openingCase = run === null;
     setBusy("ask");
     setError(null);
     try {
-      const next = await postDemo({ run_id: run.run_id, action: "ask", question: trimmed });
+      const next = await postDemo(openingCase
+        ? { action: "ask", question: trimmed }
+        : { run_id: run.run_id, action: "ask", question: trimmed });
       if (!next.answer) throw new Error("Ask Athena returned no answer.");
-      acceptRun(next);
+      acceptRun(next, openingCase);
+      if (openingCase) setSection("overview");
       setAskHistory((current) => [...current, { id: `ask-${Date.now()}-${current.length}`, question: trimmed, answer: next.answer! }]);
       setAskQuestion("");
     } catch (caught) {
@@ -1058,11 +1081,12 @@ export default function Home() {
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at)) : [];
   const openAttention = run ? [run.attention.equipment, run.attention.buddy, run.attention.compliance].filter((item) => attentionTone(item.status) !== "positive").length : 0;
 
-  const renderAskAthena = (compact = false) => (
+  const renderAskAthena = (compact = false, entry = false) => (
     <AskAthenaPanel
       history={askHistory}
       question={askQuestion}
       compact={compact}
+      entry={entry}
       busy={busy === "ask"}
       onQuestionChange={setAskQuestion}
       onAsk={askAthena}
@@ -1549,7 +1573,10 @@ export default function Home() {
 
         <main className="work">
           {!run && (
-            <WorkflowTriggerCard busy={busy !== null} onTrigger={startFlow} />
+            <div className="entry-layout">
+              <div className="entry-main">{renderAskAthena(false, true)}</div>
+              <div className="entry-side"><WorkflowTriggerCard busy={busy !== null} onTrigger={startFlow} /></div>
+            </div>
           )}
           {run && section === "overview" && renderOverview(run)}
           {run && section === "equipment" && renderEquipment(run)}
