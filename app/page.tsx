@@ -123,6 +123,23 @@ interface AttentionSummary {
   compliance: { status: string; owner_name: string; next_action: string; open_tasks: number; total_tasks: number; unresolved_escalations: number };
 }
 
+interface AgentSummary {
+  run_id: string;
+  trigger: string;
+  provider: "mock" | "anthropic";
+  model: string;
+  steps: number;
+  tool_calls: number;
+  refused: number;
+  proposed: number;
+  escalated: number;
+  stop_reason: string;
+  next_action: string | null;
+  cost_usd: number;
+  started_at: string;
+  finished_at: string;
+}
+
 interface DemoResponse {
   phase: "pending" | "resolved";
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
@@ -131,6 +148,7 @@ interface DemoResponse {
   case: { id: string; state: string; start_date: string; task_count: number; buddy_id: string | null; buddy_task_status: string | null; buddy_task_done_by: string | null };
   joiner: { full_name: string; title: string; office: string; work_mode: string; start_date: string };
   model: { provider: "mock" | "anthropic"; model: string };
+  agent: AgentSummary | null;
   equipment: { status: ToolResult["status"]; summary: string; eta: string | null };
   facts: DemoFacts;
   draft: DemoDraft | null;
@@ -332,7 +350,7 @@ export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
       <div className="no-action-heading unavailable-heading">
         <p className="eyebrow">Model-proposed action</p>
         <h2>Draft unavailable. Equipment risk remains</h2>
-        <p>The current ETA is still after the current start date. Retry drafting before any message can be sent.</p>
+        <p>The current ETA is still after the current start date. Run the assistant again before any message can be sent.</p>
       </div>
     );
   }
@@ -515,14 +533,14 @@ export default function Home() {
     }
   }
 
-  async function retryDraft() {
+  async function runAssistantAgain() {
     if (editingEquipment || !run || run.screen_state !== "draft_unavailable") return;
     setBusy("retry");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "retry_draft" }));
+      acceptRun(await postDemo({ run_id: run.run_id, action: "retry_agent" }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The draft retry failed");
+      setError(caught instanceof Error ? caught.message : "The assistant retry failed");
     } finally {
       setBusy(null);
     }
@@ -708,6 +726,7 @@ export default function Home() {
     return (
       <>
         <ExecutionSummary run={initialExecution ?? current} />
+        {current.agent && <div className="agent-run-line" role="status"><strong>Assistant</strong><span>{current.agent.trigger.replaceAll("_", " ")} · {current.agent.steps} model steps · {current.agent.proposed} proposals · {current.agent.refused} refused</span><span>{current.agent.stop_reason === "finished" ? "Finished" : `Stopped: ${current.agent.stop_reason}`}</span></div>}
         <div className="section-title"><h2>Overview</h2><p>Current case state. Rows open their work area.</p></div>
         <section className="panel" aria-label="Attention">
           <div className="panel-head"><h3>Needs attention</h3><span className="meta">{openAttention === 0 ? "Nothing open" : `${openAttention} open`}</span></div>
@@ -855,7 +874,7 @@ export default function Home() {
               ) : current.screen_state === "draft_unavailable" ? (
                 <div className="outcome unavailable" role="alert">
                   <span className="outcome-icon">!</span>
-                  <div><strong>Draft unavailable.</strong><p>{current.draft_unavailable?.message}</p><div style={{ marginTop: 8 }}><button className="button secondary small" onClick={retryDraft} disabled={busy !== null || editingEquipment}>{busy === "retry" ? "Retrying..." : "Retry draft"}</button></div></div>
+                  <div><strong>Draft unavailable.</strong><p>{current.draft_unavailable?.message}</p><div style={{ marginTop: 8 }}><button className="button secondary small" onClick={runAssistantAgain} disabled={busy !== null || editingEquipment}>{busy === "retry" ? "Running assistant..." : "Run assistant again"}</button></div></div>
                 </div>
               ) : current.screen_state === "no_action" ? (
                 <div className="outcome positive" role="status">
@@ -952,7 +971,7 @@ export default function Home() {
                     {!hasActiveBuddy && (
                       <div className="actions">
                         <p>{canPrepare ? "Prepares an exact request preview. No message is sent yet." : "Only an eligible, available candidate can be requested."}</p>
-                        <button className="button primary" onClick={() => prepareBuddy(detail.candidate.id)} disabled={!canPrepare}>{busy === "buddy_prepare" ? "Preparing..." : `Prepare request for ${detail.candidate.full_name.split(" ")[0]}`}</button>
+                        <button className="button primary" onClick={() => prepareBuddy(detail.candidate.id)} disabled={!canPrepare}>{busy === "buddy_prepare" ? "Preparing..." : `Override: request ${detail.candidate.full_name.split(" ")[0]} instead`}</button>
                       </div>
                     )}
                   </>
@@ -1004,7 +1023,7 @@ export default function Home() {
                               <p>Message receipt is recorded. No real buddy was contacted. Choose the response for this exact request.</p>
                               <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null || editingEquipment}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null || editingEquipment}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
                             </>
-                          ) : <p>{request.response === "declined" ? `${request.candidate_name} declined this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}. No replacement request was sent automatically; choose another candidate.` : request.response === "accepted" ? `${request.candidate_name} accepted this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}.` : request.sent_at ? "Awaiting response." : "Waiting for approval first."}</p>}
+              ) : <p>{request.response === "declined" ? `${request.candidate_name} declined this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}. The assistant will re-evaluate the current candidates.` : request.response === "accepted" ? `${request.candidate_name} accepted this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}.` : request.sent_at ? "Awaiting response." : "Waiting for approval first."}</p>}
                         </div>
                       </div>
                       <div className={`step ${stepState(3)}`}>
@@ -1118,7 +1137,7 @@ export default function Home() {
             </div>
             <div className="demo-controls">
               <span>Demo controls</span>
-              <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment}>{busy === "start" ? "Preparing case..." : run ? "Reset and prepare again" : "Prepare demo"}</button>
+              <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment}>{busy === "start" ? "Processing event..." : run ? "Reset / simulate contract signed again" : "Simulate contract signed"}</button>
             </div>
           </div>
         </header>

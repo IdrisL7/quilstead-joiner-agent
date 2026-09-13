@@ -145,6 +145,8 @@ input[type="date"] { font: inherit; }
 .execution-step.attention { background: #fffaf0; }
 .execution-step.attention .execution-icon { background: var(--amber-soft); color: var(--amber); }
 .execution-foot { padding: 10px 14px; border-top: 1px solid var(--line-2); color: var(--muted); font-size: 11px; }
+.agent-run-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 12px; border: 1px solid #c8e7e3; border-radius: var(--radius-sm); background: var(--agent-wash); color: var(--agent); font-size: 12px; }
+.agent-run-line strong { font-weight: 600; }
 
 /* attention rows */
 .rows { display: grid; }
