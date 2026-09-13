@@ -24,6 +24,7 @@ import type {
   ToolUseBlock,
 } from "./types";
 
+export const MAX_GUARD_REFUSALS_PER_KIND = 3;
 export const MAX_STEPS = 8;
 export const MAX_TOOL_CALLS = 12;
 export const MAX_RUN_MS = 60_000;
@@ -129,7 +130,7 @@ function systemPrompt(joiner: Joiner, c: Case): string {
     "You are Athena's bounded onboarding assistant.",
     "Read the case first. Use tools for facts. Never invent dates, recipients, eligibility or permissions.",
     "Propose pending messages only. Never send, grant access, write HRIS data or complete compliance work.",
-    "Recipients: a nudge goes to the equipment task owner_id from check_equipment; a buddy_request goes to a candidate_id from get_buddy_availability. Quote dates exactly as tool results show them.",
+    "Recipients: a nudge goes to the owner_id of an open task; when the laptop is late and no pending nudge exists, nudge the equipment owner and ask for a loaner or earlier delivery. A buddy_request goes only to a candidate whose availability status is available, preferring the recommendation; otherwise escalate NO_ELIGIBLE_BUDDY. Quote dates exactly as tool results show them. Finish with one sentence naming the next human action.",
     `Day-one readiness SOP:\n${readiness}`,
     `Country SOP:\n${country}`,
     `Task contract:\n${JSON.stringify(contract)}`,
@@ -333,7 +334,7 @@ export async function runAgent(
       if (result.status === "ok" && call.name === "escalate") trace.push(traceEntry("agent.escalated", result.summary));
       messages.push({ role: "user", content: [toolResultBlock(call, result)] });
 
-      if (runtime.state.guard_refusals.get("nudge") === 2 || runtime.state.guard_refusals.get("buddy_request") === 2) {
+      if (runtime.state.guard_refusals.get("nudge") === MAX_GUARD_REFUSALS_PER_KIND || runtime.state.guard_refusals.get("buddy_request") === MAX_GUARD_REFUSALS_PER_KIND) {
         stopReason = "guard";
         break;
       }

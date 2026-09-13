@@ -29,7 +29,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: "get_buddy_availability",
-    description: "Read eligible buddy candidates with their candidate_id, capacity, calendar coverage and proposed slots. Use candidate_id as the buddy_request recipient.",
+    description: "Read eligible buddy candidates with their candidate_id, capacity, availability status and proposed slots. Only a candidate with availability status \"available\" can receive a buddy_request; prefer the recommendation. If none is available, escalate NO_ELIGIBLE_BUDDY.",
     input_schema: {
       type: "object",
       properties: { exclude_buddy_ids: { type: "array", items: { type: "string" } } },
@@ -54,12 +54,12 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: "propose_message",
-    description: "Create one pending message draft for People approval. This tool cannot send. For kind=nudge, `to` must be the equipment task owner_id from check_equipment (for example it-1). For kind=buddy_request, `to` must be a candidate_id from get_buddy_availability (for example b-06), never a People partner or manager id. Write dates exactly as they appear in tool results.",
+    description: "Create one pending message draft for People approval. This tool cannot send. kind=nudge: `to` is the owner_id of an open task on the case (from get_case_state or check_equipment); a nudge to the equipment owner about a late laptop must ask for a loaner or earlier delivery. kind=buddy_request: `to` is the recommendation's candidate_id from get_buddy_availability, or another candidate whose availability status is exactly \"available\"; never unknown, busy, error, a People partner or a manager. Use only dates shown in tool results.",
     input_schema: {
       type: "object",
       properties: {
         kind: { type: "string", enum: ["nudge", "buddy_request"] },
-        to: { type: "string", description: "owner_id from check_equipment (nudge) or candidate_id from get_buddy_availability (buddy_request)" },
+        to: { type: "string", description: "nudge: owner_id of an open task. buddy_request: candidate_id with availability status available." },
         subject: { type: "string" },
         body: { type: "string" },
         reason: { type: "string" },
@@ -79,7 +79,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
         summary: { type: "string" },
         evidence: { type: "array", items: { type: "string" } },
       },
-      required: ["code", "summary"],
+      required: ["code"],
       additionalProperties: false,
     },
   },
@@ -91,6 +91,7 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
 ];
 
 interface EquipmentObservation {
+  pending_nudge_exists?: boolean; // true when a pending nudge already waits for approval; superseded drafts do not count
   order_id: string;
   joiner_id: string;
   status: string;
@@ -259,6 +260,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         task_due_at: task.due_at,
         owner_id: task.owner_id,
         owner_name: personById(task.owner_id)?.full_name ?? task.owner_id,
+        pending_nudge_exists: context.case.drafts.some((draft) => draft.kind === "nudge" && draft.status === "pending"),
       };
       state.equipment = {
         status: result.status,
@@ -312,7 +314,8 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         equipmentTask,
         equipmentEta: state.equipment?.data && typeof state.equipment.data === "object" ? String((state.equipment.data as EquipmentObservation).eta) : undefined,
         availability: state.availability,
-        allowed_dates: new Set([context.case.start_date, context.joiner.start_date]),
+        equipmentLate: state.equipment?.data && typeof state.equipment.data === "object" ? (state.equipment.data as EquipmentObservation).late === true : undefined,
+        allowed_dates: new Set([context.case.start_date, context.joiner.start_date, context.now.slice(0, 10)]),
       });
       if (!guard.ok) {
         const attempts = (state.guard_refusals.get(parsed.kind) ?? 0) + 1;
@@ -376,8 +379,8 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
     }
 
     if (name === "escalate") {
-      if (!validEscalationCode(input.code) || typeof input.summary !== "string") {
-        return failed(`Escalation refused: code must be one of the listed EscalationCode values and summary is required. Received code=${String(input.code)}.`);
+      if (!validEscalationCode(input.code)) {
+        return failed(`Escalation refused: code must be one of the listed EscalationCode values. Received code=${String(input.code)}.`);
       }
       const existing = context.case.escalations.find((escalation) => escalation.code === input.code && !escalation.resolved_at);
       if (existing) return ok(`Escalation ${existing.id} already exists.`, { escalation_id: existing.id });
@@ -387,7 +390,7 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         code: input.code,
         severity: input.code === "RTW_NOT_EVIDENCED" ? "critical" as const : "warn" as const,
         to_function: "people" as const,
-        summary: input.summary,
+        summary: typeof input.summary === "string" && input.summary.trim() ? input.summary.trim() : `${String(input.code)} recorded by the assistant.`,
         evidence: Array.isArray(input.evidence) ? input.evidence.filter((item): item is string => typeof item === "string") : [],
         raised_at: context.now,
       };

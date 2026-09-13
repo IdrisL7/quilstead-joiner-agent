@@ -183,9 +183,29 @@ function mismatches(actual: ScenarioActual, expected: GoldenExpected, mode: Agen
   const out: string[] = [];
   if ((expected.run ?? true) !== actual.run) out.push(`run: expected ${expected.run ?? true}, got ${actual.run}${actual.error ? ` (${actual.error})` : ""}`);
   if (expected.stop_reason !== undefined && expected.stop_reason !== actual.stop_reason) out.push(`stop_reason: expected ${expected.stop_reason}, got ${actual.stop_reason}`);
-  if (expected.proposal_kinds !== undefined && !sameArray(actual.proposal_kinds, expected.proposal_kinds)) out.push(`proposal_kinds: expected ${JSON.stringify(expected.proposal_kinds)}, got ${JSON.stringify(actual.proposal_kinds)}`);
-  if (expected.proposal_recipients !== undefined && !sameArray(actual.proposal_recipients, expected.proposal_recipients)) out.push(`proposal_recipients: expected ${JSON.stringify(expected.proposal_recipients)}, got ${JSON.stringify(actual.proposal_recipients)}`);
-  if (expected.escalation_codes !== undefined && !sameArray(actual.escalation_codes, expected.escalation_codes)) out.push(`escalation_codes: expected ${JSON.stringify(expected.escalation_codes)}, got ${JSON.stringify(actual.escalation_codes)}`);
+  if (mode === "mock") {
+    if (expected.proposal_kinds !== undefined && !sameArray(actual.proposal_kinds, expected.proposal_kinds)) out.push(`proposal_kinds: expected ${JSON.stringify(expected.proposal_kinds)}, got ${JSON.stringify(actual.proposal_kinds)}`);
+    if (expected.proposal_recipients !== undefined && !sameArray(actual.proposal_recipients, expected.proposal_recipients)) out.push(`proposal_recipients: expected ${JSON.stringify(expected.proposal_recipients)}, got ${JSON.stringify(actual.proposal_recipients)}`);
+    if (expected.escalation_codes !== undefined && !sameArray(actual.escalation_codes, expected.escalation_codes)) out.push(`escalation_codes: expected ${JSON.stringify(expected.escalation_codes)}, got ${JSON.stringify(actual.escalation_codes)}`);
+  } else {
+    // Live: the golden outcomes are the minimum. The model may add SOP-consistent work: a nudge
+    // to another open-task owner, or an OWNER_SLA_BREACHED / COMPLIANCE_DEADLINE_AT_RISK
+    // escalation. Anything else extra, or anything expected but missing, is a miss.
+    const expectedPairs = (expected.proposal_kinds ?? []).map((kind, index) => `${kind}:${expected.proposal_recipients?.[index] ?? "*"}`);
+    const actualPairs = actual.proposal_kinds.map((kind, index) => `${kind}:${actual.proposal_recipients[index]}`);
+    for (const pair of expectedPairs) {
+      const [kind, to] = pair.split(":");
+      if (!actualPairs.some((candidate) => candidate === pair || (to === "*" && candidate.startsWith(`${kind}:`)))) out.push(`missing proposal ${pair}; got ${JSON.stringify(actualPairs)}`);
+    }
+    for (const pair of actualPairs) {
+      const [kind] = pair.split(":");
+      const matchesExpected = expectedPairs.some((candidate) => candidate === pair || candidate === `${kind}:*`);
+      if (!matchesExpected && kind !== "nudge") out.push(`unexpected proposal ${pair}`);
+    }
+    const allowedExtras = new Set(["OWNER_SLA_BREACHED", "COMPLIANCE_DEADLINE_AT_RISK"]);
+    for (const code of expected.escalation_codes ?? []) if (!actual.escalation_codes.includes(code)) out.push(`missing escalation ${code}; got ${JSON.stringify(actual.escalation_codes)}`);
+    for (const code of actual.escalation_codes) if (!(expected.escalation_codes ?? []).includes(code) && !allowedExtras.has(code)) out.push(`unexpected escalation ${code}`);
+  }
   if (expected.terminal_case_state !== undefined && expected.terminal_case_state !== actual.terminal_case_state) out.push(`terminal_case_state: expected ${expected.terminal_case_state}, got ${actual.terminal_case_state}`);
   if (expected.next_action_prefix !== undefined) {
     if (expected.next_action_prefix === null) {

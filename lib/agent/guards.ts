@@ -15,8 +15,20 @@ export interface MessageGuardContext {
   joiner: Joiner;
   equipmentTask: Task;
   equipmentEta?: string;
+  equipmentLate?: boolean;
   availability: BuddyAvailabilityResult | null;
   allowed_dates: Set<string>;
+}
+
+const OPEN_TASK_STATUSES = new Set(["open", "overdue", "escalated", "waiting_approval"]);
+
+// A nudge may go to the owner of any task that is still open on the case (the SOP says to
+// chase late owners). Anyone else is refused. The equipment owner is always allowed because
+// the equipment task is the one the order observation is about.
+export function nudgeRecipients(context: MessageGuardContext): Set<string> {
+  const owners = new Set<string>([context.equipmentTask.owner_id]);
+  for (const task of context.case.tasks) if (OPEN_TASK_STATUSES.has(task.status)) owners.add(task.owner_id);
+  return owners;
 }
 
 export interface GuardedMessage {
@@ -75,6 +87,8 @@ function allAllowedDates(context: MessageGuardContext): Set<string> {
   dates.add(context.case.start_date);
   dates.add(context.joiner.start_date);
   dates.add(context.equipmentTask.due_at.slice(0, 10));
+  dates.add(context.joiner.contract_signed_at.slice(0, 10));
+  for (const task of context.case.tasks) dates.add(task.due_at.slice(0, 10)); // every deadline the model was shown
   if (context.equipmentEta) dates.add(context.equipmentEta);
   for (const assessment of context.availability?.candidates ?? []) {
     for (const slot of assessment.availability.slots) {
@@ -108,11 +122,13 @@ export function validateMessageProposal(input: MessageProposalInput, context: Me
   }
 
   if (input.kind === "nudge") {
-    if (input.to !== context.equipmentTask.owner_id) {
-      return { ok: false, summary: `Message refused: nudge recipient ${input.to} is not the equipment task owner.` };
+    const recipients = nudgeRecipients(context);
+    if (!recipients.has(input.to)) {
+      return { ok: false, summary: `Message refused: nudge recipient ${input.to} owns no open task on this case. Allowed owner ids: ${[...recipients].join(", ")}.` };
     }
-    if (!/loaner|earlier delivery/i.test(baseBody)) {
-      return { ok: false, summary: "Message refused: equipment nudge must ask for a loaner or earlier delivery." };
+    const aboutLateEquipment = input.to === context.equipmentTask.owner_id && context.equipmentLate === true;
+    if (aboutLateEquipment && !/loaner|earlier delivery/i.test(baseBody)) {
+      return { ok: false, summary: "Message refused: a nudge to the equipment owner about a late laptop must ask for a loaner or earlier delivery." };
     }
   }
 

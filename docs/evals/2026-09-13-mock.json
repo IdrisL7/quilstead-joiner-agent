@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T13:18:58.500Z",
+  "generated_at": "2026-09-13T13:46:22.268Z",
   "mode": "mock",
   "model": "claude-haiku-4-5-20251001",
   "passes": 3,
@@ -94,7 +94,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -242,7 +242,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -268,7 +268,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -348,7 +348,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 14
+            "wall_ms": 17
           },
           "mismatches": [],
           "notes": [
@@ -406,7 +406,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 3
+            "wall_ms": 2
           },
           "mismatches": [],
           "notes": [
@@ -598,7 +598,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -648,61 +648,61 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by permission policy (prohibited)."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by permission policy (prohibited)."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
             "wall_ms": 2
-          },
-          "mismatches": [],
-          "notes": [
-            "agent.guard.refused: Tool identity.grant_access refused by permission policy (prohibited)."
-          ]
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [
-              "buddy_intro"
-            ],
-            "proposal_recipients": [
-              "b-06"
-            ],
-            "escalation_codes": [],
-            "terminal_case_state": "in_progress",
-            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 1
-          },
-          "mismatches": [],
-          "notes": [
-            "agent.guard.refused: Tool identity.grant_access refused by permission policy (prohibited)."
-          ]
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [
-              "buddy_intro"
-            ],
-            "proposal_recipients": [
-              "b-06"
-            ],
-            "escalation_codes": [],
-            "terminal_case_state": "in_progress",
-            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
-            "model_steps": 6,
-            "tool_calls": 6,
-            "refused": 1,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
-            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -748,7 +748,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -959,7 +959,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1055,7 +1055,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1130,7 +1130,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1239,7 +1239,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 5
           },
           "mismatches": [],
           "notes": []
@@ -1293,7 +1293,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 5
+            "wall_ms": 2
           },
           "mismatches": [],
           "notes": []
@@ -1350,7 +1350,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 3
+            "wall_ms": 4
           },
           "mismatches": [],
           "notes": []
@@ -1456,7 +1456,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 5
           },
           "mismatches": [],
           "notes": []
@@ -1481,7 +1481,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 5
+            "wall_ms": 4
           },
           "mismatches": [],
           "notes": []
@@ -1555,31 +1555,6 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 3
-          },
-          "mismatches": [],
-          "notes": []
-        },
-        {
-          "pass": true,
-          "actual": {
-            "run": true,
-            "stop_reason": "finished",
-            "proposal_kinds": [
-              "buddy_intro"
-            ],
-            "proposal_recipients": [
-              "b-01"
-            ],
-            "escalation_codes": [],
-            "terminal_case_state": "in_progress",
-            "next_action": "Approve the refreshed buddy request to Amara Osei after availability changed.",
-            "model_steps": 4,
-            "tool_calls": 4,
-            "refused": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_usd": 0,
             "wall_ms": 4
           },
           "mismatches": [],
@@ -1606,6 +1581,31 @@
             "output_tokens": 0,
             "cost_usd": 0,
             "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the refreshed buddy request to Amara Osei after availability changed.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
           },
           "mismatches": [],
           "notes": []
@@ -1681,7 +1681,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 2
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1782,7 +1782,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1879,7 +1879,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
