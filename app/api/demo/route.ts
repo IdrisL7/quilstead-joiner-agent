@@ -3,6 +3,7 @@ import { buddyById } from "@/data/buddies";
 import { buddyCalendarById } from "@/data/buddy-calendars";
 import { personById } from "@/data/people";
 import { attentionSummary } from "@/lib/attention";
+import { askCase } from "@/lib/agent/ask";
 import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 import {
   BuddyFlowConflict,
@@ -178,6 +179,7 @@ function agentSummary(run: DemoPreparation) {
 }
 
 const UI_AGENT_TRACE_KINDS = new Set([
+  "agent.asked",
   "agent.guard.refused",
   "agent.proposed",
   "agent.escalated",
@@ -270,6 +272,7 @@ export async function POST(request: Request) {
       subject?: unknown;
       body?: unknown;
       response?: unknown;
+      question?: unknown;
     };
     if (body.action && typeof body.run_id !== "string") {
       return NextResponse.json({ error: "A current run is required for this demo mutation." }, { status: 409 });
@@ -279,6 +282,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "This approval run is no longer active. Start a new run." }, { status: 409 });
       }
       const preparation = activeRun;
+      if (body.action === "ask") {
+        if (typeof body.question !== "string") {
+          return NextResponse.json({ error: "question is required for Ask Athena" }, { status: 400 });
+        }
+        const question = body.question.trim();
+        if (!question) return NextResponse.json({ error: "Ask Athena needs a question" }, { status: 400 });
+        if (question.length > 300) return NextResponse.json({ error: "Ask Athena questions must be 300 characters or fewer" }, { status: 400 });
+        const answer = await askCase(preparation.case, preparation.joiner, question, process.env.DEMO_MODE === "live" ? "live" : "mock");
+        preparation.trace.push({ actor: "agent", kind: "agent.asked", summary: `Ask Athena answered: ${answer.answer}` });
+        return NextResponse.json({ ...preparationResponse(preparation), answer });
+      }
       if (body.action === "start_date_change") {
         if (typeof body.start_date !== "string") {
           return NextResponse.json({ error: "start_date is required for a start-date change" }, { status: 400 });

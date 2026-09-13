@@ -13,6 +13,7 @@ import type {
   AgentContext,
   AgentMessage,
   AgentModel,
+  AgentRuntime,
   AgentRun,
   AgentStep,
   AgentTraceEntry,
@@ -98,11 +99,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function permissionResult(name: string): ToolResult {
+function permissionResult(name: string, reason?: string): ToolResult {
   const permission = authorize(name);
   return {
     status: "denied",
-    summary: `Tool ${name} refused by permission policy (${permission.mode}).`,
+    summary: reason ?? `Tool ${name} refused by permission policy (${permission.mode}).`,
     retryable: false,
   };
 }
@@ -127,6 +128,7 @@ const TRIGGER_INSTRUCTIONS: Record<AgentTrigger, string> = {
   start_date_changed: "Deadlines were recomputed and every pending draft was superseded by the date change, not rejected by People. Re-check equipment against the new start date and buddy availability, propose again where the risk still holds, finish.",
   buddy_declined: "The requested buddy declined. Re-read availability excluding declined candidates and propose a replacement request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
   availability_changed: "A candidate's calendar changed and the affected request was superseded. Re-read availability and propose a fresh request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
+  question: "Answer one read-only case question from current observations, then finish.",
 };
 
 function systemPrompt(joiner: Joiner, c: Case): string {
@@ -149,7 +151,7 @@ function systemPrompt(joiner: Joiner, c: Case): string {
 async function commitRuntime(
   original: Case,
   working: Case,
-  runtime: ReturnType<typeof createAgentToolRuntime>,
+  runtime: AgentRuntime,
   now: string,
 ): Promise<void> {
   const registered: string[] = [];
@@ -232,7 +234,8 @@ export async function runAgent(
 ): Promise<AgentRun> {
   const stateHash = inputStateHash(c);
   const key = runKey(c, trigger, stateHash);
-  const previous = options?.force ? undefined : priorRuns.get(key);
+  const useCache = options?.cache ?? true;
+  const previous = useCache && !options?.force ? priorRuns.get(key) : undefined;
   if (previous) return previous;
 
   const startedAt = new Date().toISOString();
@@ -243,16 +246,22 @@ export async function runAgent(
     model = buildModel(mode, context, options);
   } catch (error) {
     const result = unavailableRun(context, mode === "live" ? "anthropic" : "mock", mode === "live" ? "live-agent-model" : "deterministic-agent-model", stateHash, startedAt, "model_error", [], 0, 0, 0, [traceEntry("agent.unavailable", error instanceof Error ? error.message : "Agent model unavailable.")]);
-    priorRuns.set(key, result);
+    if (useCache) priorRuns.set(key, result);
     return result;
   }
 
-  const runtime = createAgentToolRuntime(context);
+  const runtime = options?.runtimeFactory?.(context) ?? createAgentToolRuntime(context);
+  const toolDefinitions = options?.toolDefinitions ?? AGENT_TOOL_DEFINITIONS;
+  const permittedToolNames = new Set(toolDefinitions.map((definition) => definition.name));
+  const maxSteps = options?.maxSteps ?? MAX_STEPS;
+  const maxToolCalls = options?.maxToolCalls ?? MAX_TOOL_CALLS;
+  const maxRunMs = options?.maxRunMs ?? MAX_RUN_MS;
+  const maxModelCallMs = options?.maxModelCallMs ?? MAX_MODEL_CALL_MS;
   const steps: AgentStep[] = [];
   const trace: AgentTraceEntry[] = [traceEntry("agent.started", `Agent started for ${trigger} on ${c.id}.`)];
   const messages: AgentMessage[] = [
-    { role: "system", content: systemPrompt(joiner, c) },
-    { role: "user", content: JSON.stringify({ trigger, case_id: c.id, now, instruction: TRIGGER_INSTRUCTIONS[trigger] }) },
+    { role: "system", content: options?.systemPrompt ?? systemPrompt(joiner, c) },
+    { role: "user", content: options?.userMessage ?? JSON.stringify({ trigger, case_id: c.id, now, instruction: TRIGGER_INSTRUCTIONS[trigger] }) },
   ];
   let modelSteps = 0;
   let toolCalls = 0;
@@ -263,11 +272,11 @@ export async function runAgent(
   let modelError: string | null = null;
   let reminded = false;
 
-  while (modelSteps < MAX_STEPS && toolCalls < MAX_TOOL_CALLS && Date.now() - Date.parse(startedAt) < MAX_RUN_MS) {
+  while (modelSteps < maxSteps && toolCalls < maxToolCalls && Date.now() - Date.parse(startedAt) < maxRunMs) {
     modelSteps += 1;
     let turn;
     try {
-      turn = await withTimeout(model.complete(messages, AGENT_TOOL_DEFINITIONS), MAX_MODEL_CALL_MS);
+      turn = await withTimeout(model.complete(messages, toolDefinitions), maxModelCallMs);
     } catch (error) {
       modelError = error instanceof Error ? error.message : "Unknown model error.";
       trace.push(traceEntry("agent.unavailable", modelError));
@@ -302,13 +311,17 @@ export async function runAgent(
     }
 
     for (const call of calls) {
-      if (toolCalls >= MAX_TOOL_CALLS) break;
+      if (toolCalls >= maxToolCalls) break;
       toolCalls += 1;
       const callStarted = Date.now();
       trace.push(traceEntry("agent.tool_call", `Model requested ${call.name}.`));
       let result: ToolResult;
-      const permission = authorize(call.name);
-      if (permission.mode !== "automatic") {
+      const offered = permittedToolNames.has(call.name);
+      const permission = offered ? authorize(call.name) : { mode: "prohibited" as const };
+      if (!offered) {
+        result = permissionResult(call.name, `Tool ${call.name} refused by this run's read-only allowlist.`);
+        refused += 1;
+      } else if (permission.mode !== "automatic") {
         result = permissionResult(call.name);
         refused += 1;
       } else {
@@ -321,7 +334,7 @@ export async function runAgent(
         if (result.status === "error" && (call.name === "propose_message" || call.name === "escalate")) refused += 1;
       }
       const elapsed = Date.now() - callStarted;
-      const guardRefused = permission.mode !== "automatic"
+      const guardRefused = !offered || permission.mode !== "automatic"
         || result.status === "error" && (call.name === "propose_message" || call.name === "escalate");
       const step: AgentStep = {
         n: steps.length + 1,
@@ -361,9 +374,9 @@ export async function runAgent(
 
   if (stopReason !== "finished" && stopReason !== "guard") {
     if (modelError) stopReason = "model_error";
-    else if (toolCalls >= MAX_TOOL_CALLS) stopReason = "tool_cap";
-    else if (modelSteps >= MAX_STEPS) stopReason = "step_cap";
-    else if (Date.now() - Date.parse(startedAt) >= MAX_RUN_MS) stopReason = "time_cap";
+    else if (toolCalls >= maxToolCalls) stopReason = "tool_cap";
+    else if (modelSteps >= maxSteps) stopReason = "step_cap";
+    else if (Date.now() - Date.parse(startedAt) >= maxRunMs) stopReason = "time_cap";
   }
 
   if (stopReason !== "finished") {
@@ -383,31 +396,33 @@ export async function runAgent(
       inputTokens,
       outputTokens,
     );
-    priorRuns.set(key, result);
+    if (useCache) priorRuns.set(key, result);
     return result;
   }
 
-  try {
-    await commitRuntime(c, working, runtime, now);
-  } catch (error) {
-    const result = unavailableRun(
-      context,
-      model.provider,
-      model.model,
-      stateHash,
-      startedAt,
-      "model_error",
-      steps,
-      modelSteps,
-      toolCalls,
-      refused,
-      [...trace, traceEntry("agent.unavailable", error instanceof Error ? error.message : "Agent commit failed.")],
-      "Run assistant again.",
-      inputTokens,
-      outputTokens,
-    );
-    priorRuns.set(key, result);
-    return result;
+  if (options?.commit !== false) {
+    try {
+      await commitRuntime(c, working, runtime, now);
+    } catch (error) {
+      const result = unavailableRun(
+        context,
+        model.provider,
+        model.model,
+        stateHash,
+        startedAt,
+        "model_error",
+        steps,
+        modelSteps,
+        toolCalls,
+        refused,
+        [...trace, traceEntry("agent.unavailable", error instanceof Error ? error.message : "Agent commit failed.")],
+        "Run assistant again.",
+        inputTokens,
+        outputTokens,
+      );
+      if (useCache) priorRuns.set(key, result);
+      return result;
+    }
   }
 
   trace.push(traceEntry("agent.finished", runtime.state.next_action ?? "Agent finished without a further action."));
@@ -433,6 +448,6 @@ export async function runAgent(
     trace,
     input_state_hash: stateHash,
   };
-  priorRuns.set(key, result);
+  if (useCache) priorRuns.set(key, result);
   return result;
 }

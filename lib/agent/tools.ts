@@ -159,6 +159,8 @@ function caseProjection(context: AgentContext, state: AgentRuntimeState) {
     due_at: task.due_at,
     owner_id: task.owner_id,
     owner_name: personById(task.owner_id)?.full_name ?? task.owner_id,
+    compliance_code: task.compliance_code ?? null,
+    system: task.system ?? null,
   }));
   const openEscalations = context.case.escalations.filter((escalation) => !escalation.resolved_at).map((escalation) => ({
     code: escalation.code,
@@ -179,6 +181,12 @@ function caseProjection(context: AgentContext, state: AgentRuntimeState) {
       start_date: context.joiner.start_date,
     },
     start_date: context.case.start_date,
+    task_counts: {
+      total: taskRows.length,
+      open: taskRows.filter((task) => task.status === "open" || task.status === "overdue" || task.status === "escalated" || task.status === "waiting_approval").length,
+      overdue: taskRows.filter((task) => task.status === "overdue").length,
+      done: taskRows.filter((task) => task.status === "done").length,
+    },
     tasks: taskRows,
     open_escalations: openEscalations,
     drafts: context.case.drafts.map((draft) => ({
@@ -191,7 +199,14 @@ function caseProjection(context: AgentContext, state: AgentRuntimeState) {
       pending: draft.status === "pending",
     })),
     drafts_note: "Only pending drafts await approval. superseded = invalidated by a fact change, not a People decision; if the risk still holds, propose again. rejected = a People decision; do not re-propose the same message.",
-    buddy_requests: context.case.buddy_requests.map((request) => ({ id: request.id, candidate_id: request.candidate_id, status: request.status, start_date: request.start_date })),
+    buddy_requests: context.case.buddy_requests.map((request) => ({
+      id: request.id,
+      candidate_id: request.candidate_id,
+      candidate_name: buddyById(request.candidate_id)?.full_name ?? request.candidate_id,
+      status: request.status,
+      start_date: request.start_date,
+      slots: request.slots,
+    })),
     contract: buildContract(context.joiner, context.case.id),
     attention: attentionProjection(context, state),
   };
@@ -417,10 +432,11 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
     if (name === "finish") {
       state.finished = true;
       const raw = typeof input.next_action === "string" ? input.next_action.replace(/\s+/g, " ").trim() : "";
-      // Keep the model's wording when it is already short. Long summaries collapse to the first
-      // sentence so the Overview banner stays one line and the panel reads an action, not a report.
+      // Keep the model's wording when it is already short. Normal runs stay concise, while the
+      // read-only question trigger has a larger answer budget for grounded case summaries.
+      const maxLength = context.trigger === "question" ? 600 : 240;
       const firstSentence = raw.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? raw;
-      state.next_action = !raw ? null : raw.length <= 240 ? raw : firstSentence.length <= 240 ? firstSentence : `${raw.slice(0, 237)}...`;
+      state.next_action = !raw ? null : raw.length <= maxLength ? raw : firstSentence.length <= maxLength ? firstSentence : `${raw.slice(0, maxLength - 3)}...`;
       return ok("Agent run finished.", { next_action: state.next_action });
     }
 

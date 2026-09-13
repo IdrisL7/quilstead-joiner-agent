@@ -2,7 +2,7 @@ import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
 import type { BuddyRequest, BuddySlot, Case, Draft, Joiner, ToolResult } from "@/lib/types";
 
 export type AgentMode = "mock" | "live";
-export type AgentTrigger = "contract.signed" | "start_date_changed" | "buddy_declined" | "availability_changed";
+export type AgentTrigger = "contract.signed" | "start_date_changed" | "buddy_declined" | "availability_changed" | "question";
 export type StopReason = "finished" | "step_cap" | "tool_cap" | "time_cap" | "guard" | "model_error";
 
 export interface AgentToolDefinition {
@@ -118,7 +118,22 @@ export interface AgentRuntimeState {
   escalations_recorded: number;
 }
 
+export interface AgentRuntime {
+  state: AgentRuntimeState;
+  dispatch(name: string, input: Record<string, unknown>): Promise<ToolResult>;
+}
+
 export interface RunAgentOptions {
   model?: AgentModel;
   force?: boolean;
+  toolDefinitions?: AgentToolDefinition[];
+  runtimeFactory?: (context: AgentContext) => AgentRuntime;
+  systemPrompt?: string;
+  userMessage?: string;
+  maxSteps?: number;
+  maxToolCalls?: number;
+  maxRunMs?: number;
+  maxModelCallMs?: number;
+  commit?: boolean;
+  cache?: boolean;
 }

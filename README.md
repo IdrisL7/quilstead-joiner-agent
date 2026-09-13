@@ -41,6 +41,7 @@ reliability is claimed here.
 | Webhook HMAC verification, citation guard | Working, tested |
 | HRIS, identity, equipment, Slack, email, e-sign, buddy directory, policy KB | Simulated adapters behind the production interface |
 | Bounded model-assisted loop and mock golden flow | Working; 20 golden scenarios pass^3 in mock mode, with contract, date, decline and availability triggers covered |
+| Ask Athena read-only case panel | Working in mock mode; five grounded intents, section links, answer guards and `agent.asked` trail coverage |
 | Minimal approval screen with approve/reject boundary | Working in mock mode, browser-verified; live draft held for approval |
 | Editable equipment draft with exact saved-wording approval | Working, tested and browser-verified |
 | Buddy candidate comparison, exact request preview and People confirmation | Working in mock mode, browser-verified; calendar responses are labelled simulations |

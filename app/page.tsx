@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import Image from "next/image";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
@@ -157,6 +157,23 @@ interface AgentSummary {
   finished_at: string;
 }
 
+type AskLink = "overview" | "equipment" | "buddy" | "activity";
+
+interface AskAnswer {
+  answer: string;
+  links: AskLink[];
+  facts: string[];
+  provider: "mock" | "anthropic";
+  model: string;
+  cost_usd: number;
+}
+
+interface AskHistoryItem {
+  id: string;
+  question: string;
+  answer: AskAnswer;
+}
+
 interface DemoResponse {
   phase: "pending" | "resolved";
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
@@ -175,6 +192,7 @@ interface DemoResponse {
   buddy: BuddyState;
   date_change?: DemoDateChange;
   draft_unavailable?: { message: string };
+  answer?: AskAnswer;
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
 }
 
@@ -657,6 +675,110 @@ function Tag({ tone, children }: { tone?: string; children: React.ReactNode }) {
   return <span className={`tag ${tone ?? ""}`}>{children}</span>;
 }
 
+const ASK_SUGGESTIONS = [
+  "What's left before day one?",
+  "Is the laptop sorted?",
+  "Who is the buddy?",
+  "Any compliance risk?",
+];
+
+const ASK_LINK_LABELS: Record<AskLink, string> = {
+  overview: "Open Overview",
+  equipment: "Open Equipment",
+  buddy: "Open Buddy support",
+  activity: "Open Activity",
+};
+
+export function AskAthenaPanel({
+  history,
+  question,
+  compact,
+  busy,
+  onQuestionChange,
+  onAsk,
+  onNavigate,
+}: {
+  history: AskHistoryItem[];
+  question: string;
+  compact?: boolean;
+  busy: boolean;
+  onQuestionChange: (value: string) => void;
+  onAsk: (question: string) => void;
+  onNavigate: (section: AskLink) => void;
+}) {
+  const submit = (value: string) => {
+    const trimmed = value.trim();
+    if (!busy && trimmed) onAsk(trimmed);
+  };
+
+  const content = (
+    <div className="ask-content">
+      {history.length === 0 ? (
+        <p className="ask-empty">Ask about this case. Athena reads the current evidence and cannot change or send anything.</p>
+      ) : (
+        <div className="ask-history" aria-live="polite">
+          {history.map((item) => (
+            <div className="ask-exchange" key={item.id}>
+              <div className="ask-bubble ask-user"><span className="ask-bubble-label">You</span><p>{item.question}</p></div>
+              <div className="ask-assistant-row">
+                <span className="ask-avatar" aria-hidden="true">A</span>
+                <div className="ask-bubble ask-assistant">
+                  <div className="ask-bubble-head"><strong>Athena</strong><Tag tone={item.answer.provider === "anthropic" ? "violet" : "info"}>{item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</Tag></div>
+                  <p>{item.answer.answer}</p>
+                  <div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
+                  {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="ask-suggestions" aria-label="Suggested questions">
+        {ASK_SUGGESTIONS.map((suggestion) => <button className="ask-chip" type="button" key={suggestion} onClick={() => submit(suggestion)} disabled={busy}>{suggestion}</button>)}
+      </div>
+      <form className="ask-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); submit(question); }}>
+        <label htmlFor={compact ? "ask-question-drawer" : "ask-question"}>Ask Athena</label>
+        <div className="ask-input-row">
+          <textarea
+            id={compact ? "ask-question-drawer" : "ask-question"}
+            aria-label="Ask Athena question"
+            rows={2}
+            value={question}
+            onChange={(event) => onQuestionChange(event.target.value)}
+            onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit(question);
+              }
+            }}
+            placeholder="Ask about this case..."
+            maxLength={300}
+            disabled={busy}
+          />
+          <button className="button primary small" type="submit" disabled={busy || !question.trim()}>{busy ? "Reading..." : "Ask"}</button>
+        </div>
+        <span className="ask-hint">Read-only · current case facts · Enter to send, Shift+Enter for a new line</span>
+      </form>
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <details className="ask-drawer" open={history.length > 0}>
+        <summary><span><strong>Ask Athena</strong><span className="meta">Read-only case answers</span></span><span className="meta">{history.length === 0 ? "Open" : `${history.length} asked`}</span></summary>
+        {content}
+      </details>
+    );
+  }
+
+  return (
+    <section className="panel ask-panel" aria-label="Ask Athena">
+      <div className="panel-head"><h3>Ask Athena</h3><span className="meta">Read-only case answers</span></div>
+      {content}
+    </section>
+  );
+}
+
 const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: "overview", label: "Overview", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8.5 8 3l6 5.5M4 7.5V13h8V7.5" /></svg> },
   { key: "equipment", label: "Equipment", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3.5" width="12" height="8" rx="1" /><path d="M1.5 13h13" /></svg> },
@@ -685,11 +807,13 @@ export default function Home() {
   const [section, setSection] = useState<Section>("overview");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "reset" | "date" | "retry" | "edit" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
+  const [busy, setBusy] = useState<"start" | "reset" | "date" | "retry" | "edit" | "ask" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingEquipment, setEditingEquipment] = useState(false);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [askHistory, setAskHistory] = useState<AskHistoryItem[]>([]);
+  const [askQuestion, setAskQuestion] = useState("");
 
   function acceptRun(next: DemoResponse, replaceInitial = false) {
     setRun(next);
@@ -712,6 +836,8 @@ export default function Home() {
       const next = await postDemo();
       acceptRun(next, true);
       setEditingEquipment(false);
+      setAskHistory([]);
+      setAskQuestion("");
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
@@ -731,6 +857,8 @@ export default function Home() {
       const next = await postDemo();
       acceptRun(next, true);
       setEditingEquipment(false);
+      setAskHistory([]);
+      setAskQuestion("");
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo reset failed");
@@ -747,6 +875,25 @@ export default function Home() {
       acceptRun(await postDemo({ run_id: run.run_id, decision }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The approval action failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function askAthena(question = askQuestion) {
+    if (!run) return;
+    const trimmed = question.trim();
+    if (!trimmed || trimmed.length > 300) return;
+    setBusy("ask");
+    setError(null);
+    try {
+      const next = await postDemo({ run_id: run.run_id, action: "ask", question: trimmed });
+      if (!next.answer) throw new Error("Ask Athena returned no answer.");
+      acceptRun(next);
+      setAskHistory((current) => [...current, { id: `ask-${Date.now()}-${current.length}`, question: trimmed, answer: next.answer! }]);
+      setAskQuestion("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Ask Athena could not read the case");
     } finally {
       setBusy(null);
     }
@@ -911,6 +1058,18 @@ export default function Home() {
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at)) : [];
   const openAttention = run ? [run.attention.equipment, run.attention.buddy, run.attention.compliance].filter((item) => attentionTone(item.status) !== "positive").length : 0;
 
+  const renderAskAthena = (compact = false) => (
+    <AskAthenaPanel
+      history={askHistory}
+      question={askQuestion}
+      compact={compact}
+      busy={busy === "ask"}
+      onQuestionChange={setAskQuestion}
+      onAsk={askAthena}
+      onNavigate={setSection}
+    />
+  );
+
   /* ---------- pieces that need state ---------- */
 
   const navButtons = (variant: "side" | "tab") =>
@@ -956,7 +1115,8 @@ export default function Home() {
     ];
     const compliance = current.attention.compliance;
     return (
-      <>
+      <div className="overview-layout">
+        <div className="overview-main">
         <ExecutionSummary run={initialExecution ?? current} />
         {current.agent && <div className="agent-run-line" role="status"><strong>Assistant</strong><span>{current.agent.trigger.replaceAll("_", " ")} · {current.agent.steps} model steps · {current.agent.proposed} proposals · {current.agent.refused} refused</span><span>{current.agent.stop_reason === "finished" ? "Finished" : `Stopped: ${current.agent.stop_reason}`}</span></div>}
         <div className="next-action"><strong>Next:</strong> {nextAction}</div>
@@ -1010,7 +1170,9 @@ export default function Home() {
             </ol>
           </div>
         </section>
-      </>
+        </div>
+        <div className="overview-side">{renderAskAthena()}</div>
+      </div>
     );
   }
 
@@ -1123,6 +1285,7 @@ export default function Home() {
             </div>
           </section>
         </div>
+        {renderAskAthena(true)}
       </>
     );
   }
@@ -1285,6 +1448,7 @@ export default function Home() {
             </section>
           </div>
         </div>
+        {renderAskAthena(true)}
       </>
     );
   }
@@ -1321,6 +1485,7 @@ export default function Home() {
             </div>
           </div>
         </details>
+        {renderAskAthena(true)}
       </>
     );
   }

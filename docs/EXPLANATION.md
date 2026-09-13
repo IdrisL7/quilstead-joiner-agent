@@ -73,6 +73,17 @@ render as a labelled empty week with the same reason text the comparison shows. 
 the model. Confirmed slots turn green after People confirmation; a superseded or rejected request's
 slots are not drawn.
 
+Ask Athena is a read-only Slack-style surface over the same case. Its `question` run uses the same
+bounded loop, but the tool definitions and runtime allow only current-state and policy reads plus
+`finish`; proposal, escalation, approval, send and write tools are excluded in application code. The
+mock router answers five case intents from current observations and labels each response `Mock
+answer`. Live mode uses the Anthropic adapter with the same schemas and guards and labels the
+response `Anthropic model`. Answer guards replace untrusted dates or names and cap the response at
+600 characters. Code derives section links from the tools actually used, and one `agent.asked` step
+is added to the case trail. The browser keeps the question history in memory only, so Reset clears
+it and no persistence is introduced. The question is data, not an instruction, and cannot open a
+second path to an approval story.
+
 The attention summary is a projection of the current case, task, request and escalation state, not a
 second readiness store. The trace records simulation inputs, connector observations, approvals,
 responses and confirmation history.
