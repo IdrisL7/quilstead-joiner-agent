@@ -329,12 +329,10 @@ function WeekStrip({
   assessment,
   startDate,
   request,
-  joinerName,
 }: {
   assessment: BuddyCandidateAssessment;
   startDate: string;
   request: BuddyRequest | null;
-  joinerName: string;
 }) {
   const { candidate, availability } = assessment;
   const dates = firstWorkingWeek(startDate);
@@ -1153,7 +1151,7 @@ export default function Home() {
                 {buddyCandidates.map((assessment) => {
                   const { candidate, eligibility, availability } = assessment;
                   const requestTag = candidateRequestTagFor(request, candidate.id);
-                  const isRecommended = recommendedBuddy?.candidate_id === candidate.id;
+                  const isRecommended = recommendedBuddy?.candidate_id === candidate.id && !hasActiveBuddy; // a recommendation beside a confirmed or pending buddy reads as a contradiction
                   const isAlternative = alternativeCandidateId === candidate.id;
                   return (
                     <button type="button" className="cand" key={candidate.id} aria-pressed={selectedCandidateId === candidate.id} onClick={() => setSelectedCandidateId(candidate.id)}>
@@ -1199,7 +1197,7 @@ export default function Home() {
                     </div>
                     <p className="muted small">{detail.availability.reason}</p>
                     {detail.eligibility.reasons.length > 0 && <ul className="reasons">{detail.eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
-                    {detail.availability.status !== "unavailable" && <WeekStrip assessment={detail} startDate={current.buddy.availability.start_date} request={request} joinerName={current.joiner.full_name} />}
+                    {detail.availability.status !== "unavailable" && <WeekStrip assessment={detail} startDate={current.buddy.availability.start_date} request={request} />}
                     {detail.availability.slots.length > 0 && (
                       <div className="slots">
                         {detail.availability.slots.map((slot) => <div className="slot" key={slot.id}><span className="kind">{slot.kind}</span><span className="when">{formatSlot(slot)}</span><span className="tz">{slot.duration_minutes} min · {slot.timezone}</span></div>)}
