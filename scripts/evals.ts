@@ -172,7 +172,6 @@ function terminalSignature(actual: ScenarioActual): string {
     proposal_recipients: actual.proposal_recipients,
     escalation_codes: actual.escalation_codes,
     terminal_case_state: actual.terminal_case_state,
-    next_action: actual.next_action,
     error: actual.error ?? null,
   });
 }
@@ -270,6 +269,7 @@ async function main(): Promise<void> {
   const passes = Number.parseInt(parseFlag("--passes", "3"), 10);
   const outputPath = parseFlag("--out", path.join(process.cwd(), "docs", "evals", `${new Date().toISOString().slice(0, 10)}-${mode}.json`));
   const inspect = process.argv.includes("--inspect");
+  const only = parseFlag("--only", "");
   const paceMs = Number.parseInt(parseFlag("--pace-ms", "8000"), 10);
   const LIVE_BUDGET_USD = Number.parseFloat(parseFlag("--budget-usd", String(DEFAULT_LIVE_BUDGET_USD)));
   if (!Number.isFinite(LIVE_BUDGET_USD) || LIVE_BUDGET_USD <= 0) throw new Error("--budget-usd must be a positive number");
@@ -277,11 +277,13 @@ async function main(): Promise<void> {
   if (!Number.isInteger(passes) || passes < 1) throw new Error("--passes must be a positive integer");
 
   const scenarios = loadScenarios();
+  const selected = only ? scenarios.filter((scenario) => only.split(",").includes(scenario.id)) : scenarios;
+  if (selected.length === 0) throw new Error(`--only matched no scenario: ${only}`);
   const results: Array<{ scenario: GoldenScenario; attempts: AttemptResult[] }> = [];
   let cumulativeCost = 0;
   let budgetExceeded = false;
 
-  for (const scenario of scenarios) {
+  for (const scenario of selected) {
     const attempts: AttemptResult[] = [];
     for (let pass = 0; pass < passes; pass += 1) {
       if (mode === "live" && cumulativeCost >= LIVE_BUDGET_USD) {

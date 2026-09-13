@@ -120,6 +120,15 @@ function costForTokens(inputTokens: number, outputTokens: number): number {
     + outputTokens * HAIKU_OUTPUT_USD_PER_MILLION / 1_000_000;
 }
 
+// What each trigger means for the run. The model reads this with the trigger, so a fact
+// change is never mistaken for a human decision.
+const TRIGGER_INSTRUCTIONS: Record<AgentTrigger, string> = {
+  "contract.signed": "New case. Read the case, check equipment, check buddy availability, propose what the facts justify, finish.",
+  start_date_changed: "Deadlines were recomputed and every pending draft was superseded by the date change, not rejected by People. Re-check equipment against the new start date and buddy availability, propose again where the risk still holds, finish.",
+  buddy_declined: "The requested buddy declined. Re-read availability excluding declined candidates and propose a replacement request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
+  availability_changed: "A candidate's calendar changed and the affected request was superseded. Re-read availability and propose a fresh request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
+};
+
 function systemPrompt(joiner: Joiner, c: Case): string {
   const countrySop = path.join(process.cwd(), "data", "sops", `${joiner.country === "UK" ? "uk" : joiner.country === "US" ? "us" : "de"}-joiner.md`);
   const readinessSop = path.join(process.cwd(), "data", "sops", "day-one-readiness.md");
@@ -243,7 +252,7 @@ export async function runAgent(
   const trace: AgentTraceEntry[] = [traceEntry("agent.started", `Agent started for ${trigger} on ${c.id}.`)];
   const messages: AgentMessage[] = [
     { role: "system", content: systemPrompt(joiner, c) },
-    { role: "user", content: JSON.stringify({ trigger, case_id: c.id, now }) },
+    { role: "user", content: JSON.stringify({ trigger, case_id: c.id, now, instruction: TRIGGER_INSTRUCTIONS[trigger] }) },
   ];
   let modelSteps = 0;
   let toolCalls = 0;

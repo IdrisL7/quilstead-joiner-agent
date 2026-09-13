@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T13:46:22.268Z",
+  "generated_at": "2026-09-13T14:15:08.255Z",
   "mode": "mock",
   "model": "claude-haiku-4-5-20251001",
   "passes": 3,
@@ -44,7 +44,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 3
           },
           "mismatches": [],
           "notes": [
@@ -69,7 +69,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 2
           },
           "mismatches": [],
           "notes": [
@@ -94,7 +94,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -142,7 +142,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 3
           },
           "mismatches": [],
           "notes": [
@@ -242,7 +242,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -348,7 +348,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 17
+            "wall_ms": 14
           },
           "mismatches": [],
           "notes": [
@@ -452,7 +452,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -477,7 +477,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -573,7 +573,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -598,7 +598,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -675,7 +675,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 2
           },
           "mismatches": [],
           "notes": [
@@ -702,7 +702,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 2
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -773,7 +773,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -984,7 +984,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1055,7 +1055,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1080,7 +1080,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1130,7 +1130,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1157,7 +1157,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1293,7 +1293,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 2
+            "wall_ms": 3
           },
           "mismatches": [],
           "notes": []
@@ -1350,7 +1350,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 3
           },
           "mismatches": [],
           "notes": []
@@ -1580,7 +1580,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 3
+            "wall_ms": 4
           },
           "mismatches": [],
           "notes": []
@@ -1605,7 +1605,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 4
+            "wall_ms": 3
           },
           "mismatches": [],
           "notes": []
@@ -1756,7 +1756,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [
@@ -1879,7 +1879,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 1
+            "wall_ms": 0
           },
           "mismatches": [],
           "notes": [
@@ -1904,7 +1904,7 @@
             "input_tokens": 0,
             "output_tokens": 0,
             "cost_usd": 0,
-            "wall_ms": 0
+            "wall_ms": 1
           },
           "mismatches": [],
           "notes": [

@@ -92,6 +92,8 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
 
 interface EquipmentObservation {
   pending_nudge_exists?: boolean; // true when a pending nudge already waits for approval; superseded drafts do not count
+  nudge_needed?: boolean;
+  hint?: string;
   order_id: string;
   joiner_id: string;
   status: string;
@@ -179,7 +181,16 @@ function caseProjection(context: AgentContext, state: AgentRuntimeState) {
     start_date: context.case.start_date,
     tasks: taskRows,
     open_escalations: openEscalations,
-    drafts: context.case.drafts.map((draft) => ({ id: draft.id, kind: draft.kind, action: draft.action, to: draft.to, status: draft.status })),
+    drafts: context.case.drafts.map((draft) => ({
+      id: draft.id,
+      kind: draft.kind,
+      action: draft.action,
+      to: draft.to,
+      status: draft.decided_by === "system" || draft.decision_reason?.startsWith("superseded") ? "superseded" : draft.status,
+      decided_by: draft.decided_by ?? null,
+      pending: draft.status === "pending",
+    })),
+    drafts_note: "Only pending drafts await approval. superseded = invalidated by a fact change, not a People decision; if the risk still holds, propose again. rejected = a People decision; do not re-propose the same message.",
     buddy_requests: context.case.buddy_requests.map((request) => ({ id: request.id, candidate_id: request.candidate_id, status: request.status, start_date: request.start_date })),
     contract: buildContract(context.joiner, context.case.id),
     attention: attentionProjection(context, state),
@@ -262,6 +273,10 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         owner_name: personById(task.owner_id)?.full_name ?? task.owner_id,
         pending_nudge_exists: context.case.drafts.some((draft) => draft.kind === "nudge" && draft.status === "pending"),
       };
+      observation.nudge_needed = observation.late && !observation.pending_nudge_exists;
+      observation.hint = observation.nudge_needed
+        ? `Laptop arrives ${observation.eta}, after the ${context.case.start_date} start, and no pending nudge exists. Propose a nudge to ${observation.owner_id} asking for a loaner or earlier delivery.`
+        : observation.late ? "A pending nudge already awaits approval; do not propose another." : "Equipment arrives before the start date; no nudge needed.";
       state.equipment = {
         status: result.status,
         summary: result.summary,

@@ -348,8 +348,9 @@ function markCaseDraftSuperseded(c: Case, draftId: string, decidedAt: string, re
   const draft = c.drafts.find((candidate) => candidate.id === draftId);
   if (!draft) throw new Error(`Demo case draft is missing: ${draftId}`);
   draft.status = "rejected";
+  draft.decided_by = "system";
   draft.decided_at = decidedAt;
-  draft.decision_reason = reason;
+  draft.decision_reason = `superseded: ${reason}`;
   return draft;
 }
 
