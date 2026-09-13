@@ -6,8 +6,8 @@
 EVT-004 contract.signed
   -> CaseStore.open and deterministic plan
   -> equipment.order observation
-  -> bounded model nudge
-  -> Draft in trusted approval state
+  -> bounded agent loop: observe, propose or escalate, finish
+  -> Drafts in trusted approval state
   -> People Partner decision
   -> simulated slack.send_message receipt
   -> buddy comparison -> exact buddy request approval -> labelled simulated response
@@ -30,16 +30,30 @@ The equipment observation comes from the simulated `equipment.order` connector. 
 
 The model does not calculate deadlines, choose recipients, grant access, approve a message or declare that an external outcome happened.
 
-## 3. What the model contributes
+## 3. What the model decides
 
-`lib/model.ts` receives the joiner facts, equipment result, equipment task and owner name. In mock mode it produces deterministic subject and body text. In live mode the Anthropic adapter is bounded to a 15-second timeout, zero SDK retries and a strict JSON shape check. The requested action must mention a loaner or earlier delivery.
+`lib/agent/loop.ts` owns the bounded Messages API tool-use loop. The model can choose which
+allowed observation to request next, whether current evidence supports a pending equipment or
+buddy proposal, whether an unresolved issue needs escalation, and the next human action. The
+mock model in `lib/agent/mock-model.ts` is the golden state machine for this checkpoint. It makes
+one deliberate prohibited `identity.grant_access` call so the Activity trace shows the permission
+boundary, then continues to a finished run.
 
-The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”** Both modes keep the facts, approval gate and connector permissions outside the model.
+Every tool call passes through `authorize()` and the registered connector runtime. The loop caps
+model steps, tool calls and elapsed time. `propose_message` is guarded by application code for
+recipient allowlists, current availability, concrete equipment mitigation, trusted slots, date
+evidence and length. `finish` only records the next human action. No tool can send a message,
+grant access, write HRIS data or complete compliance work.
 
-The live adapter was verified once through the local API. It returned HTTP 200 from Anthropic
-using `claude-haiku-4-5-20251001`, with a pending draft body, `before_approval: denied` and
-trace entries for `model.draft` and `send.refused`. This proves bounded adapter wiring and the
-approval hold for one run. It does not prove production reliability or live message delivery.
+The current triggers are `contract.signed`, `start_date_changed`, `buddy_declined` and
+`availability_changed`. A date change recomputes the case before the assistant runs. A declined
+buddy or changed calendar re-reads the current comparison and can create a fresh pending request;
+the old request remains history. A failed run leaves the current case installed with a visible
+`Run assistant again` recovery action. Non-finished runs do not commit staged proposals.
+
+The spoken distinction is: **“This mock run uses a fixed draft; the live adapter generates wording from the same facts.”**
+The live Anthropic loop remains a separate Checkpoint C probe. Both modes keep facts, approval
+gates and connector permissions outside the model.
 
 The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
 policy-eligible candidates, calculates two non-overlapping first-week slots, shows up to three
@@ -73,18 +87,18 @@ remain separate, and a start-date change can supersede the pending edited draft.
 - Rejection records a human decision and the connector refuses the send.
 - A new preparation or a start-date change rotates the active run id. An old tab receives a 409 and cannot approve the current draft.
 - A start-date change supersedes any pending draft before updating the case. The case and HRIS snapshot then move together.
-- If drafting fails after that state change, `changeDemoStartDate` returns the updated case, updated joiner and current facts with `draft_unavailable`. The screen shows a clear recovery state, keeps the run active, offers `Retry draft` for the same date and allows a different date to be recalculated. No message is approvable in that state.
+- If the assistant fails after that state change, `changeDemoStartDate` returns the updated case, updated joiner and current facts with `draft_unavailable`. The screen shows a clear recovery state, keeps the run active, offers `Run assistant again` for the same date and allows a different date to be recalculated. No message is approvable in that state.
 - A successful date change to 19 October removes the late-arrival risk because the unchanged 16 October ETA is now earlier than first day. A date such as 9 October keeps the risk and can produce a fresh draft.
-- A simulated calendar change marks the selected buddy's availability unknown, refreshes the comparison and invalidates an affected request. Decline recovery offers another candidate without automatically sending a replacement.
+- A simulated calendar change marks the selected buddy's availability unknown, refreshes the comparison and invalidates an affected request. Decline recovery offers another pending candidate request without automatically sending a replacement.
 
 The recovery defect fixed in checkpoint C was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
 
 ## 7. What is simulated, tested live and still unknown
 
-Simulated: HRIS state, in-memory case storage, equipment response, policy files, model mock, Slack send and receipts. No persistence or live connector is included.
+Simulated: HRIS state, in-memory case storage, equipment response, policy files, mock agent model, Slack send and receipts. No persistence or live connector is included.
 
-Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, typecheck, lint and production build. One local Anthropic draft-generation run also passed with approval held. Production latency, provider availability, real Slack delivery and IT response remain unknown.
+Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, typecheck, lint and production build. The live Anthropic probe remains Checkpoint C and is not claimed by this checkpoint. Production latency, provider availability, real Slack delivery and IT response remain unknown.
 
 ## 8. Code and AI assistance disclosure
 
-The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, model adapter and approval state functions. Codex applied the bounded checkpoint changes and added focused regression coverage in this branch. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.
+The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, bounded agent runtime and approval state functions. Codex applied the bounded checkpoint changes and added focused regression coverage in this branch. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.

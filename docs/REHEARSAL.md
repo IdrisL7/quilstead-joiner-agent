@@ -12,8 +12,8 @@ DEMO_MODE=mock npm run dev
 
 Open `http://localhost:3000`. Keep the browser at a laptop-sized viewport for the main rehearsal. The narrow layout keeps the `SIMULATED / NO LIVE SEND` badge visible and is useful for a final readability check.
 
-This customer flow stays in mock mode. One separate local live probe generated a draft through Anthropic,
-but no live delivery was exercised. Keep that distinction explicit.
+This customer flow stays in mock mode. The live Anthropic probe is reserved for Checkpoint C, and
+no live delivery is exercised. Keep that boundary explicit.
 
 ## 15-minute customer run-of-show
 
@@ -26,9 +26,9 @@ but no live delivery was exercised. Keep that distinction explicit.
 | 4:00-5:30 | Click `Edit`, change wording, then `Cancel` | Only subject and message are editable. Cancel restores the pending draft and sends nothing. Recipient, channel and evidence remain application-controlled. |
 | 5:30-7:00 | Edit again and click `Save` | Saving creates a fresh pending revision, invalidates the old version and shows `Edited by People`. Approval is still required. |
 | 7:00-8:00 | Click `Approve` | The simulated Slack action uses exactly the saved wording. Result: `Sent with approval. Awaiting IT response.` It does not claim the laptop problem is solved. |
-| 8:00-10:00 | Open `Buddy support`, prepare Ewan, approve exact request, accept and confirm | The request preview is the exact fixed mock draft. Simulated buddy acceptance remains separate from `Confirm allocation as People`. |
+| 8:00-10:00 | Open `Buddy support`, review the assistant-prepared Ewan request, approve the exact request, accept and confirm | The request preview is the exact fixed mock draft. Simulated buddy acceptance remains separate from `Confirm allocation as People`. |
 | 10:00-11:00 | Click `Simulate Ewan Grant unavailable` | The confirmed buddy remains the target. Availability becomes unknown, the request is superseded and Amara is offered. The trace records the simulated response. |
-| 11:00-12:00 | Use `Reset and prepare again`, open `Buddy support`, click `Prepare request for Ewan`, then `Approve` and `Simulate buddy declines` | The decline control appears only after the exact request is approved and sent. Decline is labelled simulated and offers recovery. No replacement request is sent automatically. |
+| 11:00-12:00 | Use `Reset / simulate contract signed again`, open `Buddy support`, approve the assistant-prepared Ewan request, then `Simulate buddy declines` | The decline control appears only after the exact request is approved and sent. Decline is labelled simulated and the assistant prepares a fresh pending request from current availability. |
 | 12:00-13:30 | Change the start date to 19 October and click `Recalculate case` | The same case remains active, deadlines recompute, the chronological timeline updates and the compliance next action stays tied to the real compliance task. |
 | 13:30-15:00 | Open `Activity`, read the trace and close on boundaries | People owns approvals and confirmation, IT owns the equipment response, calendars remain mock read-only snapshots, and one live Anthropic draft probe does not equal live integration proof. |
 
