@@ -63,6 +63,16 @@ comparisons and keeps the exact request in a separate preview. People approves t
 before the simulated send. A clearly labelled simulated response then records acceptance or decline;
 acceptance alone never completes the task. Named People confirmation is the final buddy boundary.
 
+The first-week calendar strip in the selected-candidate panel is a second view of the same
+observation. The route projects the candidate's busy intervals for the joiner's first working week
+from `data/buddy-calendars.ts` (only when the snapshot's `read_status` is `known`, only intervals in
+that week, no titles or attendees because the fixture holds none), and the UI draws them beside the
+proposed slots and the joiner's 09:30 Monday arrival. Unknown, error and out-of-coverage calendars
+render as a labelled empty week with the same reason text the comparison shows. The agent's
+`get_buddy_availability` observation is unchanged; the strip exists for the person approving, not for
+the model. Confirmed slots turn green after People confirmation; a superseded or rejected request's
+slots are not drawn.
+
 The attention summary is a projection of the current case, task, request and escalation state, not a
 second readiness store. The trace records simulation inputs, connector observations, approvals,
 responses and confirmation history.

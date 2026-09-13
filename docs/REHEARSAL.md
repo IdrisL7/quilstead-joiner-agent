@@ -23,11 +23,11 @@ badge visible. The real Anthropic probe is not part of this browser rehearsal.
 | 1:30-2:30 | Open `Equipment`, then expand `Why this action` | Show the start date, ETA, task deadline, owner, policy evidence and the approval requirement. Code calculates the risk; the model contributes a bounded proposal. |
 | 2:30-3:30 | Open `Activity` and read the trace | Point to the deliberate prohibited access call, the visible guard refusal and the later finished step. Then show the corresponding permission rule in `config/permissions.json`. |
 | 3:30-4:30 | Approve the equipment draft | People approves the exact pending draft. The simulated Slack receipt means only that the request was sent by the demo; it does not mean IT accepted it. |
-| 4:30-6:00 | Click `Reset`, then `Simulate contract signed`; open `Buddy support`, select Ewan and prepare the request | Reset and trigger are separate demo controls. Candidate eligibility and London-time slots come from the simulated calendar; selecting a row sends nothing. |
-| 6:00-7:00 | Click `Approve` for the exact Ewan request, then `Simulate buddy declines` | Buddy acceptance is a simulated response after approval. The decline creates a new pending proposal from current facts and does not send a replacement automatically. |
+| 4:30-6:00 | Click `Reset`, then `Simulate contract signed`; open `Buddy support`. Ewan is already selected with a pending request the assistant proposed. Point at the first-week strip. | Reset and trigger are separate demo controls. Say: eligibility is policy, capacity is a count, availability is the calendar, and here is the calendar. Grey is busy, the two purple blocks are the only commitment we ask Ewan for, the red line is Aisha arriving 09:30 Monday. Read-only snapshot, simulated. Click Sam Rowe: the strip shows "Calendar not read" rather than guessing. Selecting a row sends nothing. |
+| 6:00-7:00 | Click `Approve` for the exact Ewan request, then `Simulate buddy declines` | Buddy acceptance is a simulated response after approval. The decline triggers the assistant again: it re-reads availability without Ewan, proposes Amara, and her strip replaces his. Nothing is sent automatically. |
 | 7:00-8:00 | Change the start date to 19 October and recalculate | Deadlines and risk are recomputed from current state. The chronological timeline changes, and the compliance next action remains the actual open compliance task. |
 | 8:00-9:15 | Point to `docs/evals/README.md` | Say: "All 20 evaluation scenarios passed three times. Eighteen exercised the live model; two tested contractor rejection. Expected outcomes stayed consistent across those passes." Then the two qualifications: the scenarios guided development, so this is repeatability on the development set, not unseen-case reliability; and the report verifies recorded API costs (USD 0.027 per run), not the account's total spend. Then the run-by-run table: first live run 2/20, every miss classified and fixed in the contract, the guard or the harness. |
-| 9:15-10:00 | Close on boundaries and the case Activity ledger | The case trail stays complete even though the UI trace is thinned. People owns approvals and confirmation, IT owns the equipment response, calendars are read-only snapshots, and no tool can send without approval. |
+| 9:15-10:00 | Close on boundaries and the case Activity ledger | The case trail stays complete even though the UI trace is thinned. People owns approvals and confirmation, IT owns the equipment response, calendars are read-only snapshots drawn from busy intervals with no meeting titles, and no tool can send without approval. |
 
 ## Spoken model distinction
 
@@ -55,6 +55,8 @@ run before they can be described as measured.
 - Do not describe this as a general autonomous agent or a full onboarding dashboard.
 - Do not imply that the model calculated deadlines, selected an ineligible recipient or completed a
   compliance task.
+- Do not call the calendar strip an integration. It draws the simulated snapshot's busy intervals for
+  the first working week; the model never sees the strip, only the availability observation.
 - Do not claim live Slack delivery, a real IT response or production reliability. Live reliability is
   measured on a 20-scenario golden set, not on a customer cohort; say that.
 
