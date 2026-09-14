@@ -54,7 +54,7 @@ function candidatesWithReservations(caseId?: string): { candidates: BuddyCandida
   };
 }
 
-// A narrow simulation seam for the checkpoint-B availability-change test. It does not
+// A narrow simulation seam for the availability-change test. It does not
 // create calendar events or add scheduling behaviour to the connector.
 export const setSimulatedBuddyCalendar = (snapshot: BuddyCalendarSnapshot): void => {
   calendarOverrides.set(snapshot.buddy_id, cloneCalendar(snapshot));

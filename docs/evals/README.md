@@ -6,8 +6,9 @@ availability change, equipment on track, and three repeats). Harness: `scripts/e
 
 Pricing verified on 2026-09-13 against the [official Claude pricing page](https://platform.claude.com/docs/en/about-claude/pricing):
 Haiku 4.5 at USD 1 per million input tokens and USD 5 per million output tokens. `cost_usd` uses those
-list prices from the `usage` block of each response. No `cache_control` is sent: the system prefix is
-below the 4,096-token minimum Haiku needs for caching, so a cache claim would be a no-op.
+list prices from the `usage` block of each response. No `cache_control` is sent: the system prefix
+(two SOP files plus the task contract, about 2.5 KB of text) is estimated, not measured, to sit below
+the 4,096-token minimum Haiku needs for caching, so a cache claim would be a no-op.
 
 ## Final measured result
 
@@ -18,19 +19,23 @@ below the 4,096-token minimum Haiku needs for caching, so a cache claim would be
 | pass^3 (reliability: all three passes correct) | 20/20 | 20/20 |
 | flapping (terminal state differs across passes) | 0 | 0 |
 | executed runs (contractor scenarios reject before any run) | 54 | 54 |
-| mean model turns per run | 4.4 | 4.8 |
-| mean tool calls per run | 5.4 | 5.4 |
-| mean guard refusals per run | 1.0 (the deliberate `identity.grant_access`) | 0.24 |
+| mean model turns per run | 5.9 | 4.8 |
+| mean tool calls per run | 6.0 | 5.4 |
+| mean guard refusals per run | 0.78 (1.0 on the 42 `contract.signed` runs, where the mock makes its deliberate `identity.grant_access` call; 0 on the other triggers) | 0.24 |
 | mean input / output tokens per run | 0 | 22,898 / 889 |
 | mean cost per executed run | USD 0 | USD 0.027 |
 | total cost of the run | USD 0 | USD 1.48 |
-| mean wall time per run | 1 ms | 12.3 s |
+| mean wall time per run | 2 ms | 12.3 s |
 
-Source files: `2026-09-13-mock.json`, `2026-09-13-live.json`.
+Source files: `2026-09-13-mock.json`, `2026-09-13-live.json`. Every mean above is over the 54 executed
+runs, recomputed from those files on 2026-09-14. The harness's own printed means divide by all 60
+attempts, including the six contractor attempts that never run, so it prints lower figures for the
+same data (live: 4.9 tool calls, USD 0.0246, 11.0 s).
 
 Grading. Mock grades the exact golden wording of `next_action`. Live grades structure: run happened,
 stop reason `finished`, every expected proposal (kind and recipient) present, every expected escalation
-present, terminal case state, and a one-sentence `next_action` under 240 characters. The live model may
+present, terminal case state, and a one-sentence `next_action` under 240 characters (the tool asks the
+model for under 200; the runtime and the grader enforce 240). The live model may
 add work the SOP asks for that the mock does not do: a nudge to another open-task owner, or an
 `OWNER_SLA_BREACHED` / `COMPLIANCE_DEADLINE_AT_RISK` escalation. In the final run it added 12 nudges
 to People partners about overdue HRIS profiles and 3 `OWNER_SLA_BREACHED` escalations. Anything else
@@ -86,8 +91,9 @@ Two qualifications, said in the same breath:
   set, not reliability on unseen cases. Unseen-case reliability comes from a shadow run on a real
   cohort, which has not happened.
 - The report verifies recorded API costs from each response's `usage` block (USD 0.027 per executed
-  run, USD 1.48 for the final run). It does not reconcile the account's total spend for the day,
-  roughly USD 5 across five runs and reruns.
+  run, USD 1.48 for the final run). It does not reconcile the account's total spend for the day
+  across the five runs and reruns; only the final run's output file was kept, so runs 1 to 4 in the
+  table above are recorded from their console output, not reproducible from this repository.
 
 Supporting lines if asked:
 

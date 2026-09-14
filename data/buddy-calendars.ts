@@ -1,6 +1,6 @@
 import type { BuddyCalendarSnapshot } from "@/lib/types";
 
-// The checkpoint-A fixture is intentionally a small London slice. It records only
+// The fixture is intentionally a small London slice. It records only
 // busy intervals and read state, never private meeting descriptions. The fixed
 // UTC+01 offset is valid for this fixture's 9-23 October coverage window. Requests
 // whose first working week falls outside that window return unknown.

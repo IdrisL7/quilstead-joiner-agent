@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Athena for Quilstead: Day-one readiness case. Take-home build for Humaans.",
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -996,7 +996,6 @@ export function AskAthenaPanel({
             id={compact ? "ask-question-drawer" : "ask-question"}
             aria-label="Ask Athena question"
             rows={2}
-            maxLength={300}
             value={question}
             onChange={(event) => onQuestionChange(event.target.value)}
             onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {

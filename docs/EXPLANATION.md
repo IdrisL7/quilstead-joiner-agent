@@ -35,9 +35,15 @@ The model does not calculate deadlines, choose recipients, grant access, approve
 `lib/agent/loop.ts` owns the bounded Messages API tool-use loop. The model can choose which
 allowed observation to request next, whether current evidence supports a pending equipment or
 buddy proposal, whether an unresolved issue needs escalation, and the next human action. The
-mock model in `lib/agent/mock-model.ts` is the golden state machine for this checkpoint. It makes
-one deliberate prohibited `identity.grant_access` call so the Activity trace shows the permission
-boundary, then continues to a finished run.
+mock model in `lib/agent/mock-model.ts` is the golden state machine for mock mode. On the
+`contract.signed` run it makes one deliberate prohibited `identity.grant_access` call so the Activity
+trace shows the permission boundary, then continues to a finished run; the date, decline and
+availability runs make no such call.
+
+The `Next:` banner and Ask Athena's status answer share one server-computed next action: the
+assistant's `finish` sentence while nothing has changed since its run, and the attention summary
+built from current case state once a person has approved, rejected, accepted or confirmed anything.
+The assistant's original sentence stays in the Activity trail as history.
 
 Every tool call passes through `authorize()` and the registered connector runtime. The loop caps
 model steps, tool calls and elapsed time. `propose_message` is guarded by application code for
@@ -58,8 +64,8 @@ evaluation; live wording is generated from the same observations. Both modes kee
 approval gates and connector permissions outside the model.
 
 The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
-policy-eligible candidates, calculates two non-overlapping first-week slots, shows up to three
-comparisons and keeps the exact request in a separate preview. People approves the exact buddy draft
+policy-eligible candidates, calculates two non-overlapping first-week slots, shows the top three
+plus, when one exists, the next available alternative, and keeps the exact request in a separate preview. People approves the exact buddy draft
 before the simulated send. A clearly labelled simulated response then records acceptance or decline;
 acceptance alone never completes the task. Named People confirmation is the final buddy boundary.
 
@@ -76,8 +82,8 @@ slots are not drawn.
 Ask Athena is a Slack-style surface over the same case, read-only once a case is open. The first question on an empty workspace opens the case through the same `contract.signed` path as the trigger button and prefixes its answer with what the run proposed. Its `question` run uses the same
 bounded loop, but the tool definitions and runtime allow only current-state and policy reads plus
 `finish`; proposal, escalation, approval, send and write tools are excluded in application code. The
-mock router answers five case intents from current observations and labels each response `Mock
-answer`. Live mode uses the Anthropic adapter with the same schemas and guards and labels the
+mock router answers six case intents (status, equipment, buddy, compliance, owner, start date) from
+current observations and labels each response `Mock answer`. Live mode uses the Anthropic adapter with the same schemas and guards and labels the
 response `Anthropic model`. Answer guards replace untrusted dates or names and cap the response at
 600 characters. Code derives section links from the tools actually used, and one `agent.asked` step
 is added to the case trail. The browser keeps the question history in memory only, so Reset clears
@@ -112,7 +118,7 @@ remain separate, and a start-date change can supersede the pending edited draft.
 - A successful date change to 19 October removes the late-arrival risk because the unchanged 16 October ETA is now earlier than first day. A date such as 9 October keeps the risk and can produce a fresh draft.
 - A simulated calendar change marks the selected buddy's availability unknown, refreshes the comparison and invalidates an affected request. Decline recovery offers another pending candidate request without automatically sending a replacement.
 
-The recovery defect fixed in checkpoint C was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
+A recovery defect fixed during the build was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
 
 ## 7. What is simulated, tested live and still unknown
 
@@ -122,4 +128,4 @@ Verified in this workspace: mock flow, approval refusal and approval, stale-run 
 
 ## 8. Code and AI assistance disclosure
 
-The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, bounded agent runtime and approval state functions. Codex applied the bounded checkpoint changes and added focused regression coverage in this branch. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.
+The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, bounded agent runtime and approval state functions. AI coding assistants wrote most of the code and regression tests under direction, in small reviewed steps; the final pass before submission was an adversarial QA of the API, the chat and the documents against the code, with every finding fixed or listed in the README ledger. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.

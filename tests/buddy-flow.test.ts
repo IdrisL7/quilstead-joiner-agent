@@ -57,7 +57,7 @@ type BuddyPayload = {
   after_approval?: { status: string; summary: string };
 };
 
-describe("checkpoint-B buddy flow", () => {
+describe("buddy flow", () => {
   beforeEach(() => {
     resetDemoState();
   });
