@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST, resetDemoRouteState } from "@/app/api/demo/route";
 import { ASK_TOOL_NAMES, ASK_TOOL_DEFINITIONS, askCase, guardAskAnswer } from "@/lib/agent/ask";
+import { askIntentFor } from "@/lib/agent/mock-ask";
 import { changeDemoStartDate, prepareDemo } from "@/lib/demo-flow";
 import { resetDemoState } from "@/lib/store/demo-state";
 
@@ -71,12 +72,46 @@ describe("Ask Athena", () => {
     expect(preparation.case.steps.at(-1)?.kind).toBe("agent.asked");
   });
 
+  it("routes the phrasings a People partner actually types", () => {
+    const expected: Array<[string, string]> = [
+      ["what's outstanding", "status"],
+      ["anything blocking day one", "status"],
+      ["status", "status"],
+      ["what's the risk", "status"],
+      ["when does she start", "date_question"],
+      ["what's her start date", "date_question"],
+      ["has Ewan replied", "buddy"],
+      ["was the nudge sent", "equipment"],
+      ["what if the laptop arrives after the start", "equipment"],
+      ["what changes if she starts 19 October", "date_question"],
+      ["show me the details", "unmatched"],
+      ["the secretary asked about the desk", "unmatched"],
+    ];
+    for (const [question, intent] of expected) expect(askIntentFor(question), question).toBe(intent);
+  });
+
+  it("allows real colleagues, the joiner's title and task titles through the name guard", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const run = preparation.agent!;
+    const guarded = guardAskAnswer("Aisha Okafor, Customer Success Manager, is set up by Nadia Hussain; Jonas Weber is not involved.", preparation.case, preparation.joiner, run);
+    expect(guarded.answer).toContain("Customer Success Manager");
+  });
+
+  it("answers from the current recommendation once the latest request is history", async () => {
+    const preparation = await prepareDemo(undefined, "mock");
+    const moved = await changeDemoStartDate(preparation, "2026-10-19", "mock");
+    const answer = await askCase(moved.case, moved.joiner, "who is the buddy?", "mock");
+    // The superseded Ewan request must not be presented as the buddy with its stale 12 Oct slots.
+    expect(answer.answer).toContain("Rob Fletcher");
+    expect(answer.answer).not.toContain("12 Oct");
+  });
+
   it("replaces invented dates and names with safe grounded responses", async () => {
     const preparation = await prepareDemo(undefined, "mock");
     const run = preparation.agent!;
     const inventedDate = guardAskAnswer("The laptop arrives on 1 November 2027.", preparation.case, preparation.joiner, run);
     const inventedName = guardAskAnswer("Jordan Example owns the laptop task.", preparation.case, preparation.joiner, run);
-    const outsideCaseName = guardAskAnswer("Jonas Weber owns the laptop task.", preparation.case, preparation.joiner, run);
+    const outsideCaseName = guardAskAnswer("Marcus Thornbury owns the laptop task.", preparation.case, preparation.joiner, run);
 
     expect(inventedDate.answer).toBe("I cannot confirm that date from the case.");
     expect(inventedDate.facts).toContain("Start date: 2026-10-12");

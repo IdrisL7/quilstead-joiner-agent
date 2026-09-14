@@ -375,3 +375,69 @@ describe("demo approval route", () => {
     expect((await buddyApproval.json()).buddy.request.status).toBe("awaiting_acceptance");
   });
 });
+
+describe("demo route input validation and guidance", () => {
+  async function fresh() {
+    return await (await POST(request())).json() as { run_id: string; next_action: string | null; draft: { id: string } | null; buddy: { request: { id: string; candidate_id: string } | null; draft: { id: string } | null } };
+  }
+
+  it("answers bad input with 400, never 500", async () => {
+    const run = await fresh();
+    const cases: Array<[string, Request, string]> = [
+      ["malformed JSON", new Request("http://localhost/api/demo", { method: "POST", body: "{not json" }), "JSON"],
+      ["null body", new Request("http://localhost/api/demo", { method: "POST", body: "null" }), "object"],
+      ["array body", new Request("http://localhost/api/demo", { method: "POST", body: "[]" }), "object"],
+      ["unknown action", request({ run_id: run.run_id, action: "explode" }), "Unknown demo action"],
+      ["same start date", request({ run_id: run.run_id, action: "start_date_change", start_date: "2026-10-12" }), "different start date"],
+      ["impossible date", request({ run_id: run.run_id, action: "start_date_change", start_date: "2026-02-30" }), "not a real calendar date"],
+      ["garbage date", request({ run_id: run.run_id, action: "start_date_change", start_date: "next monday" }), "ISO date"],
+      ["Saturday", request({ run_id: run.run_id, action: "start_date_change", start_date: "2026-10-17" }), "Saturday"],
+      ["before the case clock", request({ run_id: run.run_id, action: "start_date_change", start_date: "2020-01-06" }), "before the case clock"],
+      ["retry without an unavailable run", request({ run_id: run.run_id, action: "retry_agent" }), "already finished"],
+    ];
+    for (const [label, req, fragment] of cases) {
+      const response = await POST(req);
+      const body = await response.json() as { error?: string };
+      expect(response.status, label).toBe(400);
+      expect(body.error ?? "", label).toContain(fragment);
+    }
+    // The case is untouched by any of the refused calls.
+    const check = await POST(request({ run_id: run.run_id, action: "ask", question: "what's left before day one?" }));
+    expect(check.status).toBe(200);
+  });
+
+  it("moves the next action past an approved nudge on every surface", async () => {
+    const run = await fresh();
+    expect(run.next_action).toBe("Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.");
+    const approved = await (await POST(request({ run_id: run.run_id, decision: "approve" }))).json() as { next_action: string; agent: { next_action: string } };
+    expect(approved.agent.next_action).toContain("Approve the equipment nudge");
+    expect(approved.next_action).not.toContain("Approve the equipment nudge");
+    expect(approved.next_action).toContain("Wait for IT to arrange a loaner or earlier delivery");
+    expect(approved.next_action).toContain("Approve or reject the exact buddy request");
+  });
+
+  it("describes a rejected nudge honestly instead of asking for a review", async () => {
+    const run = await fresh();
+    const rejected = await (await POST(request({ run_id: run.run_id, decision: "reject" }))).json() as { next_action: string; attention: { equipment: { status: string; next_action: string } } };
+    expect(rejected.attention.equipment.status).toBe("Nudge rejected");
+    expect(rejected.attention.equipment.next_action).toContain("Nothing was sent");
+    expect(rejected.next_action).toContain("Nothing was sent");
+  });
+
+  it("keeps the pending equipment nudge in the banner after a buddy-only run", async () => {
+    const run = await fresh();
+    const approved = await (await POST(request({ run_id: run.run_id, action: "buddy_decision", request_id: run.buddy.request!.id, draft_id: run.buddy.draft!.id, decision: "approve" }))).json() as { run_id: string; buddy: { request: { id: string } } };
+    const declined = await (await POST(request({ run_id: approved.run_id, action: "buddy_response", request_id: approved.buddy.request.id, response: "declined" }))).json() as { next_action: string; agent: { next_action: string } };
+    expect(declined.agent.next_action).toBe("Approve the replacement buddy request to Amara Osei; Ewan Grant declined.");
+    expect(declined.next_action).toBe("Approve the replacement buddy request to Amara Osei; Ewan Grant declined. The equipment nudge to Nadia Hussain still awaits approval.");
+  });
+
+  it("does not duplicate trace rows when an idempotent agent run is re-applied", async () => {
+    const run = await fresh();
+    const first = await (await POST(request({ run_id: run.run_id, action: "buddy_availability_change", candidate_id: "b-03" }))).json() as { run_id: string; agent: { run_id: string }; trace: Array<{ kind: string }> };
+    const second = await (await POST(request({ run_id: first.run_id, action: "buddy_availability_change", candidate_id: "b-03" }))).json() as { run_id: string; agent: { run_id: string }; trace: Array<{ kind: string }> };
+    const proposed = (trace: Array<{ kind: string }>) => trace.filter((entry) => entry.kind === "agent.proposed").length;
+    expect(second.agent.run_id).toBe(first.agent.run_id);
+    expect(proposed(second.trace)).toBe(proposed(first.trace));
+  });
+});

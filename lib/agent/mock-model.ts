@@ -88,7 +88,8 @@ function finishNextAction(
   }
 
   if (context.trigger === "start_date_changed" && hasSupersededBuddy && buddyProposed) {
-    return `Start date moved to ${context.case.start_date}. Approve the re-proposed buddy request to ${availability.candidate_name}.`;
+    const nudge = equipment?.late && nudgeProposed ? ` Approve the equipment nudge to ${equipment.owner_name} as well.` : "";
+    return `Start date moved to ${context.case.start_date}. Approve the re-proposed buddy request to ${availability.candidate_name}.${nudge}`;
   }
 
   if (context.trigger === "availability_changed" && hasSupersededBuddy && buddyProposed) {

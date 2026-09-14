@@ -74,12 +74,14 @@ function dataFrom<T>(result: ToolResult | undefined): T | null {
 
 export function askIntentFor(question: string): AskIntent {
   const text = question.toLowerCase();
+  if (/(what changes if|what if|would happen if|impact of)/i.test(text) && /(laptop|equipment|\beta\b|delivery|loaner)/i.test(text)) return "equipment";
   if (/(what changes if|what if|would happen if|impact of)/i.test(text) && /(start|date|first day)/i.test(text)) return "date_question";
-  if (/(compliance|right to work|i-9|i9|works council|social insurance)/i.test(text)) return "compliance";
-  if (/(buddy|new starter support)/i.test(text)) return "buddy";
-  if (/(laptop|equipment|eta|delivery|loaner|sorted)/i.test(text)) return "equipment";
-  if (/(owner|who is responsible|who owns)/i.test(text)) return "owner";
-  if (/(what('?s| is|s)? left|remaining|before day one|tasks?|readiness|ready)/i.test(text)) return "status";
+  if (/(when does .* start|what('?s| is)? (her|his|their|the) start date|start date\?|which day does .* start|when is (her|his|their|the) first day)/i.test(text)) return "date_question";
+  if (/(compliance|right to work|i-9|i9|works council|social insurance|\brtw\b)/i.test(text)) return "compliance";
+  if (/(buddy|new starter support|\breplied\b|\bresponded\b|\baccepted\b|\bdeclined\b)/i.test(text)) return "buddy";
+  if (/(laptop|equipment|\beta\b|delivery|loaner|\bsorted\b|macbook|\bnudge\b|\bsent\b|\bapproved\b|\bit reply|\bit replied)/i.test(text)) return "equipment";
+  if (/(\bowner\b|who is responsible|who owns)/i.test(text)) return "owner";
+  if (/(what('?s| is|s)? left|remaining|before day one|\btasks?\b|readiness|\bready\b|\bstatus\b|\bsummary\b|\bupdate\b|outstanding|blocking|blocker|\boverdue\b|\blate\b|\brisks?\b|deadlines?|good to go|\bdone\b|on track|progress)/i.test(text)) return "status";
   return "unmatched";
 }
 
@@ -143,12 +145,23 @@ function buddyStatus(status: string): string {
   return status.replaceAll("_", " ");
 }
 
+const ACTIVE_BUDDY_STATUSES = new Set(["pending_approval", "awaiting_acceptance", "accepted", "confirmed"]);
+
 function buddyAnswer(data: CaseStateData, availability: AvailabilityData | null): string {
   const request = [...data.buddy_requests].at(-1);
   const recommendation = availability?.recommendation;
-  const candidateName = request?.candidate_name
-    ?? (request ? buddyById(request.candidate_id)?.full_name : undefined)
-    ?? recommendation?.candidate_name;
+  const requestName = request?.candidate_name ?? (request ? buddyById(request.candidate_id)?.full_name : undefined);
+
+  // The latest request is history once it is declined, rejected or superseded: say so, then
+  // answer from the current recommendation rather than the old request's slots.
+  if (request && !ACTIVE_BUDDY_STATUSES.has(request.status)) {
+    const history = `No buddy is confirmed; the latest request to ${requestName ?? request.candidate_id} was ${buddyStatus(request.status)}.`;
+    if (!recommendation) return `${history} No eligible candidate with two known first-week slots is available in the current snapshot.`;
+    const slots = recommendation.slots.slice(0, 2).map(formatSlot).join("; ");
+    return `${history} Current recommendation: ${recommendation.candidate_name}, awaiting a new request.${slots ? ` Available slots: ${slots}.` : ""}`;
+  }
+
+  const candidateName = requestName ?? recommendation?.candidate_name;
   if (!candidateName) return "No buddy is currently recommended from the available calendar snapshot.";
   const status = request ? `The request is ${buddyStatus(request.status)}.` : "No buddy request has been prepared yet.";
   const slots = request?.slots?.length ? request.slots : recommendation?.slots ?? [];
@@ -166,14 +179,23 @@ function complianceAnswer(data: CaseStateData): string {
 }
 
 function ownerAnswer(data: CaseStateData, question: string): string {
-  const words = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 3 && !["what", "which", "does", "have", "task", "tasks", "owner", "owns", "responsible"].includes(word));
-  const task = data.tasks.find((candidate) => words.some((word) => `${candidate.title} ${candidate.type}`.toLowerCase().includes(word)));
+  const words = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 3 && !["what", "which", "does", "have", "task", "tasks", "owner", "owns", "responsible", "this", "that", "request", "requests"].includes(word));
+  // Best match by number of distinct keywords hit, so "okta access request" beats the first
+  // task that merely contains "access".
+  const scored = data.tasks
+    .map((candidate) => ({ candidate, hits: words.filter((word) => `${candidate.title} ${candidate.type}`.toLowerCase().includes(word)).length }))
+    .filter((entry) => entry.hits > 0)
+    .sort((left, right) => right.hits - left.hits);
+  const task = scored[0]?.candidate;
   if (!task) return "I can identify an owner only for a task named in the current case. Open Activity to inspect the task ledger.";
   return `${task.title} is owned by ${task.owner_name}. It is ${task.status.replaceAll("_", " ")} and due ${formatDate(task.due_at)}.`;
 }
 
-function dateQuestionAnswer(data: CaseStateData): string {
-  return `The current case starts on ${formatDate(data.start_date)}. I have not changed it. Use the date control when you want Athena to reassess the case.`;
+function dateQuestionAnswer(data: CaseStateData, question: string): string {
+  const hypothetical = /(what changes if|what if|would happen if|impact of)/i.test(question);
+  return hypothetical
+    ? `The current case starts on ${formatDate(data.start_date)}. I have not changed it. Use the date control when you want Athena to reassess the case.`
+    : `The current start date is ${formatDate(data.start_date)}. Every deadline on the case is computed from it.`;
 }
 
 export const UNMATCHED_ASK_ANSWER = "I can only answer from this case. Could you clarify which current fact you need? Try: What's left before day one? Is the laptop sorted? Who is the buddy? Any compliance risk?";
@@ -192,7 +214,7 @@ function answerFor(context: MockAskContext, messages: AgentMessage[]): string {
   if (intent === "compliance") return complianceAnswer(state);
   if (intent === "owner") return ownerAnswer(state, context.question);
   if (intent === "status") return statusAnswer(state);
-  if (intent === "date_question") return dateQuestionAnswer(state);
+  if (intent === "date_question") return dateQuestionAnswer(state, context.question);
   return UNMATCHED_ASK_ANSWER;
 }
 

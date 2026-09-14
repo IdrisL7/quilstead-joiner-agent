@@ -198,7 +198,7 @@ describe("single end-to-end demonstration", () => {
 
     expect(updated.agent?.trigger).toBe("start_date_changed");
     expect(updated.agent?.stop_reason).toBe("finished");
-    expect(updated.agent?.next_action).toBe("Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher.");
+    expect(updated.agent?.next_action).toBe("Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher. Approve the equipment nudge to Nadia Hussain as well.");
     expect(updated.draft?.status).toBe("pending");
     expect(updated.facts.equipment_late).toBe(true);
   });

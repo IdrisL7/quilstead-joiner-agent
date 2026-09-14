@@ -23,6 +23,7 @@ import { CaseStore } from "@/lib/store/case-store";
 import { currentJoinerById } from "@/lib/store/joiner-store";
 import { resetDemoState } from "@/lib/store/demo-state";
 import { deriveState } from "@/lib/state-machine";
+import { isWeekend } from "@/lib/policy/dates";
 import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
 import type { BuddyRequest, Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
 import { runAgent } from "@/lib/agent/loop";
@@ -83,6 +84,7 @@ export interface DemoPreparation {
   joiner: Joiner;
   model: Pick<NudgeModelDraft, "provider" | "model">;
   agent?: AgentRun;
+  agent_trace_run_id?: string;
   draft: Draft | null;
   equipment: ToolResult;
   beforeApproval: ToolResult | null;
@@ -152,6 +154,34 @@ export class BuddyFlowConflict extends Error {
   }
 }
 
+// A request the caller can fix: bad or nonsensical input. Distinct from a conflict (409) and
+// from an internal failure (500).
+export class DemoInputError extends Error {
+  readonly statusCode = 400;
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+function formatIsoDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
+}
+
+// Start dates are validated as a People partner would: a real calendar day, a working day, and
+// not before the case clock. Public holidays are not modelled anywhere in this build.
+export function validateStartDate(value: string, now = DEMO_NOW): string | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "start_date must be an ISO date (YYYY-MM-DD).";
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return `${value} is not a real calendar date.`;
+  }
+  if (isWeekend(date)) return `${formatIsoDate(value)} is a ${date.getUTCDay() === 6 ? "Saturday" : "Sunday"}. Choose a working day (Monday to Friday).`;
+  if (value < now.slice(0, 10)) return `${formatIsoDate(value)} is before the case clock (${formatIsoDate(now.slice(0, 10))}). Choose a date on or after it.`;
+  return null;
+}
+
 function requireAction(tool: string) {
   const resolved = findAction(tool);
   if (!resolved) throw new Error(`Demo action is not registered: ${tool}`);
@@ -179,7 +209,7 @@ function agentTraceEntries(agent: AgentRun, availability: BuddyAvailabilityResul
           ? `Prepared a buddy request for ${proposal.request.candidate_id} with two proposed first-week slots (draft ${proposal.draft.id}).`
           : `Draft ${proposal.draft.id} created for ${proposal.draft.action} and awaits approval.` });
         if (proposal.request) entries.push({ actor: "agent", kind: "draft.created", summary: `Draft ${proposal.draft.id} created for the buddy request and awaits People approval.` });
-        entries.push({ actor: "system", kind: "send.refused", summary: proposal.before_approval.summary });
+        entries.push({ actor: "system", kind: "send.refused", summary: `${proposal.request ? "Buddy request" : "Equipment nudge"} draft ${proposal.draft.id}: ${proposal.before_approval.summary}` });
       }
     }
     return entries;
@@ -209,7 +239,11 @@ function applyAgentRun(preparation: DemoPreparation, agent: AgentRun): DemoPrepa
     beforeApproval: equipmentProposal?.before_approval ?? preparation.beforeApproval,
     buddy: buddyState(availability, buddyProposal?.request ?? latestRequest, buddyDraft, buddyBeforeApproval, buddyAfterApproval),
     draft_unavailable: agent.stop_reason === "finished" ? undefined : agentUnavailableMessage(agent),
-    trace: [...preparation.trace, ...agentTraceEntries(agent, availability)],
+    // An idempotent re-run returns the same run id; its trace rows are already in the trail.
+    agent_trace_run_id: agent.run_id,
+    trace: preparation.agent_trace_run_id === agent.run_id
+      ? preparation.trace
+      : [...preparation.trace, ...agentTraceEntries(agent, availability)],
   };
 }
 
@@ -308,6 +342,12 @@ function invalidateBuddyRequest(c: Case, request: BuddyRequest, now: string, rea
   if (request.status === "pending_approval") {
     supersedeDraft(request.draft_id, now, reason);
     updateCaseDraftFromTrustedState(c, request.draft_id, "rejected", undefined, now, reason);
+  }
+  if (request.status === "confirmed") {
+    // A confirmed allocation holds one of the buddy's capacity slots; invalidating it returns the
+    // slot and clears the case's buddy so the next recommendation is computed from current facts.
+    releaseBuddyCapacity(c.id, request.candidate_id);
+    if (c.buddy_id === request.candidate_id) c.buddy_id = undefined;
   }
   request.status = "superseded";
   request.invalidated_at = now;
@@ -450,12 +490,11 @@ export async function changeDemoStartDate(
   mode = process.env.DEMO_MODE ?? "mock",
   now = DEMO_NOW,
 ): Promise<DemoPreparation> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(newStartDate) || !Number.isFinite(Date.parse(`${newStartDate}T00:00:00Z`))) {
-    throw new Error("start_date must be a valid ISO date");
-  }
+  const invalid = validateStartDate(newStartDate, now);
+  if (invalid) throw new DemoInputError(invalid);
   const previousStartDate = preparation.case.start_date;
   if (newStartDate === previousStartDate) {
-    if (!preparation.draft_unavailable) throw new Error("Choose a different start date to recalculate the case");
+    if (!preparation.draft_unavailable) throw new DemoInputError("Choose a different start date to recalculate the case.");
     return retryAgent(preparation, mode, now);
   }
 
@@ -534,7 +573,7 @@ export async function retryAgent(
   mode = process.env.DEMO_MODE ?? "mock",
   now = DEMO_NOW,
 ): Promise<DemoPreparation> {
-  if (!preparation.draft_unavailable) throw new Error("Demo has no unavailable agent run to retry");
+  if (!preparation.draft_unavailable) throw new DemoInputError("The assistant already finished for the current case state. Change a fact to run it again.");
   const facts = buildDemoFacts(preparation.case, preparation.event, preparation.joiner, preparation.equipment);
   const base: DemoPreparation = {
     ...preparation,
@@ -638,7 +677,7 @@ export async function editDemoEquipmentDraft(
       { actor: "human", kind: "draft.edited", summary: editSummary },
       { actor: "system", kind: "draft.superseded", summary: `Draft ${currentDraft.id} is unavailable after the People edit.` },
       { actor: "system", kind: "draft.created", summary: `Draft ${nextDraft.id} created from the saved People wording and awaits approval.` },
-      { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
+      { actor: "system", kind: "send.refused", summary: `Equipment nudge draft ${nextDraft.id}: ${beforeApproval.summary}` },
     ],
   };
 }
@@ -790,7 +829,7 @@ export async function prepareBuddyRequest(
       ...preparation.trace,
       { actor: "agent", kind: "buddy.request.prepared", summary: `Prepared a buddy request for ${selected.candidate.full_name} with two proposed first-week slots.` },
       { actor: "agent", kind: "draft.created", summary: `Draft ${draft.id} created for the buddy request and awaits People approval.` },
-      { actor: "system", kind: "send.refused", summary: beforeApproval.summary },
+      { actor: "system", kind: "send.refused", summary: `Buddy request draft ${draft.id}: ${beforeApproval.summary}` },
     ],
   };
 }
@@ -803,14 +842,18 @@ async function invalidateBuddyForAvailabilityChange(
   reason: string,
 ): Promise<DemoBuddyActionResult> {
   invalidateBuddyRequest(preparation.case, request, now, reason);
+  // Re-read after invalidation: a released reservation changes the capacity counts shown.
+  const refreshed = request.status === "superseded" && availability.candidates.length > 0
+    ? await readBuddyAvailability(preparation.joiner, preparation.case.start_date, declinedBuddyIds(preparation.case), preparation.case.id)
+    : availability;
   const updated: DemoPreparation = {
     ...preparation,
     run_id: nextRunId(),
-    buddy: buddyState(availability, request),
+    buddy: buddyState(refreshed, request),
     trace: [
       ...preparation.trace,
       { actor: "system", kind: "buddy.request.invalidated", summary: `Buddy request ${request.id} was invalidated because the current availability no longer matches the reviewed proposal.` },
-      { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availability.recommendation ? `Recommended ${availability.recommendation.candidate_name} from the refreshed availability.` : availability.escalation?.summary ?? "No buddy recommendation is available from the refreshed availability." },
+      { actor: "agent", kind: "tool.buddy_directory.get_availability", summary: refreshed.recommendation ? `Recommended ${refreshed.recommendation.candidate_name} from the refreshed availability.` : refreshed.escalation?.summary ?? "No buddy recommendation is available from the refreshed availability." },
     ],
   };
   return { preparation: updated, conflict: `${reason} The old request cannot be approved or confirmed; prepare a new request from the refreshed facts.` };

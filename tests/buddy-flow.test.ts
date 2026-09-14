@@ -365,8 +365,10 @@ describe("checkpoint-B buddy flow", () => {
     const invalidatedBody = await invalidated.json() as BuddyPayload & { error: string };
     expect(invalidatedBody.error).toContain("availability changed");
     expect(invalidatedBody.buddy.request?.status).toBe("superseded");
-    expect(invalidatedBody.case.buddy_id).toBe("b-01");
+    // Invalidating a confirmed allocation clears the case buddy and returns the capacity slot.
+    expect(invalidatedBody.case.buddy_id).toBeNull();
     expect(invalidatedBody.case.buddy_task_status).toBe("open");
+    expect(invalidatedBody.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")?.candidate.active_buddies).toBe(1);
     expect(invalidatedBody.buddy.availability.candidates.find(({ candidate }) => candidate.id === "b-01")?.availability.status).toBe("unknown");
 
     setSimulatedBuddyCalendar(BUDDY_CALENDARS.find((calendar) => calendar.buddy_id === "b-06")!);

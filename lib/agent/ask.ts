@@ -1,5 +1,5 @@
-import { buddyById } from "@/data/buddies";
-import { personById } from "@/data/people";
+import { BUDDIES, buddyById } from "@/data/buddies";
+import { PEOPLE, personById } from "@/data/people";
 import { denied } from "@/lib/connectors/interface";
 import { inventedDate } from "./guards";
 import { MAX_MODEL_CALL_MS, runAgent } from "./loop";
@@ -83,9 +83,10 @@ export function allowedAskDates(c: Case, joiner: Joiner, run: AgentRun): Set<str
   addIsoDate(dates, c.start_date);
   addIsoDate(dates, joiner.start_date);
   addIsoDate(dates, joiner.contract_signed_at);
-  addIsoDate(dates, run.started_at);
   for (const task of c.tasks) addIsoDate(dates, task.due_at);
-  for (const step of c.steps) addIsoDate(dates, step.at);
+  // Case steps carry the fixture clock; Ask Athena's own steps carry the wall clock, which is not
+  // a case fact and must not license a date in an answer.
+  for (const step of c.steps) if (step.kind !== "agent.asked") addIsoDate(dates, step.at);
   for (const draft of c.drafts) addIsoDate(dates, draft.created_at);
   for (const request of c.buddy_requests) {
     addIsoDate(dates, request.start_date);
@@ -104,6 +105,14 @@ export function allowedAskDates(c: Case, joiner: Joiner, run: AgentRun): Set<str
 }
 
 const COMMON_CAPITALIZED_PHRASES = new Set([
+  "Works Council",
+  "Right To Work",
+  "Google Workspace",
+  "Day One",
+  "Biometric Residence Permit",
+  "Residence Permit",
+  "Quilstead Solutions",
+  "Slack Connect",
   "Ask Athena",
   "Open Overview",
   "Open Equipment",
@@ -123,14 +132,19 @@ export function unknownNameMention(answer: string, allowedNames: Set<string>): s
     if (COMMON_CAPITALIZED_PHRASES.has(candidate)) continue;
     if (known.has(candidate.toLowerCase())) continue;
     const first = candidate.split(" ")[0];
-    if (["The", "This", "That", "Next", "Laptop", "Buddy", "Compliance", "Equipment", "People", "Right", "First", "Proposed", "Confirmed", "Current", "No", "Open"].includes(first)) continue;
+    if (["The", "This", "That", "Next", "Laptop", "Buddy", "Compliance", "Equipment", "People", "Right", "First", "Proposed", "Confirmed", "Current", "No", "Open", "Start", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].includes(first)) continue;
     return candidate;
   }
   return null;
 }
 
 function answerNames(c: Case, joiner: Joiner, run: AgentRun): Set<string> {
-  const names = new Set([joiner.full_name]);
+  // Every real person and candidate in the company data is a name the model may have read in an
+  // observation; the guard exists to stop invented people, not to hide colleagues.
+  const names = new Set<string>([joiner.full_name, joiner.preferred_name, joiner.title, joiner.office, joiner.entity]);
+  for (const person of PEOPLE) names.add(person.full_name);
+  for (const candidate of BUDDIES) names.add(candidate.full_name);
+  for (const task of c.tasks) names.add(task.title);
   for (const task of c.tasks) {
     const owner = personById(task.owner_id);
     if (owner) names.add(owner.full_name);

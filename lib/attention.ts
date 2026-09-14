@@ -45,14 +45,18 @@ export function attentionSummary(run: AttentionRunProjection) {
     ? "Draft unavailable"
     : screenState === "awaiting_decision"
     ? "Needs approval"
+    : run.decision === "reject"
+    ? "Nudge rejected"
     : "Needs review";
   const equipmentNextAction = !run.facts.equipment_late
     ? "No equipment action required from the current dates."
     : run.decision === "approve"
     ? "Wait for IT to arrange a loaner or earlier delivery."
+    : run.decision === "reject"
+    ? "Nothing was sent. Chase IT by hand, or change the start date so the assistant reassesses."
     : screenState === "draft_unavailable"
     ? "Run the assistant again before any message can be sent."
-    : "Review the current equipment nudge.";
+    : "Approve or reject the equipment nudge.";
 
   let buddyStatus = "Ready for review";
   let buddyNextAction = run.buddy.availability.recommendation
@@ -71,13 +75,17 @@ export function attentionSummary(run: AttentionRunProjection) {
     buddyStatus = "Confirmed";
     buddyNextAction = "People confirmation is recorded for this case.";
   } else if (run.buddy.request?.status === "declined" || run.buddy.request?.status === "rejected") {
+    // Reached only when no replacement request is pending: the latest request is the declined or
+    // rejected one, so the guidance depends on whether a current candidate exists.
     buddyStatus = "Needs replacement";
-    buddyNextAction = run.buddy.request?.status === "declined"
-      ? "The assistant prepared a replacement request from current availability."
-      : "Choose another current candidate and prepare an exact request.";
+    buddyNextAction = run.buddy.availability.recommendation
+      ? `Prepare a replacement request for ${run.buddy.availability.recommendation.candidate_name}.`
+      : run.buddy.availability.escalation?.summary ?? "No eligible candidate in the current snapshot; People to arrange a buddy by hand.";
   } else if (run.buddy.request?.status === "superseded") {
     buddyStatus = "Needs revalidation";
-    buddyNextAction = "Prepare a fresh request from the current availability.";
+    buddyNextAction = run.buddy.availability.recommendation
+      ? `Prepare a fresh request for ${run.buddy.availability.recommendation.candidate_name} from the current availability.`
+      : run.buddy.availability.escalation?.summary ?? "No eligible candidate in the current snapshot; People to arrange a buddy by hand.";
   }
 
   return {

@@ -191,6 +191,24 @@ describe("chat start-date interpretation", () => {
     expect(startDateRequestFor("What changes if Aisha starts on 19 October?", "2026-10-12")).toBeNull();
   });
 
+  it("ignores negations, questions and non-date requests that mention the start", () => {
+    for (const question of [
+      "don't move the start date to 19 October",
+      "did the start date change to 19 October?",
+      "why did the start move to 19 October",
+      "set a reminder for the first day on 19 October",
+      "make sure the laptop arrives before the start date",
+    ]) expect(startDateRequestFor(question, "2026-10-12"), question).toBeNull();
+  });
+
+  it("reads ordinals and asks again for a weekend", () => {
+    expect(startDateRequestFor("Move start to 19th October", "2026-10-12")).toMatchObject({ kind: "confirm", date: "2026-10-19" });
+    expect(startDateRequestFor("shift start to 3rd of November", "2026-10-12")).toMatchObject({ kind: "confirm", date: "2026-11-03" });
+    const weekend = startDateRequestFor("move the start date to Sunday 18 October", "2026-10-12");
+    expect(weekend?.kind).toBe("clarify");
+    expect(weekend?.message).toContain("Sunday");
+  });
+
   it("asks for clarification when an action has no interpretable date", () => {
     const interpretation = startDateRequestFor("Change Aisha's start date", "2026-10-12");
     expect(interpretation?.kind).toBe("clarify");

@@ -8,6 +8,7 @@ import { askIntentFor } from "@/lib/agent/mock-ask";
 import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 import {
   BuddyFlowConflict,
+  DemoInputError,
   changeDemoStartDate,
   confirmBuddy,
   editDemoEquipmentDraft,
@@ -245,6 +246,7 @@ function preparationResponse(run: DemoPreparation) {
     agent: agentSummary(run),
     equipment: equipmentSummary(run),
     attention: attentionSummary(run),
+    next_action: currentNextAction(run),
     facts: run.facts,
     draft: draftSummary(run),
     before_approval: run.beforeApproval,
@@ -272,7 +274,14 @@ export function currentNextAction(run: DemoPreparation): string | null {
   const buddyStatus = run.buddy.request?.status ?? null;
   const humanActedSinceRun = Boolean(run.decision) || (buddyStatus !== null && buddyStatus !== "pending_approval");
   const agentNext = run.agent?.stop_reason === "finished" ? run.agent.next_action : null;
-  if (!humanActedSinceRun && agentNext) return agentNext;
+  if (!humanActedSinceRun && agentNext) {
+    // A buddy-only run (decline, availability change) does not restate the equipment nudge that
+    // is still waiting; the banner must, or People miss it.
+    const nudgePending = run.draft?.kind === "nudge" && run.draft.status === "pending";
+    return nudgePending && !/nudge/i.test(agentNext)
+      ? `${agentNext} The equipment nudge to ${run.facts.equipment_owner_name} still awaits approval.`
+      : agentNext;
+  }
   const attention = attentionSummary(run);
   const open = [attention.equipment, attention.buddy, attention.compliance]
     .filter((item) => !["On track", "Confirmed", "Complete"].includes(item.status))
@@ -303,7 +312,16 @@ export async function POST(request: Request) {
   }
   mutationInFlight = true;
   try {
-    const body = await request.json() as {
+    let parsed: unknown;
+    try {
+      parsed = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    }
+    const body = parsed as {
       run_id?: unknown;
       decision?: unknown;
       action?: unknown;
@@ -434,6 +452,9 @@ export async function POST(request: Request) {
         return NextResponse.json(preparationResponse(result.preparation));
       }
 
+      if (body.action !== undefined) {
+        return NextResponse.json({ error: `Unknown demo action: ${String(body.action)}` }, { status: 400 });
+      }
       if (body.decision !== "approve" && body.decision !== "reject") {
         return NextResponse.json({ error: "decision must be approve or reject" }, { status: 400 });
       }
@@ -472,7 +493,7 @@ export async function POST(request: Request) {
     activeRun = preparation;
     return NextResponse.json(preparationResponse(preparation));
   } catch (error) {
-    if (error instanceof BuddyFlowConflict) {
+    if (error instanceof BuddyFlowConflict || error instanceof DemoInputError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
     const message = error instanceof Error ? error.message : "Demo flow failed";

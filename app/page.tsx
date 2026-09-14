@@ -189,6 +189,7 @@ interface StartDateRequestInterpretation {
 
 interface DemoResponse {
   phase: "pending" | "resolved";
+  next_action: string | null;
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
   run_id: string;
   decision?: DemoDecision;
@@ -209,13 +210,14 @@ interface DemoResponse {
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
 }
 
+// The server computes one next action from the current case state (the assistant's
+// recommendation while nothing has changed since its run, the attention state afterwards).
 function agentNextAction(run: DemoResponse, fallback: string): string {
-  return run.agent?.stop_reason === "finished" && run.agent.next_action
-    ? run.agent.next_action
-    : fallback;
+  return run.next_action ?? fallback;
 }
 
 function overallAttentionNextAction(run: DemoResponse): string {
+  if (run.next_action) return run.next_action;
   return run.attention.equipment.status !== "On track"
     ? run.attention.equipment.next_action
     : run.attention.buddy.next_action;
@@ -321,10 +323,10 @@ function requestedDateFrom(question: string, currentStartDate: string): string |
   if (numeric) return isoDateForParts(numeric[3] ? Number(numeric[3]) : year, Number(numeric[2]) - 1, Number(numeric[1]));
 
   const monthPattern = Object.keys(MONTH_NUMBERS).join("|");
-  const dayMonth = question.match(new RegExp(`\\b(\\d{1,2})\\s+(${monthPattern})(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
+  const dayMonth = question.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of)?\\s+(${monthPattern})(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
   if (dayMonth) return isoDateForParts(dayMonth[3] ? Number(dayMonth[3]) : year, MONTH_NUMBERS[dayMonth[2].toLowerCase()], Number(dayMonth[1]));
 
-  const monthDay = question.match(new RegExp(`\\b(${monthPattern})\\s+(\\d{1,2})(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
+  const monthDay = question.match(new RegExp(`\\b(${monthPattern})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
   if (monthDay) return isoDateForParts(monthDay[3] ? Number(monthDay[3]) : year, MONTH_NUMBERS[monthDay[1].toLowerCase()], Number(monthDay[2]));
 
   return null;
@@ -333,14 +335,24 @@ function requestedDateFrom(question: string, currentStartDate: string): string |
 export function startDateRequestFor(question: string, currentStartDate: string): StartDateRequestInterpretation | null {
   const text = question.trim();
   if (!/(start(?:ing)?(?: date)?|first day)/i.test(text)) return null;
+  // Questions about the date, negated requests and requests about something other than the
+  // start date ("set a reminder", "make sure the laptop...") are not change requests.
   if (/(what changes if|what if|would happen if|impact of)/i.test(text)) return null;
-  if (!/(change|move|update|set|shift|reschedule|adjust|make)/i.test(text)) return null;
+  if (/\b(don'?t|do not|never|not|why|who|did|has|have|was|were|reminder|due|make sure|update me)\b/i.test(text)) return null;
+  if (!/\b(change|move|update|set|shift|reschedule|adjust|make|push|bring)\b/i.test(text)) return null;
 
   const date = requestedDateFrom(text, currentStartDate);
   if (!date) {
     return {
       kind: "clarify",
       message: "Which start date should I use? Include a date such as 19 October 2026. No change has been made.",
+    };
+  }
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (weekday === 0 || weekday === 6) {
+    return {
+      kind: "clarify",
+      message: `${formatDate(date)} is a ${weekday === 6 ? "Saturday" : "Sunday"}. Which working day should I use? No change has been made.`,
     };
   }
   return { kind: "confirm", date, label: formatDate(date) };
@@ -955,7 +967,7 @@ export function AskAthenaPanel({
                 <span className="ask-avatar" aria-hidden="true">A</span>
                 <div className="ask-bubble ask-assistant">
                   <div className="ask-bubble-head"><strong>Athena</strong><Tag tone={item.answer.provider === "anthropic" ? "violet" : "info"}>{item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</Tag></div>
-                  {!(dateChangeRequest?.history_id === item.id && dateChangeRequest.kind === "clarify") && <p>{item.answer.answer}</p>}
+                  {!(dateChangeRequest?.history_id === item.id && (dateChangeRequest.kind === "clarify" || (dateChangeRequest.kind === "confirm" && dateChangeRequest.status === "pending"))) && <p>{item.answer.answer}</p>}
                   <div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
                   {item.answer.card && <AskEvidenceCard kind={item.answer.card} snapshot={item.snapshot} currentRun={currentRun} />}
                   {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}
@@ -984,6 +996,7 @@ export function AskAthenaPanel({
             id={compact ? "ask-question-drawer" : "ask-question"}
             aria-label="Ask Athena question"
             rows={2}
+            maxLength={300}
             value={question}
             onChange={(event) => onQuestionChange(event.target.value)}
             onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1805,7 +1818,7 @@ export default function Home() {
         <nav className="nav">{navButtons("side")}</nav>
         <div className="sidebar-foot">
           <span className="sim-badge">Simulated · no live send</span>
-          <div className="sidebar-brand"><Image className="wordmark" src="/humaans-wordmark-white.svg" alt="Humaans" width={112} height={16} /><span>demo</span></div>
+          <div className="sidebar-brand"><Image className="wordmark" src="/humaans-wordmark-white.svg" alt="Humaans" width={112} height={16} style={{ width: "auto", height: 16 }} /><span>demo</span></div>
         </div>
       </aside>
 
