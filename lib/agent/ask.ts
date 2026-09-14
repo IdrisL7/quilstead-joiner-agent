@@ -17,10 +17,12 @@ import { createAgentToolRuntime } from "./tools";
 import type { Case, Joiner } from "@/lib/types";
 
 export type AskLink = "overview" | "equipment" | "buddy" | "activity";
+export type AskCardKind = "equipment" | "buddy" | "timeline";
 
 export interface AskAnswer {
   answer: string;
   links: AskLink[];
+  card: AskCardKind | null;
   facts: string[];
   provider: "mock" | "anthropic";
   model: string;
@@ -164,11 +166,19 @@ function linksFor(intent: AskIntent, run: AgentRun): AskLink[] {
   const toolNames = new Set(run.steps.map((step) => step.tool));
   const hasCaseState = toolNames.has("get_case_state");
   const links: AskLink[] = [];
-  if (intent === "status" && hasCaseState) links.push("overview", "activity");
+  if ((intent === "status" || intent === "date_question") && hasCaseState) links.push("overview", "activity");
   if (intent === "equipment" && toolNames.has("check_equipment")) links.push("equipment");
   if (intent === "buddy" && toolNames.has("get_buddy_availability")) links.push("buddy");
   if (["compliance", "owner", "unmatched"].includes(intent) && hasCaseState) links.push("activity");
   return links;
+}
+
+function cardFor(intent: AskIntent, run: AgentRun): AskCardKind | null {
+  const toolNames = new Set(run.steps.map((step) => step.tool));
+  if (intent === "equipment" || toolNames.has("check_equipment")) return "equipment";
+  if (intent === "buddy" || toolNames.has("get_buddy_availability")) return "buddy";
+  if (toolNames.has("get_case_state")) return "timeline";
+  return null;
 }
 
 export function guardAskAnswer(
@@ -234,6 +244,7 @@ export async function askCase(
   return {
     answer: guarded.answer,
     links: linksFor(askIntentFor(trimmed), run),
+    card: cardFor(askIntentFor(trimmed), run),
     facts: guarded.facts,
     provider: run.provider,
     model: run.model,

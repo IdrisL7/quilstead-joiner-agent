@@ -35,6 +35,7 @@ function caseSummary(run: DemoPreparation) {
     state: run.case.state,
     start_date: run.case.start_date,
     task_count: run.case.tasks.length,
+    open_task_count: run.case.tasks.filter((task) => !["done", "cancelled"].includes(task.status)).length,
     buddy_id: run.case.buddy_id ?? null,
     buddy_task_status: buddyTask?.status ?? null,
     buddy_task_done_by: buddyTask?.done_by ?? null,

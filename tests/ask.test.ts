@@ -21,17 +21,18 @@ describe("Ask Athena", () => {
 
   it("answers the five supported intents with case-section links", async () => {
     const cases = [
-      { question: "What's left before day one?", links: ["overview", "activity"], text: "tasks remain" },
-      { question: "Is the laptop sorted?", links: ["equipment"], text: "Laptop" },
-      { question: "Who is the buddy?", links: ["buddy"], text: "Buddy:" },
-      { question: "Any compliance risk?", links: ["activity"], text: "Compliance attention" },
-      { question: "Who owns access requests?", links: ["activity"], text: "owned by" },
+      { question: "What's left before day one?", links: ["overview", "activity"], card: "timeline", text: "tasks remain" },
+      { question: "Is the laptop sorted?", links: ["equipment"], card: "equipment", text: "Laptop" },
+      { question: "Who is the buddy?", links: ["buddy"], card: "buddy", text: "Buddy:" },
+      { question: "Any compliance risk?", links: ["activity"], card: "timeline", text: "Compliance attention" },
+      { question: "Who owns access requests?", links: ["activity"], card: "timeline", text: "owned by" },
     ] as const;
 
     for (const item of cases) {
       const preparation = await prepareDemo(undefined, "mock");
       const answer = await askCase(preparation.case, preparation.joiner, item.question, "mock");
       expect(answer.links).toEqual(item.links);
+      expect(answer.card).toBe(item.card);
       expect(answer.answer).toContain(item.text);
       expect(answer.provider).toBe("mock");
       expect(answer.facts.length).toBeGreaterThan(0);
@@ -155,7 +156,9 @@ describe("Ask Athena", () => {
 
     expect(response.status).toBe(200);
     expect(payload.case.start_date).toBe("2026-10-12");
-    expect(payload.answer.answer).toContain("I can only answer from this case");
+    expect(payload.answer.answer).toContain("The current case starts on 12 Oct 2026");
+    expect(payload.answer.answer).toContain("I have not changed it");
+    expect(payload.answer.answer).not.toContain("19 Oct 2026");
     expect(payload.date_change).toBeUndefined();
   });
 

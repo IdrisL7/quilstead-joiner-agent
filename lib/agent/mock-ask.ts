@@ -9,7 +9,7 @@ import type {
 } from "./types";
 import type { Case, Joiner, ToolResult } from "@/lib/types";
 
-export type AskIntent = "status" | "equipment" | "buddy" | "compliance" | "owner" | "unmatched";
+export type AskIntent = "status" | "equipment" | "buddy" | "compliance" | "owner" | "date_question" | "unmatched";
 
 interface MockAskContext {
   case: Case;
@@ -74,6 +74,7 @@ function dataFrom<T>(result: ToolResult | undefined): T | null {
 
 export function askIntentFor(question: string): AskIntent {
   const text = question.toLowerCase();
+  if (/(what changes if|what if|would happen if|impact of)/i.test(text) && /(start|date|first day)/i.test(text)) return "date_question";
   if (/(compliance|right to work|i-9|i9|works council|social insurance)/i.test(text)) return "compliance";
   if (/(buddy|new starter support)/i.test(text)) return "buddy";
   if (/(laptop|equipment|eta|delivery|loaner|sorted)/i.test(text)) return "equipment";
@@ -172,7 +173,11 @@ function ownerAnswer(data: CaseStateData, question: string): string {
   return `${task.title} is owned by ${task.owner_name}. It is ${task.status.replaceAll("_", " ")} and due ${formatDate(task.due_at)}.`;
 }
 
-export const UNMATCHED_ASK_ANSWER = "I can only answer from this case. Try: What's left before day one? Is the laptop sorted? Who is the buddy? Any compliance risk?";
+function dateQuestionAnswer(data: CaseStateData): string {
+  return `The current case starts on ${formatDate(data.start_date)}. I have not changed it. Use the date control when you want Athena to reassess the case.`;
+}
+
+export const UNMATCHED_ASK_ANSWER = "I can only answer from this case. Could you clarify which current fact you need? Try: What's left before day one? Is the laptop sorted? Who is the buddy? Any compliance risk?";
 
 function answerFor(context: MockAskContext, messages: AgentMessage[]): string {
   const state = dataFrom<CaseStateData>(latestResult(messages, "get_case_state")) ?? {
@@ -188,6 +193,7 @@ function answerFor(context: MockAskContext, messages: AgentMessage[]): string {
   if (intent === "compliance") return complianceAnswer(state);
   if (intent === "owner") return ownerAnswer(state, context.question);
   if (intent === "status") return statusAnswer(state);
+  if (intent === "date_question") return dateQuestionAnswer(state);
   return UNMATCHED_ASK_ANSWER;
 }
 

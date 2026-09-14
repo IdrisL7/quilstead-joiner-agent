@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { EVENTS } from "@/data/events";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { JOINERS } from "@/data/joiners";
-import { ApprovalEmptyState, AskAthenaPanel, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, WorkflowTriggerCard } from "@/app/page";
+import { ApprovalEmptyState, AskAthenaPanel, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, startDateRequestFor, WorkflowTriggerCard } from "@/app/page";
 
 function render(run: { screen_state: "draft_unavailable" | "no_action"; equipment_late: boolean }) {
   return renderToStaticMarkup(createElement(ApprovalEmptyState, {
@@ -178,6 +178,23 @@ describe("buddy simulation target", () => {
       { status: "confirmed", candidate_id: "b-06" },
       { candidate_id: "b-01" },
     )).toBe("b-06");
+  });
+});
+
+describe("chat start-date interpretation", () => {
+  it("asks for confirmation without changing the case date", () => {
+    expect(startDateRequestFor("Please change Aisha's start date to 19 October", "2026-10-12")).toEqual({
+      kind: "confirm",
+      date: "2026-10-19",
+      label: "19 Oct 2026",
+    });
+    expect(startDateRequestFor("What changes if Aisha starts on 19 October?", "2026-10-12")).toBeNull();
+  });
+
+  it("asks for clarification when an action has no interpretable date", () => {
+    const interpretation = startDateRequestFor("Change Aisha's start date", "2026-10-12");
+    expect(interpretation?.kind).toBe("clarify");
+    expect(interpretation?.message).toContain("Which start date should I use?");
   });
 });
 

@@ -162,6 +162,7 @@ type AskLink = "overview" | "equipment" | "buddy" | "activity";
 interface AskAnswer {
   answer: string;
   links: AskLink[];
+  card?: "equipment" | "buddy" | "timeline" | null;
   facts: string[];
   provider: "mock" | "anthropic";
   model: string;
@@ -172,6 +173,18 @@ interface AskHistoryItem {
   id: string;
   question: string;
   answer: AskAnswer;
+  snapshot: DemoResponse;
+}
+
+type DateChangeRequest =
+  | { kind: "confirm"; history_id: string; date: string; label: string; status: "pending" | "confirmed" | "dismissed" }
+  | { kind: "clarify"; history_id: string; message: string };
+
+interface StartDateRequestInterpretation {
+  kind: "confirm" | "clarify";
+  date?: string;
+  label?: string;
+  message?: string;
 }
 
 interface DemoResponse {
@@ -179,7 +192,7 @@ interface DemoResponse {
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
   run_id: string;
   decision?: DemoDecision;
-  case: { id: string; state: string; start_date: string; task_count: number; buddy_id: string | null; buddy_task_status: string | null; buddy_task_done_by: string | null };
+  case: { id: string; state: string; start_date: string; task_count: number; open_task_count?: number; buddy_id: string | null; buddy_task_status: string | null; buddy_task_done_by: string | null };
   joiner: { full_name: string; title: string; office: string; work_mode: string; start_date: string };
   model: { provider: "mock" | "anthropic"; model: string };
   agent: AgentSummary | null;
@@ -284,6 +297,53 @@ function formatDate(value: string | null) {
   if (!value) return "Unknown";
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
     .format(new Date(`${value}T00:00:00Z`));
+}
+
+const MONTH_NUMBERS: Record<string, number> = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+  may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10,
+  dec: 11, december: 11,
+};
+
+function isoDateForParts(year: number, month: number, day: number): string | null {
+  const date = new Date(Date.UTC(year, month, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function requestedDateFrom(question: string, currentStartDate: string): string | null {
+  const year = Number(currentStartDate.slice(0, 4));
+  const iso = question.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (iso) return isoDateForParts(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const numeric = question.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](20\d{2}))?\b/);
+  if (numeric) return isoDateForParts(numeric[3] ? Number(numeric[3]) : year, Number(numeric[2]) - 1, Number(numeric[1]));
+
+  const monthPattern = Object.keys(MONTH_NUMBERS).join("|");
+  const dayMonth = question.match(new RegExp(`\\b(\\d{1,2})\\s+(${monthPattern})(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
+  if (dayMonth) return isoDateForParts(dayMonth[3] ? Number(dayMonth[3]) : year, MONTH_NUMBERS[dayMonth[2].toLowerCase()], Number(dayMonth[1]));
+
+  const monthDay = question.match(new RegExp(`\\b(${monthPattern})\\s+(\\d{1,2})(?:\\s*,?\\s*(20\\d{2}))?\\b`, "i"));
+  if (monthDay) return isoDateForParts(monthDay[3] ? Number(monthDay[3]) : year, MONTH_NUMBERS[monthDay[1].toLowerCase()], Number(monthDay[2]));
+
+  return null;
+}
+
+export function startDateRequestFor(question: string, currentStartDate: string): StartDateRequestInterpretation | null {
+  const text = question.trim();
+  if (!/(start(?:ing)?(?: date)?|first day)/i.test(text)) return null;
+  if (/(what changes if|what if|would happen if|impact of)/i.test(text)) return null;
+  if (!/(change|move|update|set|shift|reschedule|adjust|make)/i.test(text)) return null;
+
+  const date = requestedDateFrom(text, currentStartDate);
+  if (!date) {
+    return {
+      kind: "clarify",
+      message: "Which start date should I use? Include a date such as 19 October 2026. No change has been made.",
+    };
+  }
+  return { kind: "confirm", date, label: formatDate(date) };
 }
 
 function formatDateTime(value: string) {
@@ -675,6 +735,157 @@ function Tag({ tone, children }: { tone?: string; children: React.ReactNode }) {
   return <span className={`tag ${tone ?? ""}`}>{children}</span>;
 }
 
+function AskEvidenceCard({ kind, snapshot, currentRun }: { kind: "equipment" | "buddy" | "timeline"; snapshot: DemoResponse; currentRun?: DemoResponse | null }) {
+  const displayRun = currentRun ?? snapshot;
+  if (kind === "equipment") {
+    const draft = displayRun.draft;
+    const riskRemains = displayRun.facts.equipment_late;
+    return (
+      <div className="ask-evidence-card" aria-label="Equipment evidence card">
+        <div className="ask-card-head">
+          <div><span className="eyebrow">Current evidence</span><strong>Equipment</strong></div>
+          <Tag tone={riskRemains ? "attention" : "positive"}>{riskRemains ? "Risk remains" : "On track"}</Tag>
+        </div>
+        <div className="ask-card-grid">
+          <div><span>ETA</span><strong>{formatDate(displayRun.facts.equipment_eta)}</strong></div>
+          <div><span>Start date</span><strong>{formatDate(displayRun.facts.start_date)}</strong></div>
+          <div><span>Owner</span><strong>{displayRun.facts.equipment_owner_name}</strong></div>
+        </div>
+        <p className="ask-card-note">{riskRemains ? "The equipment arrives after the current first day." : "The equipment arrives before the current first day."}</p>
+        {draft && (
+          <div className="ask-card-draft">
+            <div className="ask-card-draft-head"><span>Current draft</span><Tag tone={draft.status === "pending" ? "pending" : draft.status === "approved" ? "positive" : "attention"}>{draft.status}</Tag></div>
+            <strong>{draft.subject ?? "Equipment message"}</strong>
+            <span>To {draft.recipient}</span>
+            {draft.status === "pending" && <p>{draft.body}</p>}
+          </div>
+        )}
+        {!draft && riskRemains && <div className="ask-card-draft unavailable"><strong>Draft unavailable</strong><span>Run the assistant again before any message can be sent.</span></div>}
+      </div>
+    );
+  }
+
+  if (kind === "buddy") {
+    const request = displayRun.buddy.request;
+    const recommendation = displayRun.buddy.availability.recommendation;
+    const candidateIds = [
+      request?.candidate_id,
+      recommendation?.candidate_id,
+      ...displayRun.buddy.availability.candidates.map((assessment) => assessment.candidate.id),
+    ].filter((id): id is string => !!id);
+    const candidates = [...new Set(candidateIds)]
+      .map((id) => displayRun.buddy.availability.candidates.find((assessment) => assessment.candidate.id === id))
+      .filter((assessment): assessment is BuddyCandidateAssessment => !!assessment)
+      .slice(0, 3);
+    return (
+      <div className="ask-evidence-card" aria-label="Buddy comparison card">
+        <div className="ask-card-head">
+          <div><span className="eyebrow">Current evidence</span><strong>Buddy comparison</strong></div>
+          <span className="sim-badge">Simulated calendar</span>
+        </div>
+        <div className="ask-card-candidates">
+          {candidates.map((assessment) => {
+            const isRecommendation = recommendation?.candidate_id === assessment.candidate.id;
+            const isRequest = request?.candidate_id === assessment.candidate.id;
+            return (
+              <div className={`ask-card-candidate ${isRequest ? "current" : ""}`} key={assessment.candidate.id}>
+                <div><strong>{assessment.candidate.full_name}</strong><span>{assessment.candidate.team} · {assessment.candidate.office}</span></div>
+                <div><span className={`availability ${assessment.availability.status}`}>{availabilityLabel(assessment.availability.status)}</span><span>{assessment.candidate.active_buddies} of 2 active</span></div>
+                <div className="ask-card-candidate-tags">
+                  {isRecommendation && !isRequest && <Tag tone="violet">Recommended</Tag>}
+                  {isRequest && <Tag tone={request?.status === "confirmed" ? "positive" : "pending"}>{requestLabel(request.status)}</Tag>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {request ? (
+          <div className="ask-card-note"><strong>Request status:</strong> {requestLabel(request.status)} for {request.candidate_name}.</div>
+        ) : (
+          <div className="ask-card-note">{recommendation ? `Current recommendation: ${recommendation.candidate_name}.` : "No buddy is currently recommended from the available calendar snapshot."}</div>
+        )}
+        {displayRun.buddy.draft && (
+          <div className="ask-card-draft">
+            <div className="ask-card-draft-head"><span>Current buddy draft</span><Tag tone={displayRun.buddy.draft.status === "pending" ? "pending" : displayRun.buddy.draft.status === "approved" ? "positive" : "attention"}>{displayRun.buddy.draft.status}</Tag></div>
+            <strong>{displayRun.buddy.draft.subject ?? "Buddy request"}</strong>
+            <span>To {displayRun.buddy.draft.recipient}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const openTasks = displayRun.case.open_task_count ?? displayRun.case.task_count;
+  return (
+    <div className="ask-evidence-card" aria-label="Case timeline card">
+      <div className="ask-card-head">
+        <div><span className="eyebrow">Current evidence</span><strong>Case timeline</strong></div>
+        <Tag tone="info">{displayRun.case.id}</Tag>
+      </div>
+      <div className="ask-card-grid">
+        <div><span>Contract signed</span><strong>{formatDateTime(displayRun.facts.contract_signed_at)}</strong></div>
+        <div><span>First day</span><strong>{formatDate(displayRun.facts.start_date)}</strong></div>
+        <div><span>Open tasks</span><strong>{openTasks} of {displayRun.case.task_count}</strong></div>
+      </div>
+      <p className="ask-card-note">Current next action: {overallAttentionNextAction(displayRun)}</p>
+    </div>
+  );
+}
+
+function DateChangePrompt({
+  request,
+  currentRun,
+  busy,
+  onConfirm,
+  onDismiss,
+}: {
+  request: DateChangeRequest;
+  currentRun: DemoResponse | null;
+  busy: boolean;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  if (request.kind === "clarify") {
+    return (
+      <div className="ask-action-card" aria-label="Start date clarification">
+        <div className="ask-card-head"><div><span className="eyebrow">Action needed</span><strong>Start date</strong></div><Tag tone="pending">Clarification</Tag></div>
+        <p>{request.message}</p>
+      </div>
+    );
+  }
+
+  const alreadyCurrent = currentRun?.joiner.start_date === request.date;
+  if (request.status === "confirmed") {
+    return (
+      <div className="ask-action-card" role="status" aria-label="Start date changed">
+        <div className="ask-card-head"><div><span className="eyebrow">Case updated</span><strong>Start date changed to {request.label}</strong></div><Tag tone="positive">Reassessed</Tag></div>
+        <p>Athena reassessed the current case evidence. Review the updated workspace before taking any approval action.</p>
+      </div>
+    );
+  }
+  if (request.status === "dismissed") {
+    return (
+      <div className="ask-action-card" role="status" aria-label="Start date unchanged">
+        <div className="ask-card-head"><div><span className="eyebrow">No change made</span><strong>Current start date kept</strong></div><Tag tone="info">Unchanged</Tag></div>
+        <p>No start-date change was made.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ask-action-card" aria-label="Confirm start date change">
+      <div className="ask-card-head"><div><span className="eyebrow">Confirmation required</span><strong>Change start date to {request.label}?</strong></div><Tag tone="pending">No change yet</Tag></div>
+      <p>Athena interpreted your request as changing Aisha&apos;s first day to {request.label}. Confirming will reassess current evidence and invalidate stale work.</p>
+      {alreadyCurrent && <p className="ask-card-note">That is already the current start date.</p>}
+      <div className="ask-action-buttons">
+        <button className="button primary small" type="button" onClick={onConfirm} disabled={busy || alreadyCurrent}>{busy ? "Recalculating..." : "Confirm start date change"}</button>
+        <button className="button secondary small" type="button" onClick={onDismiss} disabled={busy}>Keep current date</button>
+      </div>
+      <span className="ask-hint">Chat text cannot change the case without this confirmation.</span>
+    </div>
+  );
+}
+
 const ASK_SUGGESTIONS = [
   "What's left before day one?",
   "Is the laptop sorted?",
@@ -701,18 +912,28 @@ export function AskAthenaPanel({
   compact,
   entry,
   busy,
+  currentRun,
+  dateChangeRequest,
+  dateChangeBusy,
   onQuestionChange,
   onAsk,
   onNavigate,
+  onConfirmDateChange,
+  onDismissDateChange,
 }: {
   history: AskHistoryItem[];
   question: string;
   compact?: boolean;
   entry?: boolean;
   busy: boolean;
+  currentRun?: DemoResponse | null;
+  dateChangeRequest?: DateChangeRequest | null;
+  dateChangeBusy?: boolean;
   onQuestionChange: (value: string) => void;
   onAsk: (question: string) => void;
   onNavigate: (section: AskLink) => void;
+  onConfirmDateChange?: () => void;
+  onDismissDateChange?: () => void;
 }) {
   const suggestions = entry ? ENTRY_ASK_SUGGESTIONS : ASK_SUGGESTIONS;
   const submit = (value: string) => {
@@ -736,7 +957,17 @@ export function AskAthenaPanel({
                   <div className="ask-bubble-head"><strong>Athena</strong><Tag tone={item.answer.provider === "anthropic" ? "violet" : "info"}>{item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</Tag></div>
                   <p>{item.answer.answer}</p>
                   <div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
+                  {item.answer.card && <AskEvidenceCard kind={item.answer.card} snapshot={item.snapshot} currentRun={currentRun} />}
                   {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}
+                  {dateChangeRequest?.history_id === item.id && onConfirmDateChange && onDismissDateChange && (
+                    <DateChangePrompt
+                      request={dateChangeRequest}
+                      currentRun={currentRun ?? null}
+                      busy={dateChangeBusy ?? false}
+                      onConfirm={onConfirmDateChange}
+                      onDismiss={onDismissDateChange}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -834,6 +1065,7 @@ export default function Home() {
   const [editBody, setEditBody] = useState("");
   const [askHistory, setAskHistory] = useState<AskHistoryItem[]>([]);
   const [askQuestion, setAskQuestion] = useState("");
+  const [dateChangeRequest, setDateChangeRequest] = useState<DateChangeRequest | null>(null);
 
   function acceptRun(next: DemoResponse, replaceInitial = false) {
     setRun(next);
@@ -858,6 +1090,7 @@ export default function Home() {
       setEditingEquipment(false);
       setAskHistory([]);
       setAskQuestion("");
+      setDateChangeRequest(null);
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo flow failed");
@@ -879,6 +1112,7 @@ export default function Home() {
       setEditingEquipment(false);
       setAskHistory([]);
       setAskQuestion("");
+      setDateChangeRequest(null);
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo reset failed");
@@ -904,6 +1138,7 @@ export default function Home() {
     const trimmed = question.trim();
     if (!trimmed || trimmed.length > 300) return;
     const openingCase = run === null;
+    const historyId = `ask-${Date.now()}-${askHistory.length}`;
     setBusy("ask");
     setError(null);
     try {
@@ -913,13 +1148,45 @@ export default function Home() {
       if (!next.answer) throw new Error("Ask Athena returned no answer.");
       acceptRun(next, openingCase);
       if (openingCase) setSection("overview");
-      setAskHistory((current) => [...current, { id: `ask-${Date.now()}-${current.length}`, question: trimmed, answer: next.answer! }]);
+      setAskHistory((current) => [...current, { id: historyId, question: trimmed, answer: next.answer!, snapshot: next }]);
+      const dateInterpretation = startDateRequestFor(trimmed, next.joiner.start_date);
+      if (dateInterpretation?.kind === "confirm") {
+        setDateChangeRequest({ kind: "confirm", history_id: historyId, date: dateInterpretation.date!, label: dateInterpretation.label!, status: "pending" });
+      } else if (dateInterpretation?.kind === "clarify") {
+        setDateChangeRequest({ kind: "clarify", history_id: historyId, message: dateInterpretation.message ?? "Please provide the intended start date. No change has been made." });
+      }
       setAskQuestion("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Ask Athena could not read the case");
     } finally {
       setBusy(null);
     }
+  }
+
+  async function confirmStartDateRequest() {
+    const request = dateChangeRequest;
+    if (request?.kind !== "confirm" || request.status !== "pending" || !run || run.screen_state === "resolved") return;
+    if (request.date === run.joiner.start_date) {
+      setDateChangeRequest({ ...request, status: "dismissed" });
+      return;
+    }
+    setBusy("date");
+    setError(null);
+    try {
+      const next = await postDemo({ run_id: run.run_id, action: "start_date_change", start_date: request.date });
+      acceptRun(next);
+      setDateChangeRequest({ ...request, status: "confirmed" });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The start-date change failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function dismissStartDateRequest() {
+    if (!dateChangeRequest) return;
+    if (dateChangeRequest.kind === "confirm") setDateChangeRequest({ ...dateChangeRequest, status: "dismissed" });
+    else setDateChangeRequest(null);
   }
 
   async function changeStartDate() {
@@ -930,6 +1197,7 @@ export default function Home() {
     if (!run || !dateDraft || run.phase !== "pending" || dateDraft === run.joiner.start_date) return;
     setBusy("date");
     setError(null);
+    setDateChangeRequest(null);
     try {
       acceptRun(await postDemo({ run_id: run.run_id, action: "start_date_change", start_date: dateDraft }));
     } catch (caught) {
@@ -1088,9 +1356,14 @@ export default function Home() {
       compact={compact}
       entry={entry}
       busy={busy === "ask"}
+      currentRun={run}
+      dateChangeRequest={dateChangeRequest}
+      dateChangeBusy={busy === "date"}
       onQuestionChange={setAskQuestion}
       onAsk={askAthena}
       onNavigate={setSection}
+      onConfirmDateChange={confirmStartDateRequest}
+      onDismissDateChange={dismissStartDateRequest}
     />
   );
 
