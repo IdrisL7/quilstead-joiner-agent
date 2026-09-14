@@ -4,6 +4,7 @@ import { buddyCalendarById } from "@/data/buddy-calendars";
 import { personById } from "@/data/people";
 import { attentionSummary } from "@/lib/attention";
 import { askCase } from "@/lib/agent/ask";
+import { askIntentFor } from "@/lib/agent/mock-ask";
 import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 import {
   BuddyFlowConflict,
@@ -264,6 +265,17 @@ function readAskQuestion(value: unknown): { question: string } | { error: string
   return { question };
 }
 
+function alignAskStatusNextAction<T extends { answer: string }>(answer: T, run: DemoPreparation, question: string): T {
+  const nextAction = run.agent?.stop_reason === "finished" ? run.agent.next_action : null;
+  if (askIntentFor(question) !== "status" || !nextAction) return answer;
+
+  const nextMarker = answer.answer.search(/\sNext(?: human action)?\s*:/i);
+  const text = nextMarker >= 0
+    ? `${answer.answer.slice(0, nextMarker)} Next: ${nextAction}`
+    : `${answer.answer} Next: ${nextAction}`;
+  return { ...answer, answer: text };
+}
+
 export function resetDemoRouteState(): void {
   activeRun = null;
   mutationInFlight = false;
@@ -296,12 +308,16 @@ export async function POST(request: Request) {
       // because "read-only" is only true once a case is open.
       const opened = !activeRun;
       const preparation = activeRun ?? await prepareDemo();
-      const answer = await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock");
+      const answer = alignAskStatusNextAction(
+        await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock"),
+        preparation,
+        parsed.question,
+      );
       if (opened) {
         const agent = preparation.agent;
         const proposals = agent?.proposals.length ?? 0;
         const opening = `Opened ${preparation.case.id} for ${preparation.joiner.full_name} and ran the readiness checks: ${proposals} proposal${proposals === 1 ? "" : "s"} now await approval.`;
-        const next = agent?.next_action ? ` Next human action: ${agent.next_action}` : "";
+        const next = agent?.next_action && !answer.answer.includes(agent.next_action) ? ` Next human action: ${agent.next_action}` : "";
         answer.answer = `${opening} ${answer.answer}${next}`;
         answer.links = [...new Set([...answer.links, "activity" as const])];
       }
@@ -320,7 +336,11 @@ export async function POST(request: Request) {
       if (body.action === "ask") {
         const parsed = readAskQuestion(body.question);
         if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
-        const answer = await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock");
+        const answer = alignAskStatusNextAction(
+          await askCase(preparation.case, preparation.joiner, parsed.question, process.env.DEMO_MODE === "live" ? "live" : "mock"),
+          preparation,
+          parsed.question,
+        );
         preparation.trace.push({ actor: "agent", kind: "agent.asked", summary: `Ask Athena answered: ${answer.answer}` });
         return NextResponse.json({ ...preparationResponse(preparation), answer });
       }

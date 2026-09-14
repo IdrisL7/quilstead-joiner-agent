@@ -196,6 +196,41 @@ describe("chat start-date interpretation", () => {
     expect(interpretation?.kind).toBe("clarify");
     expect(interpretation?.message).toContain("Which start date should I use?");
   });
+
+  it("renders one clarification for a vague start-date action", () => {
+    const html = renderToStaticMarkup(createElement(AskAthenaPanel, {
+      history: [{
+        id: "ask-clarify",
+        question: "Change Aisha's start date",
+        answer: {
+          answer: "I can only answer from this case. Could you clarify which current fact you need?",
+          links: [],
+          card: null,
+          facts: ["Start date: 2026-10-12"],
+          provider: "mock",
+          model: "deterministic-ask-model",
+          cost_usd: 0,
+        },
+        snapshot: {} as never,
+      }],
+      question: "",
+      busy: false,
+      currentRun: null,
+      dateChangeRequest: {
+        kind: "clarify",
+        history_id: "ask-clarify",
+        message: "Which start date should I use? Include a date such as 19 October 2026. No change has been made.",
+      },
+      onQuestionChange: () => undefined,
+      onAsk: () => undefined,
+      onNavigate: () => undefined,
+      onConfirmDateChange: () => undefined,
+      onDismissDateChange: () => undefined,
+    }));
+
+    expect(html).not.toContain("I can only answer from this case");
+    expect(html).toContain("Which start date should I use?");
+  });
 });
 
 describe("buddy candidate comparison", () => {

@@ -955,7 +955,7 @@ export function AskAthenaPanel({
                 <span className="ask-avatar" aria-hidden="true">A</span>
                 <div className="ask-bubble ask-assistant">
                   <div className="ask-bubble-head"><strong>Athena</strong><Tag tone={item.answer.provider === "anthropic" ? "violet" : "info"}>{item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</Tag></div>
-                  <p>{item.answer.answer}</p>
+                  {!(dateChangeRequest?.history_id === item.id && dateChangeRequest.kind === "clarify") && <p>{item.answer.answer}</p>}
                   <div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
                   {item.answer.card && <AskEvidenceCard kind={item.answer.card} snapshot={item.snapshot} currentRun={currentRun} />}
                   {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}

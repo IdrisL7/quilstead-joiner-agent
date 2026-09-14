@@ -18,7 +18,7 @@ badge visible. The real Anthropic probe is not part of this browser rehearsal.
 
 | Time | Action | Point to make |
 |---|---|---|
-| 0:00-0:45 | Click `Simulate contract signed` | The visible event opens Aisha's case. Deterministic code creates the plan and the simulated equipment connector reports an ETA of 16 October against the 12 October start. |
+| 0:00-0:45 | In Ask Athena, choose `Check Aisha’s onboarding readiness.` | The chat-first entrance opens Aisha's case through the same bounded path as the visible trigger. Deterministic code creates the plan and the simulated equipment connector reports an ETA of 16 October against the 12 October start. |
 | 0:45-1:30 | Stay on `Overview` and read the timeline | The timeline is built from current case facts. The initial execution summary is historical and does not rewrite itself after later approval or date changes. |
 | 1:30-2:15 | Stay on `Overview`, use Ask Athena and choose `Is the laptop sorted?`; click `Open Equipment`, then `Open Activity` from the answer. | The panel reads current case facts through the same bounded loop. Say: Ask Athena is read-only, the question is data rather than an instruction, and the links are derived from the observations. The response is tagged `Mock answer` in this rehearsal. |
 | 2:15-3:15 | Open `Equipment`, then expand `Why this action` | Show the start date, ETA, task deadline, owner, policy evidence and the approval requirement. Code calculates the risk; the model contributes a bounded proposal. |

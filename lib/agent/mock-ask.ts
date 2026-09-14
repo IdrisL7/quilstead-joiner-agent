@@ -119,9 +119,8 @@ function statusAnswer(data: CaseStateData): string {
     const next = [...tasks].sort((left, right) => Date.parse(left.due_at) - Date.parse(right.due_at))[0];
     return `${owner}: ${tasks.length} open, ${next.title} due ${formatDate(next.due_at)}`;
   });
-  const next = [...open].sort((left, right) => Date.parse(left.due_at) - Date.parse(right.due_at))[0];
   if (owners.length === 0) return `Nothing is currently open before ${formatDate(data.start_date)}. The case is ready for People to confirm the remaining evidence.`;
-  return `${open.length} tasks remain before ${formatDate(data.start_date)}. ${owners.join("; ")}. Next: ${next.title} with ${next.owner_name}.`;
+  return `${open.length} tasks remain before ${formatDate(data.start_date)}. ${owners.join("; ")}.`;
 }
 
 function equipmentAnswer(data: CaseStateData, equipment: EquipmentData | null, joiner: Joiner): string {

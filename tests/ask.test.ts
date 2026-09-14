@@ -128,6 +128,19 @@ describe("Ask Athena", () => {
     expect(payload.trace.filter((entry) => entry.kind === "agent.asked")).toHaveLength(1);
   });
 
+  it("uses the finished agent run as the status answer's next action", async () => {
+    const response = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const payload = await response.json() as {
+      answer: { answer: string };
+      agent: { stop_reason: string; next_action: string | null };
+    };
+
+    expect(payload.agent.stop_reason).toBe("finished");
+    expect(payload.agent.next_action).toBeTruthy();
+    expect(payload.answer.answer).toContain(`Next: ${payload.agent.next_action}`);
+    expect(payload.answer.answer).not.toContain("Next: Complete HRIS profile with Sarah Mitchell");
+  });
+
   it("reuses the active case for later questions without resetting state", async () => {
     const initialResponse = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
     const initial = await initialResponse.json() as { run_id: string; case: { start_date: string } };
