@@ -76,6 +76,7 @@ When asked how it works, use this order:
 5. The case trail and `Activity`: complete evidence remains available even when presentation rows
    are reduced to the decisions a reviewer needs.
 
-The correct close is: one bounded mock flow, one fake-client verification of the Anthropic adapter,
-and a clearly stated live-provider gap. Persistence, live integrations and broader orchestration
-remain deferred.
+The correct close is: one bounded agent flow, a scripted mock as the golden path, and the same 20
+scenarios on the live model three times each with consistent outcomes, qualified as repeatability on
+the development set rather than unseen-case reliability, at USD 0.027 per recorded run. Persistence,
+live integrations and broader orchestration remain deferred.

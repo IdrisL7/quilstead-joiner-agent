@@ -459,7 +459,10 @@ export async function changeDemoStartDate(
     return retryAgent(preparation, mode, now);
   }
 
-  const supersededDraftId = preparation.draft?.id;
+  // Only a draft still waiting for a decision is superseded. An approved and sent draft is
+  // history: it stays approved in the trail, and the re-run proposes a fresh nudge if the risk
+  // still holds against the new date.
+  const supersededDraftId = preparation.draft?.status === "pending" ? preparation.draft.id : undefined;
   if (supersededDraftId) {
     const reason = "Superseded by a start-date change before approval.";
     if (!supersedeDraft(supersededDraftId, now, reason)) throw new Error(`Demo draft could not be superseded: ${supersededDraftId}`);

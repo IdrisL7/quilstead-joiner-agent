@@ -19,3 +19,13 @@ joiner from "contract signed" to a compliant, equipped, connected first morning.
 Not yet built: persistence, live connectors, general model loop, policy Q&A, and the full case-view UI.
 
 Rules for anyone editing: no deadline in prose that code does not compute; no new tool without a permissions rule; `demo_note` never reaches a prompt.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

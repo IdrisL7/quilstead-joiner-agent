@@ -265,8 +265,24 @@ function readAskQuestion(value: unknown): { question: string } | { error: string
   return { question };
 }
 
+// The agent's next_action is a recommendation made at run time. Once a human has acted on it
+// (equipment approved or rejected, buddy request moved past approval), the guidance must come
+// from the current attention state, not from history.
+export function currentNextAction(run: DemoPreparation): string | null {
+  const buddyStatus = run.buddy.request?.status ?? null;
+  const humanActedSinceRun = Boolean(run.decision) || (buddyStatus !== null && buddyStatus !== "pending_approval");
+  const agentNext = run.agent?.stop_reason === "finished" ? run.agent.next_action : null;
+  if (!humanActedSinceRun && agentNext) return agentNext;
+  const attention = attentionSummary(run);
+  const open = [attention.equipment, attention.buddy, attention.compliance]
+    .filter((item) => !["On track", "Confirmed", "Complete"].includes(item.status))
+    .map((item) => item.next_action.trim().replace(/\.$/, ""));
+  if (open.length === 0) return "Nothing is waiting on a person for this case.";
+  return `${open.join(". ")}.`;
+}
+
 function alignAskStatusNextAction<T extends { answer: string }>(answer: T, run: DemoPreparation, question: string): T {
-  const nextAction = run.agent?.stop_reason === "finished" ? run.agent.next_action : null;
+  const nextAction = currentNextAction(run);
   if (askIntentFor(question) !== "status" || !nextAction) return answer;
 
   const nextMarker = answer.answer.search(/\sNext(?: human action)?\s*:/i);

@@ -1165,7 +1165,9 @@ export default function Home() {
 
   async function confirmStartDateRequest() {
     const request = dateChangeRequest;
-    if (request?.kind !== "confirm" || request.status !== "pending" || !run || run.screen_state === "resolved") return;
+    // Same rule as the header date control: the case stays mutable until the run phase resolves,
+    // regardless of whether the equipment draft has been decided.
+    if (request?.kind !== "confirm" || request.status !== "pending" || !run || run.phase === "resolved") return;
     if (request.date === run.joiner.start_date) {
       setDateChangeRequest({ ...request, status: "dismissed" });
       return;

@@ -184,3 +184,35 @@ describe("Ask Athena", () => {
     expect(stale.status).toBe(409);
   });
 });
+
+describe("guidance after a human has acted", () => {
+  beforeEach(() => {
+    resetDemoState();
+    resetDemoRouteState();
+  });
+
+  it("stops asking for approval of a nudge that was already approved and sent", async () => {
+    const opened = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const first = await opened.json() as { run_id: string; draft: { id: string } | null };
+    expect(first.draft).toBeTruthy();
+    const approved = await POST(request({ run_id: first.run_id, decision: "approve" }));
+    expect(approved.status).toBe(200);
+    const after = await (await approved.json() as Promise<{ run_id: string; attention: { equipment: { status: string } } }>);
+    expect(after.attention.equipment.status).toBe("Awaiting IT response");
+
+    const asked = await POST(request({ run_id: after.run_id, action: "ask", question: "What's left before day one?" }));
+    const payload = await asked.json() as { answer: { answer: string } };
+    expect(payload.answer.answer).not.toMatch(/Approve the equipment nudge/);
+    expect(payload.answer.answer).toMatch(/Next: .*(IT|buddy request)/);
+  });
+
+  it("still recalculates the start date after the equipment draft was approved", async () => {
+    const opened = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const first = await opened.json() as { run_id: string };
+    const approved = await (await POST(request({ run_id: first.run_id, decision: "approve" }))).json() as { run_id: string };
+    const changed = await POST(request({ run_id: approved.run_id, action: "start_date_change", start_date: "2026-10-19" }));
+    expect(changed.status).toBe(200);
+    const payload = await changed.json() as { case: { start_date: string } };
+    expect(payload.case.start_date).toBe("2026-10-19");
+  });
+});
