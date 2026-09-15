@@ -18,9 +18,16 @@ export interface AccessRequest {
 }
 
 export const accessRequests: AccessRequest[] = [];
+const simulatedFailures = new Set<string>();
+
+export const setSimulatedAccessFailure = (system: string, enabled = true): void => {
+  if (enabled) simulatedFailures.add(system);
+  else simulatedFailures.delete(system);
+};
 
 export const resetAccessRequests = (): void => {
   accessRequests.length = 0;
+  simulatedFailures.clear();
 };
 
 export const identity: Connector = {
@@ -47,6 +54,9 @@ export const identity: Connector = {
           return ok(`Access request ${existing.id} already filed for ${existing.system} (${existing.level}).`, { request_id: existing.id }, {
             next_actions: [`Await approval by ${existing.approver} in the IdP`],
           });
+        }
+        if (simulatedFailures.has(matrixRow.system)) {
+          return failed(`Simulated identity request failure for ${matrixRow.system}. Retry is available; no request was filed.`);
         }
         const id = `REQ-${String(accessRequests.length + 1).padStart(4, "0")}`;
         accessRequests.push({

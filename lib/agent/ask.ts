@@ -1,4 +1,5 @@
 import { BUDDIES, buddyById } from "@/data/buddies";
+import { joinerById } from "@/data/joiners";
 import { PEOPLE, personById } from "@/data/people";
 import { denied } from "@/lib/connectors/interface";
 import { inventedDate } from "./guards";
@@ -24,7 +25,9 @@ export interface AskAnswer {
   links: AskLink[];
   card: AskCardKind | null;
   facts: string[];
-  provider: "mock" | "anthropic";
+  provider: "mock" | "anthropic" | "system";
+  clarification?: "person";
+  switch_joiner_id?: string;
   model: string;
   cost_usd: number;
 }
@@ -55,6 +58,7 @@ const ASK_SYSTEM_PROMPT = [
   "Use only the read tools provided and finish with a concise answer grounded in their observations.",
   "Never propose, escalate, approve, send, grant access, write HRIS data, complete a task or take any action.",
   "Do not invent dates or names. Keep the final answer under 600 characters.",
+  "Use get_case_state.onboarding for profile setup, access requests, manager coordination and new joiner questions. Planned tasks are not submitted requests. Null arrival time, address or items to bring means not recorded; name the manager or People contact for confirmation. Never imply an account was created or a first-day schedule confirmed without evidence. Only tasks with status done are complete. Cancelled tasks are cancelled, not completed; missing tasks provide no completion evidence.",
 ].join("\n");
 
 function askRuntime(context: AgentContext): AgentRuntime {
@@ -183,7 +187,7 @@ function linksFor(intent: AskIntent, run: AgentRun): AskLink[] {
   if ((intent === "status" || intent === "date_question") && hasCaseState) links.push("overview", "activity");
   if (intent === "equipment" && toolNames.has("check_equipment")) links.push("equipment");
   if (intent === "buddy" && toolNames.has("get_buddy_availability")) links.push("buddy");
-  if (["compliance", "owner", "unmatched"].includes(intent) && hasCaseState) links.push("activity");
+  if (["compliance", "owner", "unmatched", "profile", "access", "manager", "joiner"].includes(intent) && hasCaseState) links.push("activity");
   return links;
 }
 
@@ -211,6 +215,33 @@ export function guardAskAnswer(
   return { answer, facts };
 }
 
+const SUPPORTED_ASK_JOINERS = ["J-004", "J-001"]
+  .map((id) => joinerById(id))
+  .filter((candidate): candidate is Joiner => candidate !== undefined);
+
+function mentionsName(question: string, name: string): boolean {
+  const escaped = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^\\p{L}])${escaped}(?:$|[^\\p{L}])`, "u").test(question.toLowerCase());
+}
+
+// Resolve a named supported joiner before any intent runs. The visible case remains the default
+// only when the question does not explicitly name another supported person.
+function supportedQuestionSubjects(question: string): Joiner[] {
+  return SUPPORTED_ASK_JOINERS.filter((candidate) =>
+    mentionsName(question, candidate.full_name) || mentionsName(question, candidate.preferred_name));
+}
+
+// Unfamiliar explicit profile subjects still need clarification instead of being guessed.
+function profileSubject(question: string, joiner: Joiner): string | null {
+  const text = question.toLowerCase().replaceAll("’", "'").replace(/[.?!]+$/, "").trim();
+  if (!/\bprofile\b/.test(text)) return null;
+  const subject = text.match(/\bprofile\s+(?:for|of)\s+(.+)$/)?.[1]
+    ?? text.match(/([\p{L}]+(?:\s+[\p{L}]+)*)'s\s+profile\b/u)?.[1];
+  if (!subject) return null;
+  const name = subject.replace(/^(?:(?:please|can|could|would|you|open|show|me|view|check|review|the)\s+)+/, "").trim();
+  return [joiner.full_name.toLowerCase(), joiner.preferred_name.toLowerCase(), "her", "him", "them", "the joiner", "the new joiner"].includes(name) ? null : name;
+}
+
 export async function askCase(
   c: Case,
   joiner: Joiner,
@@ -220,6 +251,24 @@ export async function askCase(
   const trimmed = question.trim();
   if (!trimmed) throw new Error("Ask Athena needs a question.");
   if (trimmed.length > 300) throw new Error("Ask Athena questions must be 300 characters or fewer.");
+
+  const namedJoiners = supportedQuestionSubjects(trimmed);
+  const requestedJoiner = namedJoiners.length === 1 && namedJoiners[0].id !== joiner.id
+    ? namedJoiners[0]
+    : null;
+  const requestedProfile = profileSubject(trimmed, joiner);
+  if (requestedJoiner || namedJoiners.length > 1 || requestedProfile) {
+    const answer = requestedJoiner
+      ? `This view is scoped to ${joiner.full_name}. Switch to ${requestedJoiner.full_name} before asking that question.`
+      : `This view is scoped to ${joiner.full_name}. The demo supports Aisha Okafor and Priya Raman only; choose one case before asking that question.`;
+    c.steps.push({
+      id: `${c.id}-S-${String(c.steps.length + 1).padStart(4, "0")}`,
+      case_id: c.id, at: new Date().toISOString(), actor: "system", kind: "agent.asked",
+      summary: "Clarified the person requested before reading case facts.",
+      data: { question: trimmed, answer, provider: "system", model: "case-scope-check" },
+    });
+    return { answer, clarification: "person", switch_joiner_id: requestedJoiner?.id, links: [], card: null, facts: [`Current case: ${joiner.full_name}`], provider: "system", model: "case-scope-check", cost_usd: 0 };
+  }
 
   const model = mode === "mock"
     ? createMockAskModel({ case: c, joiner, trigger: "question", question: trimmed })

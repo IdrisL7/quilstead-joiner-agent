@@ -6,7 +6,10 @@ import { LATE_FOR } from "@/lib/connectors/simulated/equipment";
 import { findAction } from "@/lib/connectors/registry";
 import {
   changeDemoStartDate,
+  prepareManagerCoordination,
   prepareDemo,
+  reassessDemoEquipment,
+  requestDemoAccess,
   recordBuddyResponse,
   resolveBuddyApproval,
   simulateBuddyAvailabilityChange,
@@ -39,6 +42,8 @@ interface GoldenScenario {
   start_date?: string;
   candidate_id?: string;
   equipment_on_track?: boolean;
+  equipment_update_eta?: string;
+  equipment_update_status?: "ordered" | "backordered";
   expected: GoldenExpected;
 }
 
@@ -107,6 +112,9 @@ async function runContractScenario(joinerId: string, mode: AgentMode): Promise<S
 }
 
 async function runScenario(scenario: GoldenScenario, mode: AgentMode): Promise<ScenarioOutcome> {
+  // Every golden attempt is an isolated demo. prepareDemo is intentionally side-effect free
+  // with respect to global resets so the evaluator owns this boundary explicitly.
+  resetDemoState();
   const wasLate = LATE_FOR.has(scenario.joiner_id);
   if (scenario.equipment_on_track) LATE_FOR.delete(scenario.joiner_id);
   try {
@@ -114,7 +122,28 @@ async function runScenario(scenario: GoldenScenario, mode: AgentMode): Promise<S
 
     // Fixture setup always uses the deterministic mock so the scenario's trigger is the only
     // thing the model under test has to handle.
-    const initial = await prepareDemo(NOW, "mock");
+    const initial = await prepareDemo(NOW, "mock", scenario.joiner_id);
+    if (scenario.trigger === "equipment_changed") {
+      const update = findAction("equipment.update_order");
+      if (!update) throw new Error("Equipment update action is not registered");
+      const sourceChange = await update.action.run({
+        joiner_id: scenario.joiner_id,
+        eta: scenario.equipment_update_eta,
+        status: scenario.equipment_update_status,
+        now: NOW,
+      });
+      if (sourceChange.status !== "ok") throw new Error(sourceChange.summary);
+      const reassessed = await reassessDemoEquipment(initial, mode, NOW);
+      return { case: reassessed.case, agent: reassessed.agent };
+    }
+    if (scenario.trigger === "access_requested") {
+      const requested = await requestDemoAccess(initial, mode, NOW);
+      return { case: requested.case, agent: requested.agent };
+    }
+    if (scenario.trigger === "manager_coordination") {
+      const coordinated = await prepareManagerCoordination(initial, mode, NOW);
+      return { case: coordinated.case, agent: coordinated.agent };
+    }
     if (scenario.trigger === "start_date_changed") {
       const changed = await changeDemoStartDate(initial, scenario.start_date!, mode, NOW);
       return { case: changed.case, agent: changed.agent };

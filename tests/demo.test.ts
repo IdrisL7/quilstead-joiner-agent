@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { changeDemoStartDate, editDemoEquipmentDraft, prepareBuddyRequest, prepareDemo, recordBuddyResponse, resolveBuddyApproval, resolveDemoApproval, runDemo, simulateBuddyAvailabilityChange } from "@/lib/demo-flow";
 import { sent, slack } from "@/lib/connectors/simulated/messaging";
+import { resetDemoState } from "@/lib/store/demo-state";
+
+beforeEach(() => resetDemoState());
 
 describe("single end-to-end demonstration", () => {
   it("runs event to plan to approved send with a trace", async () => {
@@ -40,6 +43,7 @@ describe("single end-to-end demonstration", () => {
 
   it("rejects a decision from a superseded preparation", async () => {
     const oldPreparation = await prepareDemo(undefined, "mock");
+    resetDemoState();
     const currentPreparation = await prepareDemo(undefined, "mock");
 
     expect(currentPreparation.run_id).not.toBe(oldPreparation.run_id);

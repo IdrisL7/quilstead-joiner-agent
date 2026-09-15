@@ -78,6 +78,7 @@ export class CaseStore {
       escalations: [],
       drafts: [],
       buddy_requests: [],
+      manager_plans: [],
       steps: [],
     };
     this.cases.set(id, c);
@@ -173,6 +174,14 @@ export class CaseStore {
   get(id: string): Case | undefined {
     return this.cases.get(id);
   }
+
+  replace(c: Case): boolean {
+    const current = this.cases.get(c.id);
+    if (!current || current.joiner_id !== c.joiner_id || current.event_id !== c.event_id) return false;
+    this.cases.set(c.id, c);
+    return true;
+  }
+
   list(): Case[] {
     return [...this.cases.values()];
   }

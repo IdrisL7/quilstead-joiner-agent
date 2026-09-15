@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { buddyById } from "@/data/buddies";
+import { personById } from "@/data/people";
+import { accessRowsFor } from "@/lib/policy/access";
+import { accessRequests } from "@/lib/connectors/simulated/identity";
 import type {
   AgentContentBlock,
   AgentMessage,
@@ -111,6 +114,9 @@ function finishNextAction(
 
 export function createMockModel(context: MockModelContext): AgentModel {
   let call = 0;
+  const accessQueue = context.trigger === "access_requested"
+    ? accessRowsFor(context.joiner).filter((row) => !accessRequests.some((request) => request.joiner_id === context.joiner.id && request.system === row.system && request.level === row.level))
+    : [];
   return {
     provider: "mock",
     model: "deterministic-agent-model",
@@ -119,7 +125,42 @@ export function createMockModel(context: MockModelContext): AgentModel {
       const seen = new Set(resultsFrom(messages).map((entry) => entry.name));
       if (!seen.has("get_case_state")) return { content: [toolUse("get_case_state")] };
 
+      if (context.trigger === "access_requested") {
+        const attempted = resultsFrom(messages).filter((entry) => entry.name === "request_access").length;
+        const row = accessQueue[attempted];
+        if (row) return { content: [toolUse("request_access", { ...row })] };
+        if (!seen.has("finish")) {
+          const count = accessRowsFor(context.joiner).length;
+          const filed = accessRowsFor(context.joiner).filter((matrixRow) => accessRequests.some((request) => request.joiner_id === context.joiner.id && request.system === matrixRow.system && request.level === matrixRow.level)).length;
+          const next_action = filed === count
+            ? `${count} access requests are awaiting their named approvers; no access has been granted.`
+            : `${filed} of ${count} access requests are awaiting approval. Retry the remaining requests; no access has been granted.`;
+          return { content: [toolUse("finish", { next_action })] };
+        }
+      }
+
+      if (context.trigger === "manager_coordination") {
+        const task = context.case.tasks.find((candidate) => candidate.type === "manager_day_one_plan" && ["open", "overdue", "escalated"].includes(candidate.status));
+        const active = context.case.manager_plans?.some((request) => ["pending_approval", "send_failed", "awaiting_response", "responded", "confirmed"].includes(request.status));
+        if (task && !active && !successfulProposal(messages, "nudge")) {
+          return { content: [toolUse("propose_message", {
+            kind: "nudge",
+            to: task.owner_id,
+            subject: `First-day plan for ${context.joiner.preferred_name}`,
+            body: `Hi, please confirm ${context.joiner.preferred_name}'s arrival time, meeting place, first-day outline and anything to bring for the ${context.case.start_date} start.`,
+            reason: "The manager day-one plan is still open.",
+            evidence: [task.id, context.case.start_date],
+          })] };
+        }
+        if (!seen.has("finish")) {
+          const managerId = task ? task.owner_id : context.joiner.manager_id;
+          const managerName = personById(managerId)?.full_name ?? managerId;
+          return { content: [toolUse("finish", { next_action: active ? "Review the current manager coordination status." : `Approve the first-day plan request to ${managerName}.` })] };
+        }
+      }
+
       const buddyOnly = context.trigger === "buddy_declined" || context.trigger === "availability_changed";
+      const equipmentOnly = context.trigger === "equipment_changed";
       const hasActiveBuddy = context.case.buddy_requests.some((request) => ["pending_approval", "awaiting_acceptance", "accepted", "confirmed"].includes(request.status));
       const hasSupersededBuddy = context.case.buddy_requests.some((request) => ["declined", "superseded", "rejected"].includes(request.status));
       const shouldProposeBuddy = !hasActiveBuddy && (
@@ -132,7 +173,7 @@ export function createMockModel(context: MockModelContext): AgentModel {
       if (!buddyOnly && !seen.has("check_equipment")) return { content: [toolUse("check_equipment")] };
 
       const equipment = equipmentData(latestResult(messages, "check_equipment"));
-      if (!buddyOnly && equipment?.late && !seen.has("search_policy")) {
+      if (!buddyOnly && !equipmentOnly && equipment?.late && !seen.has("search_policy")) {
         return {
           content: [
             toolUse("search_policy", { query: "equipment order" }),
@@ -154,6 +195,14 @@ export function createMockModel(context: MockModelContext): AgentModel {
             evidence: [equipment.eta, context.case.start_date, "equipment-policy"],
           })],
         };
+      }
+      if (equipmentOnly && !seen.has("finish")) {
+        const nextAction = equipment?.late && successfulProposal(messages, "nudge")
+          ? `Approve the equipment nudge to ${equipment.owner_name}.`
+          : equipment?.late
+            ? "Review the current equipment risk."
+            : "No equipment action needed; the current ETA is not after the start date.";
+        return { content: [toolUse("finish", { next_action: nextAction })] };
       }
       if (!seen.has("get_buddy_availability")) return { content: [toolUse("get_buddy_availability")] };
       if (context.trigger === "contract.signed" && !seen.has("identity.grant_access")) {

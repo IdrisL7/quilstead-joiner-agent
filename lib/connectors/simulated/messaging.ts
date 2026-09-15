@@ -34,6 +34,9 @@ const contentVersion = (draft: Draft): string => createHash("sha256")
     subject: draft.subject,
     body: draft.body,
     citations: draft.citations ?? [],
+    workstream: draft.workstream ?? null,
+    equipment_observation_signature: draft.equipment_observation_signature ?? null,
+    equipment_source_revision: draft.equipment_source_revision ?? null,
   }))
   .digest("hex");
 

@@ -1,19 +1,131 @@
-import { describe, expect, it } from "vitest";
-import { POST } from "@/app/api/demo/route";
+import { beforeEach, describe, expect, it } from "vitest";
+import { GET, POST, resetDemoRouteState } from "@/app/api/demo/route";
+import { resetDemoState } from "@/lib/store/demo-state";
+import { findAction } from "@/lib/connectors/registry";
+import { failed } from "@/lib/connectors/interface";
+import { orders } from "@/lib/connectors/simulated/equipment";
+import { sent } from "@/lib/connectors/simulated/messaging";
+
+beforeEach(() => {
+  resetDemoState();
+  resetDemoRouteState();
+  process.env.DEMO_MODE = "mock";
+});
 
 function request(body: Record<string, unknown> = {}) {
+  const payload = typeof body.run_id === "string" && body.case_id === undefined
+    ? { ...body, case_id: "CASE-J-004" }
+    : body;
   return new Request("http://localhost/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
 describe("demo approval route", () => {
+  it.each([
+    { case_id: "CASE-J-001", decision: "approve" },
+    { case_id: "CASE-J-001", run_id: null, decision: "reject" },
+    { case_id: "CASE-J-001", run_id: "", decision: "approve" },
+    { case_id: "CASE-J-001", run_id: 123, decision: "approve" },
+    { run_id: "RUN-unknown", decision: "approve" },
+    { case_id: "", run_id: "RUN-unknown", decision: "approve" },
+  ])("rejects malformed decision identity without opening a case: %j", async (body) => {
+    const response = await POST(new Request("http://localhost/api/demo", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }));
+    expect(response.status).toBe(409);
+    const snapshot = await (await GET(new Request("http://localhost/api/demo"))).json();
+    expect(snapshot.cases).toEqual([]);
+    expect(snapshot.monitor.running).toBe(false);
+    expect(snapshot.monitor.agent_invocations).toBe(0);
+    expect(orders).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it.each(["returned_error", "thrown_error", "lost_acknowledgement"] as const)("resumes a partially opened case after %s without duplicating its equipment order", async (failureMode) => {
+    const equipment = findAction("equipment.order");
+    if (!equipment) throw new Error("Equipment connector missing");
+    const originalRun = equipment.action.run;
+    const aisha = await (await POST(request())).json() as { run_id: string; case: { id: string } };
+    let failedOnce = false;
+    equipment.action.run = async (args) => {
+      if (args.joiner_id !== "J-001" || failedOnce) return originalRun(args);
+      failedOnce = true;
+      if (failureMode === "returned_error") return failed("Temporary equipment failure", true);
+      if (failureMode === "thrown_error") throw new Error("Temporary equipment failure");
+      await originalRun(args);
+      throw new Error("Timeout after equipment order");
+    };
+    try {
+      const failedOpen = await POST(request({ action: "open_case", joiner_id: "J-001" }));
+      expect(failedOpen.status).toBe(500);
+
+      equipment.action.run = originalRun;
+      const recoveredResponse = await POST(request({ action: "open_case", joiner_id: "J-001" }));
+      expect(recoveredResponse.status).toBe(200);
+      const recovered = await recoveredResponse.json() as { case: { id: string }; joiner: { id: string }; equipment: { summary: string } };
+      expect(recovered.case.id).toBe("CASE-J-001");
+      expect(recovered.joiner.id).toBe("J-001");
+      expect(recovered.equipment.summary).not.toContain("duplicate");
+      expect(orders.filter((order) => order.joiner_id === "J-001")).toHaveLength(1);
+
+      const preserved = await (await POST(request({ action: "open_case", joiner_id: "J-004" }))).json() as typeof aisha;
+      expect(preserved.run_id).toBe(aisha.run_id);
+    } finally {
+      equipment.action.run = originalRun;
+    }
+  });
+
+  it("keeps Aisha and Priya state isolated while switching cases", async () => {
+    const aisha = await (await POST(request())).json() as {
+      run_id: string; case: { id: string }; draft: { id: string }; decision?: string;
+    };
+    const approvedAishaResponse = await POST(request({
+      case_id: aisha.case.id,
+      run_id: aisha.run_id,
+      decision: "approve",
+    }));
+    expect(approvedAishaResponse.status).toBe(200);
+    const approvedAisha = await approvedAishaResponse.json() as typeof aisha & { decision: string };
+    expect(approvedAisha.decision).toBe("approve");
+
+    const priyaResponse = await POST(request({ action: "open_case", joiner_id: "J-001" }));
+    expect(priyaResponse.status).toBe(200);
+    const priya = await priyaResponse.json() as {
+      run_id: string; case: { id: string; start_date: string }; joiner: { id: string; full_name: string };
+    };
+    expect(priya.joiner).toMatchObject({ id: "J-001", full_name: "Priya Raman" });
+    expect(priya.case.id).toBe("CASE-J-001");
+
+    const wrongCase = await POST(request({ case_id: priya.case.id, run_id: approvedAisha.run_id, decision: "approve" }));
+    expect(wrongCase.status).toBe(409);
+
+    const changedPriyaResponse = await POST(request({
+      case_id: priya.case.id,
+      run_id: priya.run_id,
+      action: "start_date_change",
+      start_date: "2026-10-09",
+    }));
+    expect(changedPriyaResponse.status).toBe(200);
+    const changedPriya = await changedPriyaResponse.json() as typeof priya;
+    expect(changedPriya.case.start_date).toBe("2026-10-09");
+
+    const reopenedAisha = await (await POST(request({ action: "open_case", joiner_id: "J-004" }))).json() as typeof approvedAisha;
+    expect(reopenedAisha.run_id).toBe(approvedAisha.run_id);
+    expect(reopenedAisha.decision).toBe("approve");
+
+    const reopenedPriya = await (await POST(request({ action: "open_case", joiner_id: "J-001" }))).json() as typeof priya;
+    expect(reopenedPriya.run_id).toBe(changedPriya.run_id);
+    expect(reopenedPriya.case.start_date).toBe("2026-10-09");
+  });
+
   it("rejects an approval from a superseded run", async () => {
     const oldResponse = await POST(request());
     const oldRun = await oldResponse.json() as { run_id: string; agent: { trigger: string; stop_reason: string; tool_calls: number; refused: number } };
     expect(oldRun.agent).toMatchObject({ trigger: "contract.signed", stop_reason: "finished", tool_calls: 9, refused: 1 });
+    await POST(request({ action: "reset" }));
     const currentResponse = await POST(request());
     const currentRun = await currentResponse.json() as { run_id: string };
 
@@ -25,6 +137,32 @@ describe("demo approval route", () => {
     const currentDecision = await POST(request({ run_id: currentRun.run_id, decision: "approve" }));
     expect(currentDecision.status).toBe(200);
     expect((await currentDecision.json()).after_approval.status).toBe("ok");
+  });
+
+  it("returns current facts and a recovery action when supplier evidence changes before approval", async () => {
+    const pending = await (await POST(request())).json() as { run_id: string; case: { id: string }; draft: { id: string } };
+    const supplierUpdate = findAction("equipment.update_order");
+    if (!supplierUpdate) throw new Error("Equipment update connector missing");
+    await supplierUpdate.action.run({ joiner_id: "J-004", eta: "2026-10-19", status: "backordered", now: "2026-09-30T10:00:00Z" });
+
+    const refused = await POST(request({ case_id: pending.case.id, run_id: pending.run_id, decision: "approve" }));
+    expect(refused.status).toBe(409);
+    const recovery = await refused.json() as { error: string; recovery: string; run_id: string; screen_state: string; facts: { equipment_eta: string; equipment_late: boolean }; draft: null; draft_unavailable: { message: string } };
+    expect(recovery.error).toContain("stale");
+    expect(recovery.recovery).toBe("equipment_reassessment");
+    expect(recovery.run_id).not.toBe(pending.run_id);
+    expect(recovery.screen_state).toBe("draft_unavailable");
+    expect(recovery.facts).toMatchObject({ equipment_eta: "2026-10-19", equipment_late: true });
+    expect(recovery.draft).toBeNull();
+    expect(recovery.draft_unavailable.message).toContain("not approved or sent");
+
+    const retried = await POST(request({ case_id: pending.case.id, run_id: recovery.run_id, action: "retry_agent" }));
+    expect(retried.status).toBe(200);
+    const refreshed = await retried.json() as { draft: { id: string; status: string }; agent: { trigger: string } };
+    expect(refreshed.agent.trigger).toBe("equipment_changed");
+    expect(refreshed.draft).toMatchObject({ status: "pending" });
+    expect(refreshed.draft.id).not.toBe(pending.draft.id);
+    expect(sent).toHaveLength(0);
   });
 
   it("thins internal agent calls from the Activity trace while keeping decisions", async () => {
@@ -326,6 +464,7 @@ describe("demo approval route", () => {
     }));
     expect(staleAfterDateChange.status).toBe(409);
 
+    await POST(request({ action: "reset" }));
     const replayResponse = await POST(request());
     const replay = await replayResponse.json() as { run_id: string; draft: { id: string } };
     const staleAfterReplay = await POST(request({
@@ -408,7 +547,10 @@ describe("demo route input validation and guidance", () => {
 
   it("moves the next action past an approved nudge on every surface", async () => {
     const run = await fresh();
-    expect(run.next_action).toBe("Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.");
+    expect(run.next_action).toContain("Approve or reject the equipment nudge to Nadia Hussain");
+    expect(run.next_action).toContain("Approve or reject the exact buddy request to Ewan Grant");
+    expect(run.next_action).toContain("Prepare the first-day plan request to Chloe Bennett");
+    expect(run.next_action).toContain("Submit 6 remaining role access requests");
     const approved = await (await POST(request({ run_id: run.run_id, decision: "approve" }))).json() as { next_action: string; agent: { next_action: string } };
     expect(approved.agent.next_action).toContain("Approve the equipment nudge");
     expect(approved.next_action).not.toContain("Approve the equipment nudge");
@@ -429,7 +571,9 @@ describe("demo route input validation and guidance", () => {
     const approved = await (await POST(request({ run_id: run.run_id, action: "buddy_decision", request_id: run.buddy.request!.id, draft_id: run.buddy.draft!.id, decision: "approve" }))).json() as { run_id: string; buddy: { request: { id: string } } };
     const declined = await (await POST(request({ run_id: approved.run_id, action: "buddy_response", request_id: approved.buddy.request.id, response: "declined" }))).json() as { next_action: string; agent: { next_action: string } };
     expect(declined.agent.next_action).toBe("Approve the replacement buddy request to Amara Osei; Ewan Grant declined.");
-    expect(declined.next_action).toBe("Approve the replacement buddy request to Amara Osei; Ewan Grant declined. The equipment nudge to Nadia Hussain still awaits approval.");
+    expect(declined.next_action).toContain("Approve or reject the equipment nudge to Nadia Hussain");
+    expect(declined.next_action).toContain("Approve or reject the exact buddy request to Amara Osei");
+    expect(declined.next_action).not.toContain("Ewan Grant still awaits approval");
   });
 
   it("does not duplicate trace rows when an idempotent agent run is re-applied", async () => {

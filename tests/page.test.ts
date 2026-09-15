@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import { EVENTS } from "@/data/events";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { JOINERS } from "@/data/joiners";
-import { ApprovalEmptyState, AskAthenaPanel, buddyCandidatesFor, candidateRequestTagFor, executionStepsFor, initialExecutionFor, simulationTargetFor, startDateRequestFor, WorkflowTriggerCard } from "@/app/page";
+import { workFocusFor, ApprovalEmptyState, AskAthenaPanel, backgroundCaseFor, backgroundRefreshBlocked, buddyCandidatesFor, candidateRequestTagFor, committedJoinerSelection, DemoRequestError, draftEditBlocksCaseMutation, equipmentApprovalRecovery, executionStepsFor, initialExecutionFor, managerEditRebase, currentMonitorAlerts, monitorAlertKey, monitorNotificationNavigationBlocked, monitorNotificationText, monitorStatusLabel, postDemo, simulationTargetFor, startDateRequestFor, WorkflowTriggerCard } from "@/app/page";
+import { OnboardingScenario } from "@/app/components/onboarding-scenarios";
+import { BackgroundUpdateNotice, equipmentMessageHistoryText } from "@/app/page";
+import type { OnboardingView } from "@/lib/onboarding-view";
 
 function render(run: { screen_state: "draft_unavailable" | "no_action"; equipment_late: boolean }) {
   return renderToStaticMarkup(createElement(ApprovalEmptyState, {
@@ -18,6 +21,14 @@ function render(run: { screen_state: "draft_unavailable" | "no_action"; equipmen
     },
   }));
 }
+
+const scenarioView = {
+  profile: { name: "Aisha Okafor", preferred_name: "Aisha", title: "Customer Success Manager", team: "Customer Success", office: "London", work_mode: "hybrid", start_date: "2026-10-12", manager_name: "Chloe Bennett", setup: [] },
+  access: [],
+  manager: { name: "Chloe Bennett", tasks: [], escalations: [], coordination: null },
+  tasks: [],
+  first_day: { start_date: "2026-10-12", office: "London", work_mode: "hybrid", manager_name: "Chloe Bennett", people_contact: "Sarah Mitchell", arrival_time: null, office_address: null, items_to_bring: null, outline: null, confirmed_plan_id: null },
+} as OnboardingView;
 
 type TestDraftStatus = "pending" | "approved" | "rejected";
 
@@ -65,6 +76,8 @@ describe("approval empty state rendering", () => {
     const html = render({ screen_state: "draft_unavailable", equipment_late: true });
 
     expect(html).toContain("Draft unavailable. Equipment risk remains");
+    expect(html).toContain("16 Oct 2026");
+    expect(html).toContain("9 Oct 2026");
     expect(html).not.toContain("No message needed");
   });
 
@@ -73,6 +86,146 @@ describe("approval empty state rendering", () => {
 
     expect(html).toContain("No message needed");
     expect(html).not.toContain("Draft unavailable");
+  });
+});
+
+describe("approval recovery response", () => {
+  it("retains structured 409 state so the page can replace a stale approval screen", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = async () => new Response(JSON.stringify({
+      error: "This equipment draft is stale because the supplier information changed.",
+      recovery: "equipment_reassessment",
+      run_id: "DEMO-RUN-RECOVERY",
+      case: { id: "CASE-J-004" },
+      screen_state: "draft_unavailable",
+      draft: null,
+      draft_unavailable: { message: "Run the equipment reassessment again." },
+    }), { status: 409, headers: { "Content-Type": "application/json" } });
+    try {
+      await postDemo({ decision: "approve" });
+      throw new Error("Expected the stale approval to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DemoRequestError);
+      expect(equipmentApprovalRecovery(error, "CASE-J-004")).toMatchObject({
+        run_id: "DEMO-RUN-RECOVERY",
+        screen_state: "draft_unavailable",
+        draft: null,
+      });
+      expect(equipmentApprovalRecovery(error, "CASE-J-001")).toBeNull();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("does not adopt arbitrary conflict payloads as equipment recovery state", () => {
+    const payload = {
+      error: "Another conflict",
+      run_id: "DEMO-RUN-OTHER",
+      case: { id: "CASE-J-004" },
+      screen_state: "draft_unavailable",
+      draft: null,
+      draft_unavailable: { message: "Retry." },
+    } as never;
+    expect(equipmentApprovalRecovery(new DemoRequestError("Another conflict", 409, payload), "CASE-J-004")).toBeNull();
+  });
+});
+
+describe("joiner selector commit", () => {
+  it("keeps the loaded case selected until a requested switch succeeds", () => {
+    expect(committedJoinerSelection("J-004")).toBe("J-004");
+    expect(committedJoinerSelection("J-004", "J-001")).toBe("J-001");
+  });
+});
+
+describe("safe monitoring presentation", () => {
+  it("shows a retained-update warning only while an unsaved editor is open", () => {
+    const renderNotice = (hasUpdate: boolean, editingEquipment: boolean, editingManager: boolean) => renderToStaticMarkup(createElement(BackgroundUpdateNotice, { hasUpdate, editingEquipment, editingManager }));
+    expect(renderNotice(true, false, false)).toBe("");
+    expect(renderNotice(false, true, false)).toBe("");
+    expect(renderNotice(true, true, false)).toContain("Your unsaved wording is preserved");
+    expect(renderNotice(true, false, true)).toContain("Your unsaved wording is preserved");
+  });
+
+  it("distinguishes unavailable equipment drafts from cleared risk in the detail panel", () => {
+    const run = executionFixture({ includeDraft: false });
+    expect(equipmentMessageHistoryText({ ...run, screen_state: "draft_unavailable" })).toContain("Equipment risk remains");
+    expect(equipmentMessageHistoryText({ ...run, screen_state: "no_action" })).not.toContain("No equipment message is needed");
+    expect(equipmentMessageHistoryText({ ...run, screen_state: "no_action", facts: { ...run.facts, equipment_late: false } })).toBe("No equipment message is needed.");
+    const approved = executionFixture({ draftStatus: "approved" });
+    expect(equipmentMessageHistoryText({ ...approved, screen_state: "resolved" })).toBe(approved.draft?.body);
+  });
+
+  it("adopts only the selected case and blocks replacement during either draft edit", () => {
+    const aisha = { case: { id: "CASE-J-004" }, joiner: { id: "J-004" } };
+    const priya = { case: { id: "CASE-J-001" }, joiner: { id: "J-001" } };
+    expect(backgroundCaseFor([aisha, priya] as never, "CASE-J-004", "J-004")).toBe(aisha);
+    expect(backgroundCaseFor([priya] as never, "CASE-J-004", "J-004")).toBeNull();
+    expect(backgroundCaseFor([aisha] as never, "CASE-J-004", "J-001")).toBeNull();
+    expect(backgroundRefreshBlocked(true, false, false)).toBe(true);
+    expect(backgroundRefreshBlocked(false, true, false)).toBe(true);
+    expect(backgroundRefreshBlocked(false, false, true)).toBe(true);
+    expect(backgroundRefreshBlocked(false, false, false)).toBe(false);
+  });
+
+  it("keeps monitoring navigation locked while either exact draft is being edited", () => {
+    expect(monitorNotificationNavigationBlocked(false, false, true)).toBe(true);
+    expect(monitorNotificationNavigationBlocked(false, true, false)).toBe(true);
+    expect(monitorNotificationNavigationBlocked(true, false, false)).toBe(true);
+    expect(monitorNotificationNavigationBlocked(false, false, false)).toBe(false);
+  });
+
+  it("rebases a manager edit only when case, request and exact draft identities are unchanged", () => {
+    const current = {
+      run_id: "RUN-1",
+      case: { id: "CASE-J-004" },
+      joiner: { id: "J-004" },
+      manager_coordination: {
+        request: { id: "MANAGER-1", status: "pending_approval" },
+        draft: { id: "DRAFT-1", status: "pending" },
+      },
+    };
+    const refreshed = structuredClone(current);
+    refreshed.run_id = "RUN-2";
+    expect(managerEditRebase(current as never, refreshed as never)).toBe(refreshed);
+
+    const changedDraft = structuredClone(refreshed);
+    changedDraft.manager_coordination.draft.id = "DRAFT-2";
+    expect(managerEditRebase(current as never, changedDraft as never)).toBeNull();
+
+    const otherCase = structuredClone(refreshed);
+    otherCase.case.id = "CASE-J-001";
+    expect(managerEditRebase(current as never, otherCase as never)).toBeNull();
+  });
+
+  it("uses calm monitor labels and case-derived notification facts", () => {
+    expect(monitorStatusLabel("watching")).toBe("Watching equipment updates");
+    expect(monitorStatusLabel("checking")).toBe("Checking a change");
+    expect(monitorStatusLabel("needs_attention")).toBe("Needs attention");
+    expect(monitorStatusLabel("paused")).toBe("Paused");
+    const monitoredCase = {
+      joiner: { full_name: "Priya Raman" },
+      facts: { equipment_eta: "2026-10-09", start_date: "2026-10-05" },
+    };
+    const text = monitorNotificationText({
+      outcome: "proposal_prepared",
+      equipment_eta: "2026-10-09",
+      start_date: "2026-10-05",
+    } as never, monitoredCase as never);
+    expect(text).toContain("Priya Raman's laptop");
+    expect(text).toContain("9 Oct 2026");
+    expect(text).toContain("5 Oct 2026");
+    expect(text).toContain("loaner or earlier delivery");
+
+    const historicalText = monitorNotificationText({
+      outcome: "proposal_prepared",
+      equipment_eta: "2026-10-09",
+      start_date: "2026-10-05",
+    } as never, {
+      joiner: { full_name: "Priya Raman" },
+      facts: { equipment_eta: "2026-10-02", start_date: "2026-10-05" },
+    } as never);
+    expect(historicalText).toContain("9 Oct 2026");
+    expect(historicalText).not.toContain("2 Oct 2026");
   });
 });
 
@@ -108,9 +261,9 @@ describe("workflow trigger presentation", () => {
       onNavigate: () => undefined,
     }));
 
-    expect(html).toContain("Chat-first case discovery");
+    expect(html).toContain("Let’s get Aisha ready for day one");
     expect(html).toContain("Fictional demo");
-    expect(html).toContain("One active onboarding case: Aisha Okafor");
+    expect(html).toContain("This demo follows Aisha Okafor’s onboarding at Quilstead.");
     expect(html).toContain("Check Aisha’s onboarding readiness.");
     expect(html).toContain("Find an available buddy for Aisha.");
     expect(html).toContain("What changes if Aisha starts on 19 October?");
@@ -266,5 +419,102 @@ describe("buddy candidate comparison", () => {
     expect(view.alternativeCandidateId).toBe("b-01");
     expect(candidateRequestTagFor({ status: "confirmed", candidate_id: "b-06" }, "b-06")).toEqual({ label: "Confirmed", tone: "positive" });
     expect(candidateRequestTagFor({ status: "confirmed", candidate_id: "b-06" }, "b-01")).toBeNull();
+  });
+});
+
+
+describe("question-focused workstreams", () => {
+  it("blocks case mutations during either equipment or manager draft editing", () => {
+    expect(draftEditBlocksCaseMutation(true, false)).toBe(true);
+    expect(draftEditBlocksCaseMutation(false, true)).toBe(true);
+    expect(draftEditBlocksCaseMutation(false, false)).toBe(false);
+  });
+  it("shows every workstream for readiness and keeps narrow questions focused", () => {
+    expect(workFocusFor("Check Aisha’s onboarding readiness.", "timeline")).toBe("all");
+    expect(workFocusFor("What's left before day one?", "timeline")).toBe("all");
+    expect(workFocusFor("Find an available buddy for Aisha.", "buddy")).toBe("buddy");
+    expect(workFocusFor("Is the laptop sorted?", "equipment")).toBe("equipment");
+    expect(workFocusFor("Any compliance risk?", "timeline")).toBe("compliance");
+  });
+  it("keeps hypothetical and explicit date questions separate from approval cards", () => {
+    expect(workFocusFor("What changes if Aisha starts on 19 October?", "timeline")).toBe("dates");
+    expect(workFocusFor("Change Aisha start date to 19 October", "timeline")).toBe("dates");
+    expect(workFocusFor("What if the laptop delivery slips?", "equipment")).toBe("equipment");
+    expect(workFocusFor("Who owns access requests?", "timeline")).toBe("answer");
+    expect(workFocusFor("What is the coffee policy?")).toBe("answer");
+  });
+});
+
+describe("manager coordination recovery UI", () => {
+  const baseProps = {
+    kind: "manager" as const,
+    view: scenarioView,
+    compact: false,
+    onOpen: () => undefined,
+    onAsk: () => undefined,
+  };
+
+  it("keeps Save and Cancel available while other case mutations are blocked", () => {
+    const html = renderToStaticMarkup(createElement(OnboardingScenario, {
+      ...baseProps,
+      disabled: true,
+      managerEditDisabled: false,
+      editingManager: true,
+      managerEditSubject: "First-day details",
+      managerEditBody: "Unsaved wording",
+      managerCoordination: {
+        request: { id: "MANAGER-1", manager_name: "Chloe Bennett", status: "pending_approval" },
+        draft: { id: "DRAFT-1", recipient: "Chloe Bennett", subject: "First-day details", body: "Original wording", status: "pending" },
+      },
+    }));
+    expect(html).toContain("Save new version");
+    expect(html).toContain("Cancel");
+    expect(html).not.toMatch(/disabled[^>]*>Save new version/);
+    expect(html).not.toMatch(/disabled[^>]*>Cancel/);
+  });
+
+  it("shows a retry for the same approved draft after delivery fails", () => {
+    const html = renderToStaticMarkup(createElement(OnboardingScenario, {
+      ...baseProps,
+      disabled: false,
+      managerCoordination: {
+        request: { id: "MANAGER-1", manager_name: "Chloe Bennett", status: "send_failed", send_error: "Temporary Slack failure" },
+        draft: { id: "DRAFT-1", recipient: "Chloe Bennett", subject: "First-day details", body: "Approved wording", status: "approved" },
+      },
+    }));
+    expect(html).toContain("Approved request was not delivered");
+    expect(html).toContain("Your exact approval is preserved");
+    expect(html).toContain("Retry approved request");
+  });
+});
+
+
+describe("monitor alert lifecycle", () => {
+  const notification = { id: "N1", case_id: "CASE-J-001", joiner_id: "J-001", at: "2026-09-15T10:00:00Z", source_revision: 2, equipment_eta: "2026-10-09", start_date: "2026-10-05", outcome: "proposal_prepared" as const, draft_id: "D1" };
+  const current = { case: { id: "CASE-J-001" }, joiner: { id: "J-001" }, facts: { equipment_eta: "2026-10-09", start_date: "2026-10-05", equipment_late: true }, draft: { id: "D1", status: "pending" } };
+
+  it("hides reviewed alerts without hiding a genuinely new alert", () => {
+    expect(currentMonitorAlerts([notification], [current] as never, [])).toHaveLength(1);
+    const reviewed = [monitorAlertKey(notification)];
+    expect(currentMonitorAlerts([notification], [current] as never, reviewed)).toEqual([]);
+    const fresh = { ...notification, at: "2026-09-15T11:00:00Z", draft_id: "D2" };
+    const changed = { ...current, draft: { id: "D2", status: "pending" } };
+    expect(currentMonitorAlerts([fresh], [changed] as never, reviewed)).toHaveLength(1);
+  });
+
+  it("shows only the latest case update and does not resurrect older alerts when dismissed", () => {
+    const cleared = { ...notification, id: "N2", source_revision: 3, equipment_eta: "2026-10-02", outcome: "risk_cleared" as const, draft_id: null };
+    const onTime = { ...current, facts: { ...current.facts, equipment_eta: "2026-10-02", equipment_late: false }, draft: null };
+    expect(currentMonitorAlerts([notification, cleared], [onTime] as never, []).map(x => x.notification.id)).toEqual(["N2"]);
+    expect(currentMonitorAlerts([notification, cleared], [onTime] as never, [monitorAlertKey(cleared)])).toEqual([]);
+  });
+
+  it("removes obsolete proposals and rejects mismatched case evidence", () => {
+    for (const changed of [
+      { ...current, draft: { id: "D1", status: "approved" } },
+      { ...current, draft: { id: "D2", status: "pending" } },
+      { ...current, joiner: { id: "J-004" } },
+      { ...current, facts: { ...current.facts, start_date: "2026-10-19" } },
+    ]) expect(currentMonitorAlerts([notification], [changed] as never, [])).toEqual([]);
   });
 });

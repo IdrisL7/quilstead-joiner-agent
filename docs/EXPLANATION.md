@@ -1,131 +1,93 @@
-# Athena build explanation
+# Why I built it this way
 
-## The flow in one line
+I chose onboarding because the consequences are easy to see. Someone can have a signed contract and a completed checklist, then arrive without a laptop, a buddy who has time, or a confirmed plan for the morning.
 
-```text
-EVT-004 contract.signed
-  -> CaseStore.open and deterministic plan
-  -> equipment.order observation
-  -> bounded agent loop: observe, propose or escalate, finish
-  -> Drafts in trusted approval state
-  -> People Partner decision
-  -> simulated slack.send_message receipt
-  -> buddy comparison -> exact buddy request approval -> labelled simulated response
-  -> named People confirmation
-  -> joiner.start_date_changed and current-state recomputation
-```
+My interpretation of Quilstead's problem was that People still has to connect information across owners and systems. I built around that coordination work. In a real engagement, I would check that diagnosis with the team before treating it as the cause.
 
-## 1. What starts the workflow and where facts come from
+## What I prioritised
 
-The demo selects the existing `EVT-004` contract-signed event in `data/events.ts`. `CaseStore.open` creates `CASE-J-004`, writes the contract, builds the country-aware plan and assigns owners from the deterministic policy code in `lib/plan.ts`.
+Equipment came first. A delivery date after the start date gives the agent a clear problem, an owner and a useful next step: ask IT for a loaner or earlier delivery. It also gives the customer something concrete to review.
 
-The equipment observation comes from the simulated `equipment.order` connector. It returns a backordered order with an ETA of 16 October. `buildDemoFacts` in `lib/demo-flow.ts` projects the current contract timestamp, equipment task deadline, owner, start date, ETA, calculated gap, risk flag and verbatim equipment policy quote. The UI and model receive the same current facts.
+Buddy availability mattered to me because I have been through onboarding where the person assigned to help was too busy. Eligibility alone does not solve that. The demo checks capacity and calendar slots, then asks the buddy to accept. People confirms the allocation afterwards. A free calendar slot does not prove someone is willing or able to help.
 
-## 2. What deterministic code decides
+I added access requests and manager coordination to cover more of the first-day handoffs. Access follows a role matrix and stops at a submitted request with a named approver. The manager supplies arrival details, which only become confirmed facts after People reviews them.
 
-- `lib/plan.ts` decides task deadlines, owners, status and policy escalations.
-- `lib/store/case-store.ts` preserves the case identity and reconciles the existing tasks when a start-date event arrives.
-- `lib/demo-flow.ts` decides whether the current ETA is late, whether a draft is needed and whether a superseded draft is still usable.
-- `lib/connectors/simulated/messaging.ts` resolves the approved draft from trusted state. A caller cannot supply approval, recipient or free text to the send action.
+Equipment monitoring removes one repeated manual check. Once a case is open, the server watches for supplier changes and prepares a new action when needed. I kept monitoring limited to equipment so I could test the full path, including stale work and failures.
 
-The model does not calculate deadlines, choose recipients, grant access, approve a message or declare that an external outcome happened.
+I chose a conversation as the entry point. A readiness question shows the full picture; a specific question shows the relevant work. Calendar comparisons, source facts and the activity trail remain available when someone needs to inspect the reasoning.
 
-## 3. What the model decides
+I left profile editing, real integrations and persistence out of this build. The profile view makes the missing setup task visible, but does not pretend to complete it. Adding more write operations would need more validation than I could demonstrate here.
 
-`lib/agent/loop.ts` owns the bounded Messages API tool-use loop. The model can choose which
-allowed observation to request next, whether current evidence supports a pending equipment or
-buddy proposal, whether an unresolved issue needs escalation, and the next human action. The
-mock model in `lib/agent/mock-model.ts` is the golden state machine for mock mode. On the
-`contract.signed` run it makes one deliberate prohibited `identity.grant_access` call so the Activity
-trace shows the permission boundary, then continues to a finished run; the date, decline and
-availability runs make no such call.
+## How a case runs
 
-The `Next:` banner and Ask Athena's status answer share one server-computed next action: the
-assistant's `finish` sentence while nothing has changed since its run, and the attention summary
-built from current case state once a person has approved, rejected, accepted or confirmed anything.
-The assistant's original sentence stays in the Activity trail as history.
+A contract-signed fixture event, or the first supported question, opens the case. Code creates tasks, calculates dates and gathers initial observations. The model does not choose every part of that setup.
 
-Every tool call passes through `authorize()` and the registered connector runtime. The loop caps
-model steps, tool calls and elapsed time. `propose_message` is guarded by application code for
-recipient allowlists, current availability, concrete equipment mitigation, trusted slots, date
-evidence and length. `finish` only records the next human action. No tool can send a message,
-grant access, write HRIS data or complete compliance work.
+The bounded loop then gives the model a case goal, instructions and permitted tools. In live mode it chooses what to check next, whether to propose a message, an allowed recipient, wording, an escalation or a next action. Each trigger limits the work it can do.
 
-The current triggers are `contract.signed`, `start_date_changed`, `buddy_declined` and
-`availability_changed`. A date change recomputes the case before the assistant runs. A declined
-buddy or changed calendar re-reads the current comparison and can create a fresh pending request;
-the old request remains history. A failed run leaves the current case installed with a visible
-`Run assistant again` recovery action. Non-finished runs do not commit staged proposals.
+Code validates the result before registering a pending draft. People can edit the wording and approve the exact saved version. The messaging connector checks that approval again before sending. A changed date, supplier observation or draft can make an earlier approval stale.
 
-The model proposes the recipient and wording. Code appends the two proposed buddy slots from the
-latest availability observation, validates the proposal against the current facts and guardrails,
-and leaves the draft for a named human to approve. Mock wording is deterministic for repeatable
-evaluation; live wording is generated from the same observations. Both modes keep facts,
-approval gates and connector permissions outside the model.
+The response and the outcome stay separate. Sending a message to IT does not mean the laptop is sorted. Buddy acceptance is followed by People confirmation. A manager's reply is reviewed before it becomes a confirmed first-day plan.
 
-The buddy presentation uses the same current case facts and simulated calendar snapshot. Code ranks
-policy-eligible candidates, calculates two non-overlapping first-week slots, shows the top three
-plus, when one exists, the next available alternative, and keeps the exact request in a separate preview. People approves the exact buddy draft
-before the simulated send. A clearly labelled simulated response then records acceptance or decline;
-acceptance alone never completes the task. Named People confirmation is the final buddy boundary.
+## Code, model and human decisions
 
-The first-week calendar strip in the selected-candidate panel is a second view of the same
-observation. The route projects the candidate's busy intervals for the joiner's first working week
-from `data/buddy-calendars.ts` (only when the snapshot's `read_status` is `known`, only intervals in
-that week, no titles or attendees because the fixture holds none), and the UI draws them beside the
-proposed slots and the joiner's 09:30 Monday arrival. Unknown, error and out-of-coverage calendars
-render as a labelled empty week with the same reason text the comparison shows. The agent's
-`get_buddy_availability` observation is unchanged; the strip exists for the person approving, not for
-the model. Confirmed slots turn green after People confirmation; a superseded or rejected request's
-slots are not drawn.
+| Responsibility | Who owns it |
+|---|---|
+| Dates, owners, equipment lateness, buddy eligibility, capacity and slots | Deterministic application rules |
+| Tool permissions, role access, proposal validation and stale-version checks | Application code |
+| Which permitted observation to request, what to propose and how to word it | The live model, within the trigger's instructions |
+| Message approval, buddy willingness and final allocation or plan confirmation | People and the named participants |
+| Supplier updates, calendar changes and replies | External inputs, simulated in this build |
 
-Ask Athena is a Slack-style surface over the same case, read-only once a case is open. The first question on an empty workspace opens the case through the same `contract.signed` path as the trigger button and prefixes its answer with what the run proposed. Its `question` run uses the same
-bounded loop, but the tool definitions and runtime allow only current-state and policy reads plus
-`finish`; proposal, escalation, approval, send and write tools are excluded in application code. The
-mock router answers six case intents (status, equipment, buddy, compliance, owner, start date) from
-current observations and labels each response `Mock answer`. Live mode uses the Anthropic adapter with the same schemas and guards and labels the
-response `Anthropic model`. Answer guards replace untrusted dates or names and cap the response at
-600 characters. Code derives section links from the tools actually used, and one `agent.asked` step
-is added to the case trail. The browser keeps the question history in memory only, so Reset clears
-it and no persistence is introduced. The question is data, not an instruction, and cannot open a
-second path to an approval story.
+I kept exact rules in code because they have answers that can be tested directly. A model does not need to calculate whether 9 October is after a 5 October start. Its role is to use the observations to choose and explain a permitted next step.
 
-The attention summary is a projection of the current case, task, request and escalation state, not a
-second readiness store. The trace records simulation inputs, connector observations, approvals,
-responses and confirmation history.
+The live model's output can vary. Temperature zero does not guarantee identical wording or tool choices. Mock mode uses fixed responses and is useful for repeatable workflow tests; it is not evidence of fresh model reasoning.
 
-## 4. Why the approval boundary is outside the model
+Ask Athena uses read-only tools once a case is open. A first question can open a case and run its initial checks. An explicit date-change request still needs the separate confirmation action. Filing access requests is permitted only within the relevant workflow and role rules. There is no access-grant action.
 
-Every outbound message is a registered `Draft` with a pending status. `approveDraft` and `rejectDraft` are trusted application functions called by the approval route. The connector checks the trusted approval snapshot again before sending and suppresses duplicate sends by action, channel and draft id.
+## Background monitoring and recovery
 
-The e-sign action has its own action and channel check, so an email approval cannot authorise an e-sign pack.
+One server-side monitor checks opened cases on chained 15-second ticks. It compares supplier signatures and revisions. An unchanged observation creates no new agent run, draft or notification.
 
-## 5. How People edits equipment wording
+A changed observation triggers equipment reassessment. Before accepting the result, code checks the supplier source, case revision and reset generation again. That prevents an older result from replacing newer state. The browser polls read-only snapshots to display progress; it does not drive the scheduler.
 
-Only a pending equipment draft exposes `Edit`. People can change the subject and message,
-while recipient, channel and evidence facts remain application-controlled. `Save` validates
-the fields, creates a fresh draft and run id, supersedes the old pending version and records
-`Edited by People`; it sends nothing. Approval then resolves that exact saved draft. A stale tab,
-old draft id, superseded draft or non-pending draft is rejected. Buddy request state and history
-remain separate, and a start-date change can supersede the pending edited draft.
+The monitor continues while the browser is closed, provided the server stays running. It creates in-app alerts, not administrator emails or push notifications. Alerts can draw attention to another case without switching the user's view. Reviewing or dismissing an alert leaves the approval decision unchanged.
 
-## 6. Rejection, stale approval, model failure and a changed date
+The loop has caps of eight model steps and twelve tool calls, a 60-second run budget and a 15-second model-call timeout. The SDK has no automatic retries; the live adapter separately allows one retry for rate-limit or overload responses. These limits bound the demo's work and cost. They do not guarantee production response times.
 
-- Rejection records a human decision and the connector refuses the send.
-- A new preparation or a start-date change rotates the active run id. An old tab receives a 409 and cannot approve the current draft.
-- A start-date change supersedes any pending draft before updating the case. The case and HRIS snapshot then move together.
-- If the assistant fails after that state change, `changeDemoStartDate` returns the updated case, updated joiner and current facts with `draft_unavailable`. The screen shows a clear recovery state, keeps the run active, offers `Run assistant again` for the same date and allows a different date to be recalculated. No message is approvable in that state.
-- A successful date change to 19 October removes the late-arrival risk because the unchanged 16 October ETA is now earlier than first day. A date such as 9 October keeps the risk and can produce a fresh draft.
-- A simulated calendar change marks the selected buddy's availability unknown, refreshes the comparison and invalidates an affected request. Decline recovery offers another pending candidate request without automatically sending a replacement.
+Monitoring has a six-invocation session ceiling and a two-attempt limit for a failed observation. Case state is in memory, so a server restart loses progress. A production service would need durable state and recovery before it could promise continued monitoring.
 
-A recovery defect fixed during the build was a partial transition: the old implementation mutated the case before drafting, then returned the old preparation facts when drafting failed. The new preparation is built from the mutated case and current joiner state before it is installed as the active run.
+## How I used AI and checked the output
 
-## 7. What is simulated, tested live and still unknown
+I used AI coding assistants to produce most of the implementation and regression tests. My role was to set the scope, question the behavior, direct revisions and check the evidence. I do not claim to have manually written or reviewed every line.
 
-Simulated: HRIS state, in-memory case storage, equipment response, policy files, mock agent model, Slack send and receipts. Live Anthropic wording uses the same simulated observations; no persistence or live connector is included.
+I worked incrementally through fictional data, deterministic rules, simulated connectors, approval controls, the model loop and the customer interface. I used separate QA passes to challenge the result through tests, HTTP requests and browser interactions.
 
-Verified in this workspace: mock flow, approval refusal and approval, stale-run rejection, duplicate suppression, start-date recomputation, evidence projection, missing-key drafting failure recovery, editable equipment draft exactness, bounded trigger recovery, the 20-scenario mock golden set at 20/20 pass^3, the same 20 scenarios live on `claude-haiku-4-5-20251001` at 20/20 pass^3 with zero terminal-state flapping (USD 0.027 per run, 2026-09-13), typecheck, lint and production build. Real Slack delivery, IT response, persistence and production latency under load remain unknown.
+One useful failure involved a supplier update arriving while People edited a manager message. The update changed the case version, so Save could fail or navigation could hide the editor. The repair preserved the wording and allowed a newer case version only when the exact pending manager request and draft still matched. The server continued to reject stale work.
 
-## 8. Code and AI assistance disclosure
+Later QA found a malformed approval request that opened the default case instead of rejecting the request. It did not send anything, but it was still the wrong behavior. Validation now rejects it before any case or monitor starts. I also corrected status messages that made saved edits look unsaved or described a failed draft as requiring no action.
 
-The implementation reuses the existing `CaseStore`, plan builder, simulated connectors, permission ladder, policy files, bounded agent runtime and approval state functions. AI coding assistants wrote most of the code and regression tests under direction, in small reviewed steps; the final pass before submission was an adversarial QA of the API, the chat and the documents against the code, with every finding fixed or listed in the README ledger. The customer flow does not claim that a human reviewed every line or that live integrations were exercised.
+The [evaluation report](evals/README.md) separates the current mock results from earlier live-model evidence. Neither the tests nor the evaluation establish reliability on unseen customer data. Live verification of the latest access, manager and monitoring paths is still outstanding.
+
+## Value I would measure
+
+The demo catches a late laptop, prepares a request, identifies buddies with time, files permitted access requests and records a confirmed first-day plan. It also reacts to a supplier change without another manual check.
+
+I expect that to reduce checking and chasing, but I have not measured customer time savings. For a pilot I would compare People effort per joiner, unresolved blockers before day one, and how often proposals are accepted, edited or rejected. I would also measure detection delay, failed-action recovery, API cost and human review time. An approval queue that takes as much work as the old process would not be a useful result.
+
+## Before a real build
+
+I would start with People, managers, buddies and IT to map the handoffs. Which failures recur? Who owns each step? What evidence counts as ready? Can buddies decline, and how is their capacity measured?
+
+Next I would agree which systems are authoritative and check their APIs, events and sandbox access. A supplier receipt, an access request and a completed delivery mean different things. The integration needs to preserve those distinctions.
+
+Security and privacy owners would need to agree what employee and calendar data the service can read, what may reach the model, who can approve each action, and how long records are retained. The policies and country rules in this repository are fictional examples, not a substitute for that discovery.
+
+## Before pilot and launch
+
+I would require authenticated identities and case-level permissions, durable cases and approvals, recoverable work after a restart, and coordination between workers. Retries must reconcile ambiguous sends so a lost acknowledgement does not produce a second message.
+
+Real connector tests would cover duplicates, out-of-order events, rate limits, missing records, partial failures and revoked access. Policy tests would include public holidays, timezone changes, contractors, leave and incomplete calendars. Deterministic code can still be consistently wrong if its inputs or policy rules are wrong.
+
+I would test the current live model on held-out cases and untrusted inputs, including instructions hidden in messages or documents. Evaluation needs to check recipients, dates and actions as well as readable prose. Prompt, tool, policy and model changes should trigger another evaluation.
+
+I would agree an operational owner, failure alerts, spending limits, a pause control and a manual fallback. Then I would start in a sandbox, compare results in a read-only shadow run, and pilot proposals with a small supervised group. Expansion should follow the evidence from that pilot.

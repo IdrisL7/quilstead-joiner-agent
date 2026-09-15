@@ -276,6 +276,34 @@ export interface Draft {
   edited_by?: string;
   edited_at?: string;
   supersedes_draft_id?: string;
+  workstream?: "equipment" | "manager";
+  equipment_observation_signature?: string;
+  equipment_source_revision?: number;
+}
+
+export type ManagerPlanStatus = "pending_approval" | "send_failed" | "awaiting_response" | "responded" | "confirmed" | "rejected" | "superseded";
+
+export interface ManagerPlanRequest {
+  id: string;
+  case_id: string;
+  joiner_id: string;
+  manager_id: string;
+  draft_id: string;
+  start_date: string;
+  status: ManagerPlanStatus;
+  created_at: string;
+  sent_at?: string;
+  send_failed_at?: string;
+  send_error?: string;
+  response_at?: string;
+  arrival_time?: string;
+  meeting_place?: string;
+  first_day_outline?: string[];
+  items_to_bring?: string[];
+  confirmed_at?: string;
+  confirmed_by?: string;
+  invalidated_at?: string;
+  invalidation_reason?: string;
 }
 
 export type StepActor = "system" | "agent" | "human";
@@ -301,6 +329,7 @@ export interface Case {
   escalations: Escalation[];
   drafts: Draft[];
   buddy_requests: BuddyRequest[];
+  manager_plans?: ManagerPlanRequest[];
   steps: Step[];
   buddy_id?: string;
   closed_at?: string;

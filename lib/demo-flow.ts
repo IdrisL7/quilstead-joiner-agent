@@ -6,6 +6,7 @@ import { joinerById } from "@/data/joiners";
 import { personById } from "@/data/people";
 import { authorize } from "@/lib/permissions";
 import { findAction } from "@/lib/connectors/registry";
+import { failed } from "@/lib/connectors/interface";
 import { loadKb } from "@/lib/connectors/simulated/policy-kb";
 import {
   releaseBuddyCapacity,
@@ -14,23 +15,26 @@ import {
 } from "@/lib/connectors/simulated/buddy-directory";
 import {
   approveDraft,
+  discardDraft,
   rejectDraft,
   registerDraft,
   supersedeDraft,
 } from "@/lib/connectors/simulated/messaging";
 import type { NudgeModelDraft } from "@/lib/model";
 import { CaseStore } from "@/lib/store/case-store";
-import { currentJoinerById } from "@/lib/store/joiner-store";
 import { resetDemoState } from "@/lib/store/demo-state";
+import { currentJoinerById } from "@/lib/store/joiner-store";
 import { deriveState } from "@/lib/state-machine";
 import { isWeekend } from "@/lib/policy/dates";
 import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
-import type { BuddyRequest, Case, Draft, HrisEvent, Joiner, ToolResult } from "@/lib/types";
+import type { BuddyRequest, Case, Draft, HrisEvent, Joiner, ManagerPlanRequest, ToolResult } from "@/lib/types";
 import { runAgent } from "@/lib/agent/loop";
+import { AGENT_TOOL_DEFINITIONS } from "@/lib/agent/tools";
 import type { AgentRun } from "@/lib/agent/types";
+import type { EquipmentSourceObservation } from "@/lib/connectors/simulated/equipment";
 
 const DEMO_NOW = "2026-09-30T09:00:00Z";
-const DEMO_EVENT_ID = "EVT-004";
+const DEMO_JOINER_ID = "J-004";
 const EQUIPMENT_POLICY_ID = "equipment-policy";
 const EQUIPMENT_POLICY_QUOTE = "IT orders equipment within five working days of the contract being signed.";
 
@@ -87,6 +91,7 @@ export interface DemoPreparation {
   agent_trace_run_id?: string;
   draft: Draft | null;
   equipment: ToolResult;
+  equipment_observation: EquipmentSourceObservation;
   beforeApproval: ToolResult | null;
   facts: DemoFacts;
   buddy: DemoBuddyState;
@@ -106,6 +111,7 @@ export interface DemoResolution {
   model: Pick<NudgeModelDraft, "provider" | "model">;
   draft: Draft;
   equipment: ToolResult;
+  equipment_observation: EquipmentSourceObservation;
   beforeApproval: ToolResult;
   afterApproval: ToolResult;
   facts: DemoFacts;
@@ -150,6 +156,12 @@ const ACTIVE_BUDDY_REQUEST_STATUSES = new Set<BuddyRequest["status"]>([
 export class BuddyFlowConflict extends Error {
   readonly statusCode = 409;
   constructor(message: string) {
+    super(message);
+  }
+}
+
+export class EquipmentApprovalConflict extends BuddyFlowConflict {
+  constructor(message: string, readonly preparation: DemoPreparation) {
     super(message);
   }
 }
@@ -199,6 +211,9 @@ function agentTraceEntries(agent: AgentRun, availability: BuddyAvailabilityResul
     : availability.escalation?.summary ?? "No buddy recommendation is available from the current facts.";
   return agent.trace.flatMap((entry) => {
     const entries: DemoTraceEntry[] = [entry];
+    if (entry.kind === "agent.tool_result" && entry.summary.startsWith("Access request ")) {
+      entries.push({ actor: "agent", kind: "tool.identity.request_access", summary: entry.summary });
+    }
     if (entry.kind === "agent.tool_result" && (entry.summary.startsWith("Recommended") || entry.summary.startsWith("No suitable buddy"))) {
       entries.push({ actor: "agent", kind: "tool.buddy_directory.get_availability", summary: availabilitySummary });
     }
@@ -222,7 +237,7 @@ function agentUnavailableMessage(agent: AgentRun): DemoDraftUnavailable {
 
 function applyAgentRun(preparation: DemoPreparation, agent: AgentRun): DemoPreparation {
   const availability = agent.availability ?? preparation.buddy.availability;
-  const equipmentProposal = agent.proposals.find((proposal) => proposal.draft.kind === "nudge");
+  const equipmentProposal = agent.proposals.find((proposal) => proposal.draft.kind === "nudge" && proposal.draft.workstream !== "manager");
   const buddyProposal = agent.proposals.find((proposal) => proposal.draft.kind === "buddy_intro");
   const latestRequest = latestBuddyRequest(preparation.case);
   const preservesCurrentBuddy = latestRequest?.id === preparation.buddy.request?.id;
@@ -408,6 +423,34 @@ function equipmentData(equipment: ToolResult): { eta: string; status: string } {
   return { eta: String(equipment.data.eta), status: "status" in equipment.data ? String(equipment.data.status) : equipment.status };
 }
 
+function equipmentObservation(equipment: ToolResult): EquipmentSourceObservation {
+  if (!equipment.data || typeof equipment.data !== "object") throw new Error("Equipment source observation is missing.");
+  const data = equipment.data as Record<string, unknown>;
+  if (typeof data.order_id !== "string" || typeof data.joiner_id !== "string" || typeof data.eta !== "string"
+    || (data.status !== "ordered" && data.status !== "backordered") || !Number.isInteger(data.source_revision)
+    || typeof data.signature !== "string") {
+    throw new Error("Equipment source observation is malformed.");
+  }
+  return {
+    order_id: data.order_id,
+    joiner_id: data.joiner_id,
+    eta: data.eta,
+    status: data.status,
+    source_revision: data.source_revision as number,
+    signature: data.signature,
+  };
+}
+
+export async function readEquipmentSource(joinerId: string): Promise<{ result: ToolResult; observation: EquipmentSourceObservation }> {
+  const result = await requireAction("equipment.get_order").action.run({ joiner_id: joinerId });
+  if (result.status === "error" || result.status === "denied") throw new Error(result.summary);
+  return { result, observation: equipmentObservation(result) };
+}
+
+export function sameEquipmentObservation(left: EquipmentSourceObservation, right: EquipmentSourceObservation): boolean {
+  return left.signature === right.signature && left.source_revision === right.source_revision;
+}
+
 export function buildDemoFacts(c: Case, event: HrisEvent, joiner: Joiner, equipment: ToolResult): DemoFacts {
   const task = c.tasks.find((candidate) => candidate.type === "equipment_order");
   if (!task) throw new Error("Demo equipment task is missing from the plan");
@@ -438,32 +481,48 @@ function modelMetadata(mode: string): Pick<NudgeModelDraft, "provider" | "model"
     : { provider: "mock", model: "deterministic-demo-model" };
 }
 
-export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?? "mock"): Promise<DemoPreparation> {
-  resetDemoState();
+export async function prepareDemo(
+  now = DEMO_NOW,
+  mode = process.env.DEMO_MODE ?? "mock",
+  joinerId = DEMO_JOINER_ID,
+  store = new CaseStore(),
+): Promise<DemoPreparation> {
   const runId = nextRunId();
 
-  const event = EVENTS.find((candidate) => candidate.event_id === DEMO_EVENT_ID && candidate.type === "contract.signed");
-  if (!event) throw new Error(`Demo event is not registered: ${DEMO_EVENT_ID}`);
+  const event = EVENTS.find((candidate) => candidate.joiner_id === joinerId
+    && candidate.type === "contract.signed"
+    && candidate.payload.redelivery !== true);
+  if (!event) throw new Error(`Demo contract event is not registered for joiner: ${joinerId}`);
   const joiner = joinerById(event.joiner_id);
   if (!joiner) throw new Error(`Demo joiner is not registered: ${event.joiner_id}`);
 
-  const store = new CaseStore();
   const opened = store.open(event, joiner, now);
-  if (!opened.case || opened.outcome !== "opened") throw new Error(`Demo case did not open: ${opened.outcome}`);
+  if (!opened.case || !["opened", "duplicate"].includes(opened.outcome) || opened.case.event_id !== event.event_id) {
+    throw new Error(`Demo case did not open: ${opened.outcome}`);
+  }
   const c = opened.case;
   const trace = traceFromCase(c);
 
   const equipmentAction = requireAction("equipment.order");
   if (authorize("equipment.order").mode !== "automatic") throw new Error("Demo equipment action is not automatic");
-  const equipment = await equipmentAction.action.run({
-    joiner_id: joiner.id,
-    model: joiner.equipment_preference,
-    ship_to: joiner.work_mode === "remote" ? "home" : "office",
-    now,
-  });
-  recordCaseStep(c, "agent", "tool.equipment.order", equipment.summary, now, { status: equipment.status });
-  trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
+  let equipment = opened.outcome === "duplicate"
+    ? await requireAction("equipment.get_order").action.run({ joiner_id: joiner.id })
+    : failed("No existing equipment order", true);
+  if (equipment.status === "error" || equipment.status === "denied") {
+    equipment = await equipmentAction.action.run({
+      joiner_id: joiner.id,
+      model: joiner.equipment_preference,
+      ship_to: joiner.work_mode === "remote" ? "home" : "office",
+      now,
+    });
+  }
+  if (equipment.status === "error" || equipment.status === "denied") throw new Error(equipment.summary);
+  if (!c.steps.some((step) => step.kind === "tool.equipment.order")) {
+    recordCaseStep(c, "agent", "tool.equipment.order", equipment.summary, now, { status: equipment.status });
+    trace.push({ actor: "agent", kind: "tool.equipment.order", summary: equipment.summary });
+  }
   const facts = buildDemoFacts(c, event, joiner, equipment);
+  const sourceObservation = equipmentObservation(equipment);
   const agent = await runAgent(c, joiner, "contract.signed", now, mode === "live" ? "live" : "mock");
   const availability = agent.availability ?? await readBuddyAvailability(joiner, c.start_date, [], c.id);
   const base: DemoPreparation = {
@@ -475,6 +534,7 @@ export async function prepareDemo(now = DEMO_NOW, mode = process.env.DEMO_MODE ?
     model: { provider: agent.provider, model: agent.model },
     draft: null,
     equipment,
+    equipment_observation: sourceObservation,
     beforeApproval: null,
     facts,
     buddy: buddyState(availability, null),
@@ -496,6 +556,11 @@ export async function changeDemoStartDate(
   if (newStartDate === previousStartDate) {
     if (!preparation.draft_unavailable) throw new DemoInputError("Choose a different start date to recalculate the case.");
     return retryAgent(preparation, mode, now);
+  }
+
+  const currentManagerPlan = latestManagerPlan(preparation.case);
+  if (currentManagerPlan && ACTIVE_MANAGER_PLAN_STATUSES.has(currentManagerPlan.status)) {
+    invalidateManagerPlan(preparation.case, currentManagerPlan, now, "Start date changed; the manager must reconfirm the first-day plan.");
   }
 
   // Only a draft still waiting for a decision is superseded. An approved and sent draft is
@@ -586,6 +651,15 @@ export async function retryAgent(
       { actor: "system", kind: "agent.retry", summary: `Ran the assistant again for the current ${facts.start_date} case state.` },
     ],
   };
+  if (preparation.agent?.trigger === "manager_coordination") {
+    return prepareManagerCoordination(base, mode, now);
+  }
+  if (preparation.agent?.trigger === "access_requested") {
+    return requestDemoAccess(base, mode, now);
+  }
+  if (preparation.agent?.trigger === "equipment_changed") {
+    return reassessDemoEquipment(base, mode, now, { force: true });
+  }
   const agent = await runAgent(
     preparation.case,
     preparation.joiner,
@@ -595,6 +669,381 @@ export async function retryAgent(
     { force: true },
   );
   return applyAgentRun(base, agent);
+}
+
+function retirePendingEquipmentDraft(preparation: DemoPreparation, now: string, reason: string): string | null {
+  const draft = preparation.draft;
+  if (!draft || draft.workstream !== "equipment" || draft.status !== "pending") return null;
+  if (!supersedeDraft(draft.id, now, reason)) throw new Error(`Equipment draft could not be superseded: ${draft.id}`);
+  markCaseDraftSuperseded(preparation.case, draft.id, now, reason);
+  return draft.id;
+}
+
+export async function reassessDemoEquipment(
+  preparation: DemoPreparation,
+  mode = process.env.DEMO_MODE ?? "mock",
+  now = DEMO_NOW,
+  options?: { force?: boolean; detectedByMonitor?: boolean },
+): Promise<DemoPreparation> {
+  const source = await readEquipmentSource(preparation.joiner.id);
+  if (!options?.force && sameEquipmentObservation(preparation.equipment_observation, source.observation)) return preparation;
+
+  const supersedeReason = `Superseded because equipment source revision changed from ${preparation.equipment_observation.source_revision} to ${source.observation.source_revision}.`;
+  const supersededDraftId = retirePendingEquipmentDraft(preparation, now, supersedeReason);
+  const facts = buildDemoFacts(preparation.case, preparation.event, preparation.joiner, source.result);
+  const base: DemoPreparation = {
+    ...preparation,
+    run_id: nextRunId(),
+    equipment: source.result,
+    equipment_observation: source.observation,
+    facts,
+    draft: null,
+    beforeApproval: null,
+    decision: undefined,
+    afterApproval: undefined,
+    draft_unavailable: undefined,
+    trace: [
+      ...preparation.trace,
+      { actor: "system", kind: "equipment.source.changed", summary: `Equipment ${source.observation.order_id} changed to ETA ${source.observation.eta}, status ${source.observation.status}, revision ${source.observation.source_revision}.` },
+      ...(options?.detectedByMonitor ? [{ actor: "agent" as const, kind: "equipment.monitor.detected", summary: `Athena detected supplier revision ${source.observation.source_revision} and started an equipment reassessment.` }] : []),
+      ...(supersededDraftId ? [{ actor: "system" as const, kind: "draft.superseded", summary: `Draft ${supersededDraftId} is unavailable after the equipment update.` }] : []),
+    ],
+  };
+  const toolDefinitions = AGENT_TOOL_DEFINITIONS.filter((tool) => ["get_case_state", "check_equipment", "propose_message", "finish"].includes(tool.name));
+  const agent = await runAgent(preparation.case, preparation.joiner, "equipment_changed", now, mode === "live" ? "live" : "mock", {
+    force: true,
+    cache: false,
+    toolDefinitions,
+    systemPrompt: [
+      "You are Athena's bounded equipment reassessment assistant.",
+      "Read the case and current equipment order.",
+      "If the ETA is after the current start date, propose one nudge to the equipment task owner asking for a loaner or earlier delivery.",
+      "Otherwise finish with no equipment action needed. Never call buddy, access or manager tools. Never send the message.",
+    ].join("\n"),
+  });
+  let updated = applyAgentRun(base, agent);
+
+  let verified: Awaited<ReturnType<typeof readEquipmentSource>>;
+  try {
+    verified = await readEquipmentSource(preparation.joiner.id);
+  } catch (error) {
+    retirePendingEquipmentDraft(updated, now, "Superseded because the final supplier verification failed.");
+    return {
+      ...updated,
+      run_id: nextRunId(),
+      draft: null,
+      beforeApproval: null,
+      decision: undefined,
+      afterApproval: undefined,
+      draft_unavailable: { message: "The final supplier check failed. The unverified draft was discarded; current facts remain visible and you can run the equipment reassessment again." },
+      trace: [...updated.trace, { actor: "system", kind: "equipment.reassessment.unverified", summary: error instanceof Error ? error.message : "The final supplier check failed." }],
+    };
+  }
+  if (!sameEquipmentObservation(source.observation, verified.observation)) {
+    retirePendingEquipmentDraft(updated, now, "Superseded because equipment changed while the replacement draft was being prepared.");
+    updated = {
+      ...updated,
+      run_id: nextRunId(),
+      equipment: verified.result,
+      facts: buildDemoFacts(updated.case, updated.event, updated.joiner, verified.result),
+      draft: null,
+      beforeApproval: null,
+      draft_unavailable: { message: "Equipment changed while Athena was preparing the draft. Current facts are shown; run the equipment reassessment again." },
+      trace: [...updated.trace, { actor: "system", kind: "equipment.reassessment.stale", summary: "The supplier source changed during drafting, so no draft is available for approval." }],
+    };
+  }
+  return updated;
+}
+
+export async function requestDemoAccess(
+  preparation: DemoPreparation,
+  mode = process.env.DEMO_MODE ?? "mock",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const toolDefinitions = AGENT_TOOL_DEFINITIONS.filter((tool) => ["get_case_state", "request_access", "finish"].includes(tool.name));
+  const agent = await runAgent(
+    preparation.case,
+    preparation.joiner,
+    "access_requested",
+    now,
+    mode === "live" ? "live" : "mock",
+    {
+      force: true,
+      toolDefinitions,
+      systemPrompt: [
+        "You are Athena's bounded access-request assistant.",
+        "Read onboarding.access first. Call request_access only for role-matrix rows whose request_id is null.",
+        "Summarise progress from the resulting receipt state, including receipts that existed before this run.",
+        "A request is not a grant. Never claim access was granted and never call any unlisted tool.",
+        "Finish with the number of requests awaiting their named approvers.",
+      ].join("\n"),
+    },
+  );
+  return applyAgentRun(preparation, agent);
+}
+
+const ACTIVE_MANAGER_PLAN_STATUSES = new Set<ManagerPlanRequest["status"]>([
+  "pending_approval",
+  "send_failed",
+  "awaiting_response",
+  "responded",
+  "confirmed",
+]);
+
+function latestManagerPlan(c: Case): ManagerPlanRequest | null {
+  return c.manager_plans?.at(-1) ?? null;
+}
+
+function managerPlanTask(c: Case) {
+  return c.tasks.find((task) => task.type === "manager_day_one_plan");
+}
+
+function managerDraftFor(c: Case, request: ManagerPlanRequest | null): Draft | null {
+  return request ? c.drafts.find((draft) => draft.id === request.draft_id) ?? null : null;
+}
+
+function attachManagerRequest(preparation: DemoPreparation, draft: Draft, now: string): DemoPreparation {
+  const existing = preparation.case.manager_plans?.find((request) => request.draft_id === draft.id);
+  if (existing) return preparation;
+  const request: ManagerPlanRequest = {
+    id: `MANAGER-PLAN-${randomUUID()}`,
+    case_id: preparation.case.id,
+    joiner_id: preparation.joiner.id,
+    manager_id: draft.to,
+    draft_id: draft.id,
+    start_date: preparation.case.start_date,
+    status: "pending_approval",
+    created_at: now,
+  };
+  preparation.case.manager_plans ??= [];
+  preparation.case.manager_plans.push(request);
+  const task = managerPlanTask(preparation.case);
+  if (task) {
+    task.status = "waiting_approval";
+    task.detail = `Manager request ${request.id} awaits People approval.`;
+  }
+  recordCaseStep(preparation.case, "agent", "manager.request.prepared", `Prepared manager plan request ${request.id} to ${personById(request.manager_id)?.full_name ?? request.manager_id}; draft ${request.draft_id} awaits People approval.`, now, { request_id: request.id, draft_id: request.draft_id });
+  preparation.trace.push({ actor: "agent", kind: "manager.request.prepared", summary: `Prepared a first-day plan request to ${personById(request.manager_id)?.full_name ?? request.manager_id}.` });
+  return preparation;
+}
+
+function invalidateManagerPlan(c: Case, request: ManagerPlanRequest, now: string, reason: string): void {
+  if (request.status === "pending_approval") {
+    supersedeDraft(request.draft_id, now, reason);
+    updateCaseDraftFromTrustedState(c, request.draft_id, "rejected", undefined, now, reason);
+  }
+  request.status = "superseded";
+  request.invalidated_at = now;
+  request.invalidation_reason = reason;
+  const task = managerPlanTask(c);
+  if (task) {
+    task.status = "open";
+    task.detail = reason;
+    delete task.done_at;
+    delete task.done_by;
+  }
+  recordCaseStep(c, "system", "manager.plan.invalidated", `Manager plan ${request.id} was invalidated. ${reason}`, now, { request_id: request.id });
+}
+
+export async function prepareManagerCoordination(
+  preparation: DemoPreparation,
+  mode = process.env.DEMO_MODE ?? "mock",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const existing = latestManagerPlan(preparation.case);
+  if (existing && ACTIVE_MANAGER_PLAN_STATUSES.has(existing.status)) return preparation;
+  const linkedDraftIds = new Set(preparation.case.manager_plans?.map((request) => request.draft_id) ?? []);
+  const recoverableDraft = [...preparation.case.drafts].reverse().find((draft) =>
+    draft.workstream === "manager" && draft.status === "pending" && !linkedDraftIds.has(draft.id));
+  if (recoverableDraft) return attachManagerRequest(preparation, recoverableDraft, now);
+  const toolDefinitions = AGENT_TOOL_DEFINITIONS.filter((tool) => ["get_case_state", "propose_message", "finish"].includes(tool.name));
+  const agent = await runAgent(
+    preparation.case,
+    preparation.joiner,
+    "manager_coordination",
+    now,
+    mode === "live" ? "live" : "mock",
+    {
+      force: true,
+      toolDefinitions,
+      systemPrompt: [
+        "You are Athena's bounded manager-coordination assistant.",
+        "Read the case, then propose one pending message to the owner of manager_day_one_plan.",
+        "Ask for arrival time, meeting place, first-day outline and anything to bring for the current start date.",
+        "Do not send or mark the plan complete. Finish with the exact human approval needed next.",
+      ].join("\n"),
+    },
+  );
+  const updated = applyAgentRun(preparation, agent);
+  const proposal = agent.proposals.find((candidate) => candidate.draft.workstream === "manager");
+  if (!proposal) return updated;
+  return attachManagerRequest(updated, proposal.draft, now);
+}
+
+export async function editDemoManagerDraft(
+  preparation: DemoPreparation,
+  requestId: unknown,
+  draftId: unknown,
+  subject: unknown,
+  body: unknown,
+  editedBy = "pp-1",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const request = latestManagerPlan(preparation.case);
+  const currentDraft = managerDraftFor(preparation.case, request);
+  if (!request || request.id !== requestId || request.status !== "pending_approval" || !currentDraft || currentDraft.id !== draftId || currentDraft.status !== "pending") {
+    throw new BuddyFlowConflict("This manager draft is no longer current.");
+  }
+  if (personById(editedBy)?.function !== "people") throw new BuddyFlowConflict("Manager draft edits must use a named People actor.");
+  const normalizedSubject = normalizedHumanDraftText(subject, "subject", MAX_DRAFT_SUBJECT_LENGTH);
+  const normalizedBody = normalizedHumanDraftText(body, "body", MAX_DRAFT_BODY_LENGTH);
+  if (normalizedSubject === currentDraft.subject && normalizedBody === currentDraft.body) return preparation;
+  const replacement: Draft = {
+    ...currentDraft,
+    id: `DRAFT-${randomUUID()}`,
+    subject: normalizedSubject,
+    body: normalizedBody,
+    status: "pending",
+    created_at: now,
+    revision: (currentDraft.revision ?? 0) + 1,
+    edited_by: editedBy,
+    edited_at: now,
+    supersedes_draft_id: currentDraft.id,
+    decided_at: undefined,
+    decided_by: undefined,
+    decision_reason: undefined,
+  };
+  if (!registerDraft(replacement)) throw new Error(`Manager draft could not be registered: ${replacement.id}`);
+  const reason = "Superseded by a saved People edit.";
+  if (!supersedeDraft(currentDraft.id, now, reason)) {
+    discardDraft(replacement.id);
+    throw new BuddyFlowConflict("This manager draft changed before the edit was saved.");
+  }
+  updateCaseDraftFromTrustedState(preparation.case, currentDraft.id, "rejected", undefined, now, reason);
+  preparation.case.drafts.push(replacement);
+  request.draft_id = replacement.id;
+  const updated = { ...preparation, run_id: nextRunId() };
+  recordCaseStep(updated.case, "human", "manager.draft.edited", `Sarah Mitchell saved manager draft ${replacement.id}; ${currentDraft.id} was superseded.`, now, { request_id: request.id, draft_id: replacement.id });
+  updated.trace = [...preparation.trace, { actor: "human", kind: "manager.draft.edited", summary: `Saved a new exact manager draft for approval (${replacement.id}).` }];
+  return updated;
+}
+
+export async function resolveManagerApproval(
+  preparation: DemoPreparation,
+  requestId: unknown,
+  draftId: unknown,
+  decision: DemoDecision,
+  decidedBy = "pp-1",
+  now = DEMO_NOW,
+): Promise<DemoPreparation> {
+  const request = latestManagerPlan(preparation.case);
+  const draft = managerDraftFor(preparation.case, request);
+  const retryingApprovedSend = request?.status === "send_failed" && draft?.status === "approved" && decision === "approve";
+  const decidingPendingDraft = request?.status === "pending_approval" && draft?.status === "pending";
+  if (!request || request.id !== requestId || !draft || draft.id !== draftId || (!decidingPendingDraft && !retryingApprovedSend)) {
+    throw new BuddyFlowConflict("This manager approval is no longer current.");
+  }
+  if (decision === "reject") {
+    if (!rejectDraft(draft.id, decidedBy, now, "Rejected by People.")) throw new BuddyFlowConflict("This manager approval could not be recorded.");
+    updateCaseDraftFromTrustedState(preparation.case, draft.id, "rejected", decidedBy, now, "Rejected by People.");
+    request.status = "rejected";
+    const task = managerPlanTask(preparation.case);
+    if (task) task.status = "open";
+    recordCaseStep(preparation.case, "human", "manager.draft.rejected", `Manager draft ${draft.id} rejected by ${decidedBy}; nothing was sent.`, now);
+    return { ...preparation, run_id: nextRunId(), trace: [...preparation.trace, { actor: "human", kind: "manager.draft.rejected", summary: "Manager request rejected. Nothing was sent." }] };
+  }
+  if (!retryingApprovedSend) {
+    if (!approveDraft(draft.id, decidedBy, now)) throw new BuddyFlowConflict("This manager approval could not be recorded.");
+    updateCaseDraftFromTrustedState(preparation.case, draft.id, "approved", decidedBy, now);
+    recordCaseStep(preparation.case, "human", "manager.draft.approved", `Manager draft ${draft.id} approved by ${decidedBy}.`, now);
+  }
+  const send = requireAction("slack.send_message");
+  let sentResult: ToolResult;
+  try {
+    sentResult = await send.action.run({ draft_id: draft.id, now });
+  } catch (error) {
+    sentResult = { status: "error", summary: error instanceof Error ? error.message : "Manager request delivery failed.", retryable: true };
+  }
+  if (sentResult.status !== "ok") {
+    request.status = "send_failed";
+    request.send_failed_at = now;
+    request.send_error = sentResult.summary;
+    const task = managerPlanTask(preparation.case);
+    if (task) task.detail = `Manager request ${request.id} was approved, but delivery failed. Retry the same approved draft.`;
+    recordCaseStep(preparation.case, "system", "manager.request.send_failed", `Approved manager draft ${draft.id} was not delivered: ${sentResult.summary}`, now, { request_id: request.id, draft_id: draft.id });
+    return {
+      ...preparation,
+      run_id: nextRunId(),
+      trace: [...preparation.trace, ...(!retryingApprovedSend ? [{ actor: "human" as const, kind: "manager.draft.approved", summary: `Approved the exact request to ${personById(request.manager_id)?.full_name ?? request.manager_id}.` }] : []), { actor: "system", kind: "manager.request.send_failed", summary: `Delivery failed for the approved request: ${sentResult.summary}` }],
+    };
+  }
+  request.status = "awaiting_response";
+  request.sent_at = now;
+  delete request.send_failed_at;
+  delete request.send_error;
+  const task = managerPlanTask(preparation.case);
+  if (task) task.detail = `Approved manager request ${request.id} was sent; awaiting ${personById(request.manager_id)?.full_name ?? request.manager_id}.`;
+  recordCaseStep(preparation.case, "agent", "manager.request.sent", sentResult.summary, now, { request_id: request.id, draft_id: draft.id });
+  return { ...preparation, run_id: nextRunId(), trace: [...preparation.trace, ...(!retryingApprovedSend ? [{ actor: "human" as const, kind: "manager.draft.approved", summary: `Approved the exact request to ${personById(request.manager_id)?.full_name ?? request.manager_id}.` }] : []), { actor: "agent", kind: "manager.request.sent", summary: sentResult.summary }] };
+}
+
+export interface ManagerPlanResponseInput {
+  arrival_time: string;
+  meeting_place: string;
+  first_day_outline: string[];
+  items_to_bring: string[];
+}
+
+export function recordManagerResponse(
+  preparation: DemoPreparation,
+  requestId: unknown,
+  response: ManagerPlanResponseInput,
+  now = DEMO_NOW,
+): DemoPreparation {
+  const request = latestManagerPlan(preparation.case);
+  if (!request || request.id !== requestId || request.status !== "awaiting_response") throw new BuddyFlowConflict("This manager request is not awaiting a response.");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(response.arrival_time)
+    || !response.meeting_place.trim()
+    || response.first_day_outline.length === 0
+    || response.first_day_outline.some((item) => !item.trim())
+    || response.items_to_bring.length === 0
+    || response.items_to_bring.some((item) => !item.trim())) {
+    throw new DemoInputError("The simulated manager response must include arrival time, meeting place, first-day outline and items to bring.");
+  }
+  Object.assign(request, {
+    status: "responded" as const,
+    response_at: now,
+    arrival_time: response.arrival_time,
+    meeting_place: response.meeting_place.trim(),
+    first_day_outline: response.first_day_outline.map((item) => item.trim()),
+    items_to_bring: response.items_to_bring.map((item) => item.trim()),
+  });
+  recordCaseStep(preparation.case, "human", "manager.response.simulated", `${personById(request.manager_id)?.full_name ?? request.manager_id} supplied a simulated first-day plan for People review.`, now, { request_id: request.id });
+  return { ...preparation, run_id: nextRunId(), trace: [...preparation.trace, { actor: "human", kind: "manager.response.simulated", summary: `Simulated response received from ${personById(request.manager_id)?.full_name ?? request.manager_id}; People confirmation is still required.` }] };
+}
+
+export function confirmManagerPlan(
+  preparation: DemoPreparation,
+  requestId: unknown,
+  confirmedBy = "pp-1",
+  now = DEMO_NOW,
+): DemoPreparation {
+  const request = latestManagerPlan(preparation.case);
+  if (!request || request.id !== requestId || request.status !== "responded" || request.start_date !== preparation.case.start_date) {
+    throw new BuddyFlowConflict("This manager plan is not ready for confirmation.");
+  }
+  request.status = "confirmed";
+  request.confirmed_at = now;
+  request.confirmed_by = confirmedBy;
+  const task = managerPlanTask(preparation.case);
+  if (!task) throw new Error("Manager day-one plan task is missing.");
+  task.status = "done";
+  task.done_at = now;
+  task.done_by = confirmedBy;
+  task.detail = `First-day plan ${request.id} confirmed by ${personById(confirmedBy)?.full_name ?? confirmedBy}.`;
+  preparation.case.state = deriveState(preparation.case);
+  recordCaseStep(preparation.case, "human", "manager.plan.confirmed", `First-day plan ${request.id} confirmed by ${personById(confirmedBy)?.full_name ?? confirmedBy}.`, now, { request_id: request.id });
+  return { ...preparation, run_id: nextRunId(), trace: [...preparation.trace, { actor: "human", kind: "manager.plan.confirmed", summary: "People confirmed the manager's first-day plan." }] };
 }
 
 function normalizedHumanDraftText(value: unknown, field: "subject" | "body", maxLength: number): string {
@@ -689,6 +1138,30 @@ export async function resolveDemoApproval(
   now = DEMO_NOW,
 ): Promise<DemoResolution> {
   if (!preparation.draft || !preparation.beforeApproval) throw new Error("Demo has no current draft requiring approval");
+  const currentSource = await readEquipmentSource(preparation.joiner.id);
+  const draftMatchesSource = preparation.draft.equipment_observation_signature === currentSource.observation.signature
+    && preparation.draft.equipment_source_revision === currentSource.observation.source_revision;
+  if (!draftMatchesSource) {
+    const oldRevision = preparation.draft.equipment_source_revision ?? "unbound";
+    retirePendingEquipmentDraft(preparation, now, `Superseded before approval because equipment source revision changed from ${oldRevision} to ${currentSource.observation.source_revision}.`);
+    const recoveryAgent = preparation.agent
+      ? { ...preparation.agent, trigger: "equipment_changed" as const, stop_reason: "guard" as const, next_action: "Run assistant again." }
+      : undefined;
+    const recovery: DemoPreparation = {
+      ...preparation,
+      run_id: nextRunId(),
+      agent: recoveryAgent,
+      equipment: currentSource.result,
+      facts: buildDemoFacts(preparation.case, preparation.event, preparation.joiner, currentSource.result),
+      draft: null,
+      beforeApproval: null,
+      decision: undefined,
+      afterApproval: undefined,
+      draft_unavailable: { message: "The equipment source changed after this draft was prepared. The stale draft was not approved or sent. Run the equipment reassessment again." },
+      trace: [...preparation.trace, { actor: "system", kind: "approval.refused.stale_equipment", summary: `Draft approval refused because equipment ${currentSource.observation.order_id} is now revision ${currentSource.observation.source_revision}.` }],
+    };
+    throw new EquipmentApprovalConflict("This equipment draft is stale because the supplier information changed.", recovery);
+  }
   const changed = decision === "approve"
     ? approveDraft(preparation.draft.id, decidedBy, now)
     : rejectDraft(preparation.draft.id, decidedBy, now, "Rejected in the approval screen.");
@@ -720,6 +1193,7 @@ export async function resolveDemoApproval(
     model: preparation.model,
     draft,
     equipment: preparation.equipment,
+    equipment_observation: preparation.equipment_observation,
     beforeApproval: preparation.beforeApproval,
     afterApproval,
     facts: preparation.facts,
@@ -1108,6 +1582,7 @@ export async function confirmBuddy(
 }
 
 export async function runDemo(now = DEMO_NOW): Promise<DemoRun> {
+  resetDemoState();
   const preparation = await prepareDemo(now);
   const resolution = await resolveDemoApproval(preparation, "approve", "pp-1", now);
   const slackAction = requireAction("slack.send_message");

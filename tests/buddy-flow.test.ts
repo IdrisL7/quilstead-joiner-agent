@@ -9,13 +9,16 @@ import {
   resolveBuddyApproval,
 } from "@/lib/demo-flow";
 import { resetDemoState } from "@/lib/store/demo-state";
-import { POST } from "@/app/api/demo/route";
+import { POST, resetDemoRouteState } from "@/app/api/demo/route";
 
 function request(body: Record<string, string> = {}) {
+  const payload = body.run_id && body.case_id === undefined
+    ? { ...body, case_id: "CASE-J-004" }
+    : body;
   return new Request("http://localhost/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -60,6 +63,7 @@ type BuddyPayload = {
 describe("buddy flow", () => {
   beforeEach(() => {
     resetDemoState();
+    resetDemoRouteState();
   });
 
   it("keeps equipment and buddy decisions on the same case, with People confirmation last", async () => {

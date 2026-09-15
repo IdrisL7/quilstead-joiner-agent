@@ -128,6 +128,9 @@ const TRIGGER_INSTRUCTIONS: Record<AgentTrigger, string> = {
   start_date_changed: "Deadlines were recomputed and every pending draft was superseded by the date change, not rejected by People. Re-check equipment against the new start date and buddy availability, propose again where the risk still holds, finish.",
   buddy_declined: "The requested buddy declined. Re-read availability excluding declined candidates and propose a replacement request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
   availability_changed: "A candidate's calendar changed and the affected request was superseded. Re-read availability and propose a fresh request if one is available, else escalate NO_ELIGIBLE_BUDDY.",
+  equipment_changed: "The supplier's equipment observation changed. Read the case and current equipment only. If ETA is after the start date, propose one nudge to the equipment task owner asking for a loaner or earlier delivery. Otherwise finish with no equipment action needed.",
+  access_requested: "People explicitly requested role access. Read onboarding.access, file only permitted role-matrix rows whose request_id is null through request_access, then finish from the resulting receipt state. A request is not a grant.",
+  manager_coordination: "People explicitly requested first-day coordination. Read the case, prepare one message to the owner of the open manager_day_one_plan task asking for the missing plan details, then finish.",
   question: "Answer one read-only case question from current observations, then finish.",
 };
 

@@ -6,10 +6,13 @@ import { changeDemoStartDate, prepareDemo } from "@/lib/demo-flow";
 import { resetDemoState } from "@/lib/store/demo-state";
 
 function request(body: Record<string, unknown> = {}) {
+  const payload = typeof body.run_id === "string" && body.case_id === undefined
+    ? { ...body, case_id: "CASE-J-004" }
+    : body;
   return new Request("http://localhost/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -18,6 +21,17 @@ describe("Ask Athena", () => {
     resetDemoState();
     resetDemoRouteState();
     process.env.DEMO_MODE = "mock";
+  });
+
+  it("keeps the first buddy answer scoped while retaining the other prepared work", async () => {
+    const response = await POST(request({ action: "ask", question: "Find an available buddy for Aisha." }));
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.answer.answer).toContain("onboarding case");
+    expect(result.answer.answer).not.toContain("Next human action:");
+    expect(result.answer.answer).not.toContain("proposals now await approval");
+    expect(result.draft.status).toBe("pending");
+    expect(result.buddy.request.status).toBe("pending_approval");
   });
 
   it("answers the five supported intents with case-section links", async () => {
@@ -140,9 +154,16 @@ describe("Ask Athena", () => {
     expect(asked.answer.answer).toContain("Laptop");
     expect(asked.trace.some((entry) => entry.kind === "agent.asked")).toBe(true);
 
-    const resetResponse = await POST(request());
-    const reset = await resetResponse.json() as { trace: Array<{ kind: string }> };
-    expect(reset.trace.some((entry) => entry.kind === "agent.asked")).toBe(false);
+    const resetResponse = await POST(request({ action: "reset" }));
+    const reset = await resetResponse.json() as { reset: boolean };
+    expect(resetResponse.status).toBe(200);
+    expect(reset.reset).toBe(true);
+
+    const reopenedResponse = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
+    const reopened = await reopenedResponse.json() as { run_id: string; trace: Array<{ kind: string }> };
+    expect(reopenedResponse.status).toBe(200);
+    expect(reopened.trace.filter((entry) => entry.kind === "agent.asked")).toHaveLength(1);
+    expect(reopened.run_id).not.toBe(initial.run_id);
   });
 
   it("opens the existing case from the readiness entry question", async () => {
@@ -163,7 +184,7 @@ describe("Ask Athena", () => {
     expect(payload.trace.filter((entry) => entry.kind === "agent.asked")).toHaveLength(1);
   });
 
-  it("uses the finished agent run as the status answer's next action", async () => {
+  it("uses current case state rather than the historical agent recommendation for status guidance", async () => {
     const response = await POST(request({ action: "ask", question: "Check Aisha’s onboarding readiness." }));
     const payload = await response.json() as {
       answer: { answer: string };
@@ -172,7 +193,9 @@ describe("Ask Athena", () => {
 
     expect(payload.agent.stop_reason).toBe("finished");
     expect(payload.agent.next_action).toBeTruthy();
-    expect(payload.answer.answer).toContain(`Next: ${payload.agent.next_action}`);
+    expect(payload.answer.answer).toContain("Next: Approve or reject the equipment nudge to Nadia Hussain");
+    expect(payload.answer.answer).toContain("Prepare the first-day plan request to Chloe Bennett");
+    expect(payload.answer.answer).not.toContain("Next human action:");
     expect(payload.answer.answer).not.toContain("Next: Complete HRIS profile with Sarah Mitchell");
   });
 
@@ -213,6 +236,7 @@ describe("Ask Athena", () => {
   it("rejects an ask from a superseded run", async () => {
     const oldResponse = await POST(request());
     const old = await oldResponse.json() as { run_id: string };
+    await POST(request({ action: "reset" }));
     await POST(request());
 
     const stale = await POST(request({ run_id: old.run_id, action: "ask", question: "Who is the buddy?" }));

@@ -1,11 +1,15 @@
+import { onboardingView } from "@/lib/onboarding-view";
 import { randomUUID } from "node:crypto";
 import { buddyById } from "@/data/buddies";
 import { personById } from "@/data/people";
+import { OWNER_BY_FUNCTION_AND_COUNTRY } from "@/data/people";
 import { attentionSummary } from "@/lib/attention";
 import { buildContract } from "@/lib/contract";
 import { findAction } from "@/lib/connectors/registry";
+import { authorize } from "@/lib/permissions";
 import { denied, failed, ok } from "@/lib/connectors/interface";
 import { BUDDY_COMMITMENT } from "@/lib/policy/buddy";
+import { accessRowsFor } from "@/lib/policy/access";
 import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
 import type { BuddyRequest, Case, Draft, EscalationCode, ToolResult } from "@/lib/types";
 import { validateMessageProposal, type MessageProposalInput } from "./guards";
@@ -49,6 +53,20 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
       type: "object",
       properties: { page_id: { type: "string" }, quote: { type: "string" } },
       required: ["page_id", "quote"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "request_access",
+    description: "File one access request for the current joiner. The system, level and approver must exactly match a row returned in get_case_state onboarding.access. This requests access only and never grants it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        system: { type: "string" },
+        level: { type: "string", enum: ["standard", "elevated"] },
+        approver: { type: "string", enum: ["it", "manager", "finance"] },
+      },
+      required: ["system", "level", "approver"],
       additionalProperties: false,
     },
   },
@@ -103,6 +121,8 @@ interface EquipmentObservation {
   task_due_at: string;
   owner_id: string;
   owner_name: string;
+  source_revision: number;
+  source_signature: string;
 }
 
 export interface AgentToolRuntime {
@@ -152,6 +172,7 @@ function attentionProjection(context: AgentContext, state: AgentRuntimeState) {
 }
 
 function caseProjection(context: AgentContext, state: AgentRuntimeState) {
+  const { profile, access, manager, first_day } = onboardingView(context.case, context.joiner);
   const taskRows = context.case.tasks.map((task) => ({
     type: task.type,
     title: task.title,
@@ -170,6 +191,7 @@ function caseProjection(context: AgentContext, state: AgentRuntimeState) {
   }));
   return {
     case_id: context.case.id,
+    onboarding: { profile, access, manager, first_day },
     joiner: {
       id: context.joiner.id,
       preferred_name: context.joiner.preferred_name,
@@ -272,9 +294,9 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
       if (!resolved) return failed("Equipment read action is not registered.");
       const result = await resolved.action.run({ joiner_id: context.joiner.id });
       if (result.status === "error" || result.status === "denied") return result;
-      const data = resultData<{ id: string; joiner_id: string; status: string; eta: string }>(result);
+      const data = resultData<{ id: string; joiner_id: string; status: string; eta: string; source_revision: number; signature: string }>(result);
       const task = taskFor(context.case, "equipment_order");
-      if (!data || !task) return failed("Equipment observation is missing order or task facts.");
+      if (!data || !task || !Number.isInteger(data.source_revision) || typeof data.signature !== "string") return failed("Equipment observation is missing order or task facts.");
       const gapDays = dayGap(context.case.start_date, data.eta);
       const observation: EquipmentObservation = {
         order_id: data.id,
@@ -286,6 +308,8 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         task_due_at: task.due_at,
         owner_id: task.owner_id,
         owner_name: personById(task.owner_id)?.full_name ?? task.owner_id,
+        source_revision: data.source_revision,
+        source_signature: data.signature,
         pending_nudge_exists: context.case.drafts.some((draft) => draft.kind === "nudge" && draft.status === "pending"),
       };
       observation.nudge_needed = observation.late && !observation.pending_nudge_exists;
@@ -331,13 +355,65 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
       return resolved.action.run({ page_id: input.page_id, quote: input.quote });
     }
 
+    if (name === "request_access") {
+      const matrixRow = accessRowsFor(context.joiner).find((row) => row.system === input.system && row.level === input.level);
+      if (!matrixRow || matrixRow.approver !== input.approver) {
+        return denied(`Access request refused: ${String(input.level)} ${String(input.system)} with approver ${String(input.approver)} is not in ${context.joiner.role}'s role matrix.`);
+      }
+      if (authorize("identity.request_access").mode !== "automatic") {
+        return denied("Access request refused by the identity permission policy.");
+      }
+      const resolved = findAction("identity.request_access");
+      if (!resolved) return failed("Identity access-request action is not registered.");
+      const result = await resolved.action.run({
+        joiner_id: context.joiner.id,
+        system: matrixRow.system,
+        level: matrixRow.level,
+        approver: matrixRow.approver,
+        now: context.now,
+      });
+      if (result.status !== "ok") return result;
+      const data = resultData<{ request_id?: string }>(result);
+      const approverId = matrixRow.approver === "manager"
+        ? context.joiner.manager_id
+        : OWNER_BY_FUNCTION_AND_COUNTRY[matrixRow.approver][context.joiner.country];
+      const approverName = personById(approverId)?.full_name ?? matrixRow.approver;
+      const task = context.case.tasks.find((candidate) => candidate.type === "access_request" && candidate.system === matrixRow.system);
+      if (task && data?.request_id) {
+        task.detail = `Request ${data.request_id} submitted; awaiting approval from ${approverName}. Access is not yet granted.`;
+      }
+      return ok(`${result.summary} Named approver: ${approverName}. Access remains ungranted.`, {
+        request_id: data?.request_id,
+        system: matrixRow.system,
+        level: matrixRow.level,
+        approver: matrixRow.approver,
+        approver_id: approverId,
+        approver_name: approverName,
+        status: "awaiting_approval",
+        granted: false,
+      });
+    }
+
     if (name === "propose_message") {
       const parsed = messageInput(input);
       if (!parsed) return failed(`Message refused: proposal shape is invalid. Received keys: ${Object.keys(input).join(", ") || "none"}; kind=${String(input.kind)}. Required: kind (nudge|buddy_request), to, subject, body.`);
       const existingProposal = state.proposals.find((proposal) => proposal.draft.kind === (parsed.kind === "nudge" ? "nudge" : "buddy_intro"));
       if (existingProposal) return failed(`Message refused: ${parsed.kind} already has a pending proposal in this run.`);
+      const managerTask = context.trigger === "manager_coordination"
+        ? context.case.tasks.find((task) => task.type === "manager_day_one_plan" && ["open", "overdue", "escalated", "waiting_approval"].includes(task.status))
+        : undefined;
+      if (context.trigger === "manager_coordination" && (parsed.kind !== "nudge" || !managerTask || parsed.to !== managerTask.owner_id)) {
+        const attempts = (state.guard_refusals.get(parsed.kind) ?? 0) + 1;
+        state.guard_refusals.set(parsed.kind, attempts);
+        return failed(`Manager message refused: recipient must be the current manager-plan task owner ${managerTask?.owner_id ?? "not available"}.`);
+      }
       const equipmentTask = taskFor(context.case, "equipment_order");
       if (!equipmentTask) return failed("Message refused: equipment task is missing.");
+      if (context.trigger === "equipment_changed" && (parsed.kind !== "nudge" || parsed.to !== equipmentTask.owner_id)) {
+        const attempts = (state.guard_refusals.get(parsed.kind) ?? 0) + 1;
+        state.guard_refusals.set(parsed.kind, attempts);
+        return failed(`Equipment message refused: recipient must be the current equipment task owner ${equipmentTask.owner_id}.`);
+      }
       const guard = validateMessageProposal(parsed, {
         case: context.case,
         joiner: context.joiner,
@@ -352,6 +428,18 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         state.guard_refusals.set(parsed.kind, attempts);
         return failed(guard.summary);
       }
+      const workstream = context.trigger === "manager_coordination"
+        ? "manager" as const
+        : context.trigger === "equipment_changed"
+          ? "equipment" as const
+          : guard.message.kind === "nudge"
+            ? context.case.tasks.find((task) => task.owner_id === guard.message.to && ["open", "overdue", "escalated", "waiting_approval"].includes(task.status))?.type === "manager_day_one_plan"
+              ? "manager" as const
+              : "equipment" as const
+            : undefined;
+      const equipmentObservation = workstream === "equipment" && state.equipment?.data && typeof state.equipment.data === "object"
+        ? state.equipment.data as EquipmentObservation
+        : null;
       const draft: Draft = {
         id: `DRAFT-${randomUUID()}`,
         case_id: context.case.id,
@@ -363,6 +451,9 @@ export function createAgentToolRuntime(context: AgentContext): AgentToolRuntime 
         body: guard.message.body,
         status: "pending",
         created_at: context.now,
+        workstream,
+        equipment_observation_signature: equipmentObservation?.source_signature,
+        equipment_source_revision: equipmentObservation?.source_revision,
       };
       const request = guard.message.kind === "buddy_intro" && state.availability
         ? (() => {

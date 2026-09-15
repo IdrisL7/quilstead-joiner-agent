@@ -1,3 +1,4 @@
+import type { OnboardingView } from "@/lib/onboarding-view";
 import { randomUUID } from "node:crypto";
 import { buddyById } from "@/data/buddies";
 import type {
@@ -9,7 +10,9 @@ import type {
 } from "./types";
 import type { Case, Joiner, ToolResult } from "@/lib/types";
 
-export type AskIntent = "status" | "equipment" | "buddy" | "compliance" | "owner" | "date_question" | "unmatched";
+import { askIntentFor } from "@/lib/ask-intent";
+export type { AskIntent } from "@/lib/ask-intent";
+export { askIntentFor } from "@/lib/ask-intent";
 
 interface MockAskContext {
   case: Case;
@@ -29,6 +32,7 @@ interface CaseTaskRow {
 }
 
 interface CaseStateData {
+  onboarding?: Omit<OnboardingView, "tasks">;
   start_date: string;
   tasks: CaseTaskRow[];
   open_escalations: Array<{ code: string; summary: string }>;
@@ -72,18 +76,6 @@ function dataFrom<T>(result: ToolResult | undefined): T | null {
     : null;
 }
 
-export function askIntentFor(question: string): AskIntent {
-  const text = question.toLowerCase();
-  if (/(what changes if|what if|would happen if|impact of)/i.test(text) && /(laptop|equipment|\beta\b|delivery|loaner)/i.test(text)) return "equipment";
-  if (/(what changes if|what if|would happen if|impact of)/i.test(text) && /(start|date|first day)/i.test(text)) return "date_question";
-  if (/(when does .* start|what('?s| is)? (her|his|their|the) start date|start date\?|which day does .* start|when is (her|his|their|the) first day)/i.test(text)) return "date_question";
-  if (/(compliance|right to work|i-9|i9|works council|social insurance|\brtw\b)/i.test(text)) return "compliance";
-  if (/(buddy|new starter support|\breplied\b|\bresponded\b|\baccepted\b|\bdeclined\b)/i.test(text)) return "buddy";
-  if (/(laptop|equipment|\beta\b|delivery|loaner|\bsorted\b|macbook|\bnudge\b|\bsent\b|\bapproved\b|\bit reply|\bit replied)/i.test(text)) return "equipment";
-  if (/(\bowner\b|who is responsible|who owns)/i.test(text)) return "owner";
-  if (/(what('?s| is|s)? left|remaining|before day one|\btasks?\b|readiness|\bready\b|\bstatus\b|\bsummary\b|\bupdate\b|outstanding|blocking|blocker|\boverdue\b|\blate\b|\brisks?\b|deadlines?|good to go|\bdone\b|on track|progress)/i.test(text)) return "status";
-  return "unmatched";
-}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -209,6 +201,29 @@ function answerFor(context: MockAskContext, messages: AgentMessage[]): string {
     buddy_requests: [],
   };
   const intent = askIntentFor(context.question);
+  const view = state.onboarding;
+  if (["profile", "access", "manager", "joiner"].includes(intent) && !view) return "I could not read those details from the current case.";
+  if (intent === "profile" && view) {
+    const pending = view.profile.setup.filter((task) => isOpen(task.status));
+    return `${view.profile.name} is joining as ${view.profile.title} in ${view.profile.office}, reporting to ${view.profile.manager_name}. ${pending.length ? `Profile setup still needs ${pending[0].owner_name}'s attention, due ${formatDate(pending[0].due_at)}.` : view.profile.setup.some((task) => task.status === "cancelled") ? "Profile setup includes cancelled work; completion is not confirmed." : view.profile.setup.length && view.profile.setup.every((task) => task.status === "done") ? "The profile setup task is complete." : "Profile completion is not recorded."} The profile shows the details currently on file.`;
+  }
+  if (intent === "access" && view) {
+    const submitted = view.access.filter((row) => row.request_id).length;
+    return `${view.access.length} systems are listed for this role: ${view.access.map((row) => row.system.replaceAll("_", " ")).join(", ")}. ${submitted} requests have been submitted; ${view.access.length - submitted} are still planned. Each row shows its owner and required approver. A request does not mean access has been granted.`;
+  }
+  if (intent === "manager" && view) {
+    const task = view.manager.tasks.find((item) => isOpen(item.status));
+    const coordination = view.manager.coordination;
+    const currentStatus = coordination ? ` Manager coordination is ${coordination.status.replaceAll("_", " ")}.` : "";
+    return `${view.manager.name} is the manager. ${task ? `${task.title} is ${task.status.replaceAll("_", " ")}, owned by ${task.owner_name}, due ${formatDate(task.due_at)}. Arrival arrangements and the first-day schedule still need confirmation.` : view.manager.tasks.some((item) => item.status === "cancelled") ? "The manager tasks include cancelled work; completion is not confirmed." : view.manager.tasks.length && view.manager.tasks.every((item) => item.status === "done") ? "The recorded manager tasks are complete." : "No manager task is recorded."}${currentStatus}`;
+  }
+  if (intent === "joiner" && view) {
+    const day = view.first_day;
+    if (day.confirmed_plan_id) {
+      return `${context.joiner.preferred_name} starts on ${formatDate(day.start_date)}, based in ${day.office} (${day.work_mode}). The confirmed plan says arrive at ${day.arrival_time} and meet at ${day.office_address}. Items to bring: ${day.items_to_bring?.map((item) => item.toLowerCase()).join(", ")}. First-day outline: ${day.outline?.map((item) => item.toLowerCase()).join("; ")}. Manager: ${day.manager_name}.`;
+    }
+    return `${context.joiner.preferred_name} starts on ${formatDate(day.start_date)}, based in ${day.office} (${day.work_mode}). Manager: ${day.manager_name}; People contact: ${day.people_contact}. Arrival time, meeting place and items to bring are not recorded. Please confirm those with ${day.manager_name} before day one.`;
+  }
   if (intent === "equipment") return equipmentAnswer(state, dataFrom<EquipmentData>(latestResult(messages, "check_equipment")), context.joiner);
   if (intent === "buddy") return buddyAnswer(state, dataFrom<AvailabilityData>(latestResult(messages, "get_buddy_availability")));
   if (intent === "compliance") return complianceAnswer(state);

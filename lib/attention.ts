@@ -56,7 +56,7 @@ export function attentionSummary(run: AttentionRunProjection) {
     ? "Nothing was sent. Chase IT by hand, or change the start date so the assistant reassesses."
     : screenState === "draft_unavailable"
     ? "Run the assistant again before any message can be sent."
-    : "Approve or reject the equipment nudge.";
+    : `Approve or reject the equipment nudge to ${run.facts.equipment_owner_name}.`;
 
   let buddyStatus = "Ready for review";
   let buddyNextAction = run.buddy.availability.recommendation
@@ -64,7 +64,8 @@ export function attentionSummary(run: AttentionRunProjection) {
     : run.buddy.availability.escalation?.summary ?? "People must review buddy support by hand.";
   if (run.buddy.request?.status === "pending_approval") {
     buddyStatus = "Awaiting approval";
-    buddyNextAction = "Approve or reject the exact buddy request.";
+    const candidateName = buddyById(run.buddy.request.candidate_id)?.full_name ?? run.buddy.request.candidate_id;
+    buddyNextAction = `Approve or reject the exact buddy request to ${candidateName}.`;
   } else if (run.buddy.request?.status === "awaiting_acceptance") {
     buddyStatus = "Awaiting buddy acceptance";
     buddyNextAction = "Use the labelled simulation response control.";

@@ -2,7 +2,7 @@ import type { BuddyAvailabilityResult } from "@/lib/policy/buddy-availability";
 import type { BuddyRequest, BuddySlot, Case, Draft, Joiner, ToolResult } from "@/lib/types";
 
 export type AgentMode = "mock" | "live";
-export type AgentTrigger = "contract.signed" | "start_date_changed" | "buddy_declined" | "availability_changed" | "question";
+export type AgentTrigger = "contract.signed" | "start_date_changed" | "buddy_declined" | "availability_changed" | "equipment_changed" | "access_requested" | "manager_coordination" | "question";
 export type StopReason = "finished" | "step_cap" | "tool_cap" | "time_cap" | "guard" | "model_error";
 
 export interface AgentToolDefinition {

@@ -1,13 +1,39 @@
 "use client";
 
-import { useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import Image from "next/image";
+import type { OnboardingView } from "@/lib/onboarding-view";
+import { JoinerProfile, OnboardingScenario, OnboardingTasks, type ScenarioKind } from "./components/onboarding-scenarios";
+import { askIntentFor } from "@/lib/ask-intent";
 import { DEMO_TRIGGER_PREVIEW } from "@/data/demo-trigger";
 import { firstWorkingWeek } from "@/lib/policy/buddy-availability";
 
 type ToolResult = { status: "ok" | "warning" | "error" | "denied"; summary: string };
 type DemoDecision = "approve" | "reject";
-type Section = "overview" | "equipment" | "buddy" | "activity";
+type Section = "overview" | "equipment" | "buddy" | "activity" | "profile";
+
+type WorkFocus = "all" | "equipment" | "buddy" | "compliance" | "dates" | "answer" | ScenarioKind;
+const FOCUS_LABELS: Record<WorkFocus, string> = { all: "Onboarding readiness", equipment: "Equipment", buddy: "Buddy support", compliance: "Compliance", dates: "Start date", answer: "Your question", access: "Access requests", profile: "Profile setup", manager: "Manager coordination", joiner: "New joiner questions" };
+export function workFocusFor(question: string, card?: "equipment" | "buddy" | "timeline" | null): WorkFocus {
+  const intent = askIntentFor(question);
+  if (intent === "profile" || intent === "access" || intent === "manager" || intent === "joiner") return intent;
+  if (intent === "equipment" || intent === "buddy" || intent === "compliance") return intent;
+  if (intent === "date_question" || startDateRequestFor(question, "2026-10-12")) return "dates";
+  if (intent === "status") return "all";
+  if (card === "equipment" || card === "buddy") return card;
+  return "answer";
+}
+
+function BotanicalWelcome({ entry = false, focus = "all", joinerName = "Aisha Okafor", preferredName = "Aisha" }: { entry?: boolean; focus?: WorkFocus; joinerName?: string; preferredName?: string }) {
+  return <div className={`botanical-welcome ${entry ? "welcome-entry" : "welcome-current"}`}>
+    <Image src="/onboarding-botanicals.png" alt="" fill priority={entry} sizes="(max-width: 768px) 100vw, 880px" />
+    <div className="welcome-copy"><span className="welcome-eyebrow">A little care before day one</span>
+      <h2>{entry ? "A great first day starts here." : FOCUS_LABELS[focus]}</h2>
+      <p>{entry ? `You’re supporting ${preferredName} from the People team. Athena checks what needs attention; you review and approve the next steps.` : `${joinerName} · Quilstead Solutions`}</p>
+    </div>
+  </div>;
+}
+
 
 interface DemoFacts {
   contract_event_id: string;
@@ -164,7 +190,9 @@ interface AskAnswer {
   links: AskLink[];
   card?: "equipment" | "buddy" | "timeline" | null;
   facts: string[];
-  provider: "mock" | "anthropic";
+  provider: "mock" | "anthropic" | "system";
+  clarification?: "person";
+  switch_joiner_id?: string;
   model: string;
   cost_usd: number;
 }
@@ -188,26 +216,77 @@ interface StartDateRequestInterpretation {
 }
 
 interface DemoResponse {
+  onboarding?: OnboardingView;
   phase: "pending" | "resolved";
   next_action: string | null;
   screen_state: "awaiting_decision" | "draft_unavailable" | "no_action" | "resolved";
   run_id: string;
+  available_joiners: Array<{ id: string; case_id: string; full_name: string; title: string; start_date: string; opened: boolean }>;
   decision?: DemoDecision;
   case: { id: string; state: string; start_date: string; task_count: number; open_task_count?: number; buddy_id: string | null; buddy_task_status: string | null; buddy_task_done_by: string | null };
-  joiner: { full_name: string; title: string; office: string; work_mode: string; start_date: string };
+  joiner: { id: string; full_name: string; title: string; office: string; work_mode: string; start_date: string };
   model: { provider: "mock" | "anthropic"; model: string };
   agent: AgentSummary | null;
-  equipment: { status: ToolResult["status"]; summary: string; eta: string | null };
+  equipment: { status: ToolResult["status"]; summary: string; eta: string | null; source_revision?: number };
+  equipment_observation?: { source_revision: number; eta: string; status: string; signature: string };
   facts: DemoFacts;
   draft: DemoDraft | null;
   before_approval: ToolResult | null;
   after_approval?: ToolResult;
   attention: AttentionSummary;
   buddy: BuddyState;
+  manager_coordination: {
+    request: {
+      id: string; manager_id: string; manager_name: string; draft_id: string; start_date: string;
+      status: "pending_approval" | "awaiting_response" | "responded" | "confirmed" | "rejected" | "superseded";
+      sent_at?: string; response_at?: string; arrival_time?: string; meeting_place?: string;
+      first_day_outline?: string[]; items_to_bring?: string[]; confirmed_at?: string; confirmed_by_name?: string | null;
+    } | null;
+    draft: { id: string; recipient: string; subject?: string; body: string; status: "pending" | "approved" | "rejected"; revision?: number; supersedes_draft_id?: string } | null;
+  };
   date_change?: DemoDateChange;
   draft_unavailable?: { message: string };
   answer?: AskAnswer;
+  recovery?: "equipment_reassessment";
   trace: { actor: "system" | "agent" | "human"; kind: string; summary: string }[];
+  source_update?: ToolResult & { data?: { changed?: boolean; eta?: string; source_revision?: number } };
+}
+
+interface MonitorCaseSnapshot {
+  case_id: string;
+  joiner_id: string;
+  state: "watching" | "checking" | "needs_attention" | "paused";
+  last_checked_at: string | null;
+  last_successful_check_at: string | null;
+  last_error: string | null;
+  next_action: string | null;
+}
+
+interface MonitorNotification {
+  id: string;
+  case_id: string;
+  joiner_id: string;
+  at: string;
+  source_revision: number;
+  equipment_eta: string;
+  start_date: string;
+  outcome: "proposal_prepared" | "risk_cleared";
+  draft_id: string | null;
+}
+
+interface MonitorSnapshot {
+  running: boolean;
+  provider: "mock" | "anthropic";
+  agent_invocations: number;
+  max_agent_invocations: number;
+  cases: MonitorCaseSnapshot[];
+  notifications: MonitorNotification[];
+}
+
+interface DemoSnapshotResponse {
+  busy: boolean;
+  monitor: MonitorSnapshot;
+  cases: DemoResponse[];
 }
 
 // The server computes one next action from the current case state (the assistant's
@@ -356,6 +435,14 @@ export function startDateRequestFor(question: string, currentStartDate: string):
     };
   }
   return { kind: "confirm", date, label: formatDate(date) };
+}
+
+export function draftEditBlocksCaseMutation(editingEquipment: boolean, editingManager: boolean): boolean {
+  return editingEquipment || editingManager;
+}
+
+export function committedJoinerSelection(currentJoinerId: string, loadedJoinerId?: string): string {
+  return loadedJoinerId ?? currentJoinerId;
 }
 
 function formatDateTime(value: string) {
@@ -546,15 +633,8 @@ function requestLabel(status: BuddyRequest["status"]) {
   if (status === "accepted") return "Awaiting People confirmation";
   if (status === "declined") return "Buddy declined";
   if (status === "rejected") return "Request rejected";
-  if (status === "superseded") return "Request superseded";
+  if (status === "superseded") return "Request replaced";
   return "Allocation confirmed";
-}
-
-function requestTone(status: BuddyRequest["status"]) {
-  if (status === "confirmed") return "positive";
-  if (status === "awaiting_acceptance" || status === "accepted") return "pending";
-  if (status === "pending_approval") return "info";
-  return "attention";
 }
 
 function activeBuddyRequest(request: Pick<BuddyRequest, "status"> | null) {
@@ -628,7 +708,7 @@ function gapLabel(gapDays: number) {
 }
 
 function decisionLabel(run: DemoResponse) {
-  if (run.screen_state === "awaiting_decision") return "Awaiting decision";
+  if (run.screen_state === "awaiting_decision") return "Ready for your review";
   if (run.screen_state === "draft_unavailable") return "Draft unavailable";
   if (run.screen_state === "no_action") return "Risk cleared";
   return run.decision === "approve" ? "Sent with approval" : "Rejected";
@@ -650,13 +730,25 @@ type ApprovalPanelRun = {
   facts: Pick<DemoFacts, "equipment_late" | "start_date" | "equipment_eta">;
 };
 
+export function equipmentMessageHistoryText(run: Pick<DemoResponse, "draft" | "screen_state" | "facts">): string {
+  if (run.draft) return run.draft.body;
+  if (run.screen_state === "draft_unavailable") return "Draft unavailable. Equipment risk remains. Run the assistant again before sending a message.";
+  if (run.screen_state === "no_action" && !run.facts.equipment_late) return "No equipment message is needed.";
+  return "No current equipment draft is available.";
+}
+
+export function BackgroundUpdateNotice({ hasUpdate, editingEquipment, editingManager }: { hasUpdate: boolean; editingEquipment: boolean; editingManager: boolean }) {
+  if (!hasUpdate || (!editingEquipment && !editingManager)) return null;
+  return <div className="background-update" role="status"><strong>New information arrived.</strong><span>Your unsaved wording is preserved. Save or cancel the edit before the workspace refreshes.</span></div>;
+}
+
 export function ApprovalEmptyState({ run }: { run: ApprovalPanelRun }) {
   if (run.screen_state === "draft_unavailable") {
     return (
       <div className="no-action-heading unavailable-heading">
         <p className="eyebrow">Model-proposed action</p>
         <h2>Draft unavailable. Equipment risk remains</h2>
-        <p>The current ETA is still after the current start date. Run the assistant again before any message can be sent.</p>
+        <p>The laptop is currently expected on {formatDate(run.facts.equipment_eta)}, after the {formatDate(run.facts.start_date)} start date. Run the assistant again before any message can be sent.</p>
       </div>
     );
   }
@@ -848,14 +940,18 @@ function DateChangePrompt({
   request,
   currentRun,
   busy,
+  blocked = false,
   onConfirm,
   onDismiss,
+  preferredName = "Aisha",
 }: {
   request: DateChangeRequest;
   currentRun: DemoResponse | null;
   busy: boolean;
+  blocked?: boolean;
   onConfirm: () => void;
   onDismiss: () => void;
+  preferredName?: string;
 }) {
   if (request.kind === "clarify") {
     return (
@@ -887,11 +983,11 @@ function DateChangePrompt({
   return (
     <div className="ask-action-card" aria-label="Confirm start date change">
       <div className="ask-card-head"><div><span className="eyebrow">Confirmation required</span><strong>Change start date to {request.label}?</strong></div><Tag tone="pending">No change yet</Tag></div>
-      <p>Athena interpreted your request as changing Aisha&apos;s first day to {request.label}. Confirming will reassess current evidence and invalidate stale work.</p>
+      <p>Athena interpreted your request as changing {preferredName}&apos;s first day to {request.label}. Confirming will reassess current evidence and invalidate stale work.</p>
       {alreadyCurrent && <p className="ask-card-note">That is already the current start date.</p>}
       <div className="ask-action-buttons">
-        <button className="button primary small" type="button" onClick={onConfirm} disabled={busy || alreadyCurrent}>{busy ? "Recalculating..." : "Confirm start date change"}</button>
-        <button className="button secondary small" type="button" onClick={onDismiss} disabled={busy}>Keep current date</button>
+        <button className="button primary small" type="button" onClick={onConfirm} disabled={busy || blocked || alreadyCurrent}>{busy ? "Recalculating..." : "Confirm start date change"}</button>
+        <button className="button secondary small" type="button" onClick={onDismiss} disabled={busy || blocked}>Keep current date</button>
       </div>
       <span className="ask-hint">Chat text cannot change the case without this confirmation.</span>
     </div>
@@ -905,14 +1001,18 @@ const ASK_SUGGESTIONS = [
   "Any compliance risk?",
 ];
 
-const ENTRY_ASK_SUGGESTIONS = [
-  "Check Aisha’s onboarding readiness.",
-  "Find an available buddy for Aisha.",
-  "What changes if Aisha starts on 19 October?",
+const entryAskSuggestions = (preferredName: string) => [
+  `Check ${preferredName}’s onboarding readiness.`,
+  `Find an available buddy for ${preferredName}.`,
+  `What changes if ${preferredName} starts on 19 October?`,
+  `Check ${preferredName}’s access requests.`,
+  `Open ${preferredName}’s profile.`,
+  `Coordinate with ${preferredName}’s manager.`,
+  "Answer new joiner questions.",
 ];
 
 const ASK_LINK_LABELS: Record<AskLink, string> = {
-  overview: "Open Overview",
+  overview: "Back to conversation",
   equipment: "Open Equipment",
   buddy: "Open Buddy support",
   activity: "Open Activity",
@@ -932,7 +1032,16 @@ export function AskAthenaPanel({
   onNavigate,
   onConfirmDateChange,
   onDismissDateChange,
+  onSwitchJoiner,
+  blocked = false,
+  children,
+  joinerName = "Aisha Okafor",
+  preferredName = "Aisha",
 }: {
+  blocked?: boolean;
+  children?: React.ReactNode;
+  joinerName?: string;
+  preferredName?: string;
   history: AskHistoryItem[];
   question: string;
   compact?: boolean;
@@ -946,38 +1055,44 @@ export function AskAthenaPanel({
   onNavigate: (section: AskLink) => void;
   onConfirmDateChange?: () => void;
   onDismissDateChange?: () => void;
+  onSwitchJoiner?: (joinerId: string) => void;
 }) {
-  const suggestions = entry ? ENTRY_ASK_SUGGESTIONS : ASK_SUGGESTIONS;
+  const entrySuggestions = entryAskSuggestions(preferredName);
+  const suggestions = entry ? entrySuggestions : ASK_SUGGESTIONS;
   const submit = (value: string) => {
     const trimmed = value.trim();
-    if (!busy && trimmed) onAsk(trimmed);
+    if (!busy && !blocked && trimmed) onAsk(trimmed);
   };
 
   const content = (
     <div className="ask-content">
-      {busy && <div className="ask-processing" role="status" aria-live="polite">{entry ? "Opening Aisha’s case and checking current evidence..." : "Reading current case evidence..."}</div>}
+      {busy && <div className="ask-processing" role="status" aria-live="polite">{entry ? `Opening ${preferredName}’s case and checking current evidence...` : "Reading current case evidence..."}</div>}
       {history.length === 0 ? (
-        <p className="ask-empty">{entry ? "Ask Athena to open Aisha’s onboarding case, run the checks and show the next human action." : "Ask about this case. Athena reads the current evidence and cannot change or send anything."}</p>
+        <p className="ask-empty">{entry ? `I’ll check what ${preferredName} needs, prepare the next steps, and bring you the decisions that need your approval.` : `I’ve checked ${preferredName}’s onboarding. Here’s what needs your attention.`}</p>
       ) : (
         <div className="ask-history" aria-live="polite">
-          {history.map((item) => (
+          {history.slice(0, -1).length > 0 && <details className="earlier-conversation"><summary>Earlier conversation ({history.length - 1})</summary>{history.slice(0, -1).map((item) => <div key={item.id} className="earlier-exchange"><strong>{item.question}</strong><p>{item.answer.answer}</p></div>)}</details>}
+          {history.slice(-1).map((item) => (
             <div className="ask-exchange" key={item.id}>
-              <div className="ask-bubble ask-user"><span className="ask-bubble-label">You</span><p>{item.question}</p></div>
+              <div className="ask-bubble ask-user"><span className="ask-bubble-label">You · People team</span><p>{item.question}</p></div>
               <div className="ask-assistant-row">
                 <span className="ask-avatar" aria-hidden="true">A</span>
                 <div className="ask-bubble ask-assistant">
-                  <div className="ask-bubble-head"><strong>Athena</strong><Tag tone={item.answer.provider === "anthropic" ? "violet" : "info"}>{item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</Tag></div>
-                  {!(dateChangeRequest?.history_id === item.id && (dateChangeRequest.kind === "clarify" || (dateChangeRequest.kind === "confirm" && dateChangeRequest.status === "pending"))) && <p>{item.answer.answer}</p>}
-                  <div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
+                  <div className="ask-bubble-head"><strong>Athena</strong></div>
+                  {!(dateChangeRequest?.history_id === item.id && (dateChangeRequest.kind === "clarify" || (dateChangeRequest.kind === "confirm" && dateChangeRequest.status === "pending"))) && <p>{item.question === entrySuggestions[0] && item.snapshot ? `${preferredName} starts on ${formatDate(item.snapshot.facts.start_date)}. ${item.snapshot.facts.equipment_late ? `The laptop is expected on ${formatDate(item.snapshot.facts.equipment_eta)}, after the first day.` : "The laptop is expected before day one."} ${item.snapshot.draft?.status === "pending" ? "I’ve prepared a message to IT for your review." : "The equipment status is shown below."} ${item.snapshot.buddy.request ? `There’s also a buddy request for ${item.snapshot.buddy.request.candidate_name}.` : "Buddy support still needs attention."}` : item.answer.answer}</p>}
+                  {item.answer.switch_joiner_id && onSwitchJoiner && <button className="button secondary small" type="button" onClick={() => onSwitchJoiner(item.answer.switch_joiner_id!)}>Switch case</button>}
+                  <details className="answer-evidence"><summary>Sources and answer details</summary><span className="meta">{item.answer.provider === "system" ? "Case scope check" : item.answer.provider === "anthropic" ? "Anthropic model" : "Mock answer"}</span>{item.question === entrySuggestions[0] && <p>{item.answer.answer}</p>}<div className="ask-facts"><span>Evidence used</span>{item.answer.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
                   {item.answer.card && <AskEvidenceCard kind={item.answer.card} snapshot={item.snapshot} currentRun={currentRun} />}
-                  {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}
+                  {item.answer.links.length > 0 && <div className="ask-links">{item.answer.links.map((link) => <button className="ask-link" type="button" key={link} onClick={() => onNavigate(link)}>{ASK_LINK_LABELS[link]}</button>)}</div>}</details>
                   {dateChangeRequest?.history_id === item.id && onConfirmDateChange && onDismissDateChange && (
                     <DateChangePrompt
                       request={dateChangeRequest}
                       currentRun={currentRun ?? null}
                       busy={dateChangeBusy ?? false}
+                      blocked={blocked}
                       onConfirm={onConfirmDateChange}
                       onDismiss={onDismissDateChange}
+                      preferredName={preferredName}
                     />
                   )}
                 </div>
@@ -986,8 +1101,9 @@ export function AskAthenaPanel({
           ))}
         </div>
       )}
+      {children}
       <div className="ask-suggestions" aria-label="Suggested questions">
-        {suggestions.map((suggestion) => <button className="ask-chip" type="button" key={suggestion} onClick={() => submit(suggestion)} disabled={busy}>{suggestion}</button>)}
+        {suggestions.map((suggestion) => <button className="ask-chip" type="button" key={suggestion} onClick={() => submit(suggestion)} disabled={busy || blocked}>{suggestion}{entry && <span aria-hidden="true">↗</span>}</button>)}
       </div>
       <form className="ask-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); submit(question); }}>
         <label htmlFor={compact ? "ask-question-drawer" : "ask-question"}>Ask Athena</label>
@@ -1004,13 +1120,13 @@ export function AskAthenaPanel({
                 submit(question);
               }
             }}
-            placeholder="Ask about this case..."
+            placeholder={`Ask about ${preferredName}’s onboarding…`}
             maxLength={300}
-            disabled={busy}
+            disabled={busy || blocked}
           />
-          <button className="button primary small" type="submit" disabled={busy || !question.trim()}>{busy ? "Reading..." : "Ask"}</button>
+          <button className="button primary small" type="submit" disabled={busy || blocked || !question.trim()}>{busy ? "Reading..." : "Ask"}</button>
         </div>
-        <span className="ask-hint">Read-only · current case facts · Enter to send, Shift+Enter for a new line</span>
+        <span className="ask-hint">Ask a question, or review the prepared messages below. Sending always needs your approval.</span>
       </form>
     </div>
   );
@@ -1018,7 +1134,7 @@ export function AskAthenaPanel({
   if (compact) {
     return (
       <details className="ask-drawer" open={history.length > 0}>
-        <summary><span><strong>Ask Athena</strong><span className="meta">Read-only case answers</span></span><span className="meta">{history.length === 0 ? "Open" : `${history.length} asked`}</span></summary>
+        <summary><span><strong>Ask Athena</strong><span className="meta">{preferredName}’s onboarding</span></span><span className="meta">{history.length === 0 ? "Open" : `${history.length} asked`}</span></summary>
         {content}
       </details>
     );
@@ -1029,21 +1145,21 @@ export function AskAthenaPanel({
       <div className="panel-head">
         <div>
           <h3>Ask Athena</h3>
-          {entry && <span className="meta ask-entry-subtitle">Chat-first case discovery</span>}
+          {entry && <span className="meta ask-entry-subtitle">Let’s get {preferredName} ready for day one</span>}
         </div>
         <div className="ask-panel-meta">
           {entry && <Tag tone="info">Fictional demo</Tag>}
-          <span className="meta">{entry ? "One active case" : "Read-only case answers"}</span>
+          <span className="meta">{entry ? "" : `${preferredName}’s onboarding`}</span>
         </div>
       </div>
-      {entry && <div className="ask-scope" aria-label="Available demo scope"><Tag tone="info">Available scope</Tag><span>One active onboarding case: Aisha Okafor · mock systems only · no persistence</span></div>}
+      {entry && <div className="ask-scope" aria-label="Available demo scope"><span>This demo follows {joinerName}’s onboarding at Quilstead.</span></div>}
       {content}
     </section>
   );
 }
 
 const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
-  { key: "overview", label: "Overview", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8.5 8 3l6 5.5M4 7.5V13h8V7.5" /></svg> },
+  { key: "overview", label: "Conversation", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8.5 8 3l6 5.5M4 7.5V13h8V7.5" /></svg> },
   { key: "equipment", label: "Equipment", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3.5" width="12" height="8" rx="1" /><path d="M1.5 13h13" /></svg> },
   { key: "buddy", label: "Buddy support", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="6" r="2.5" /><circle cx="11.5" cy="7" r="2" /><path d="M1.5 13.5c.6-2.3 2.3-3.5 4.5-3.5s3.9 1.2 4.5 3.5M10.5 10.6c1.9 0 3.3.9 4 2.9" /></svg> },
   { key: "activity", label: "Activity", icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 8h3l2-4 3 8 2-4h2" /></svg> },
@@ -1051,36 +1167,165 @@ const NAV: { key: Section; label: string; icon: React.ReactNode }[] = [
 
 /* ---------- data access ---------- */
 
-async function postDemo(body: Record<string, string> = {}) {
+export class DemoRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly payload: DemoResponse & { error?: string }) {
+    super(message);
+    this.name = "DemoRequestError";
+  }
+}
+
+export function equipmentApprovalRecovery(error: unknown, caseId: string): DemoResponse | null {
+  if (!(error instanceof DemoRequestError) || error.status !== 409) return null;
+  const payload = error.payload;
+  if (payload.recovery !== "equipment_reassessment" || payload.case?.id !== caseId
+    || payload.screen_state !== "draft_unavailable" || payload.draft !== null
+    || typeof payload.run_id !== "string" || typeof payload.draft_unavailable?.message !== "string") return null;
+  return payload;
+}
+
+export async function postDemo(body: Record<string, string> = {}) {
   const response = await fetch("/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const payload = await response.json() as DemoResponse & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? "The demo flow failed");
+  if (!response.ok) {
+    throw new DemoRequestError(payload.error ?? "The demo flow failed", response.status, payload);
+  }
   return payload;
 }
+
+export async function getDemoSnapshot(): Promise<DemoSnapshotResponse> {
+  const response = await fetch("/api/demo", { method: "GET", cache: "no-store" });
+  const payload = await response.json() as DemoSnapshotResponse & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "Monitoring status could not be refreshed");
+  return payload;
+}
+
+export function backgroundCaseFor(cases: DemoResponse[], currentCaseId: string, selectedJoinerId: string): DemoResponse | null {
+  return cases.find((candidate) => candidate.case.id === currentCaseId && candidate.joiner.id === selectedJoinerId) ?? null;
+}
+
+export function backgroundRefreshBlocked(editingEquipment: boolean, editingManager: boolean, mutationBusy: boolean): boolean {
+  return editingEquipment || editingManager || mutationBusy;
+}
+
+export function monitorNotificationNavigationBlocked(mutationBusy: boolean, editingEquipment: boolean, editingManager: boolean): boolean {
+  return mutationBusy || editingEquipment || editingManager;
+}
+
+const REVIEWED_ALERTS_KEY = "athena-reviewed-equipment-alerts";
+
+export function monitorAlertKey(notification: MonitorNotification): string {
+  return `${notification.id}:${notification.at}:${notification.draft_id ?? "cleared"}`;
+}
+
+export function currentMonitorAlerts(notifications: MonitorNotification[], cases: DemoResponse[], reviewed: string[]) {
+  const latest = new Map<string, MonitorNotification>();
+  for (const notification of notifications) latest.set(notification.case_id, notification);
+  return [...latest.values()].reverse().flatMap((notification) => {
+    const monitoredCase = backgroundCaseFor(cases, notification.case_id, notification.joiner_id);
+    if (!monitoredCase || reviewed.includes(monitorAlertKey(notification))) return [];
+    if (monitoredCase.facts.start_date !== notification.start_date || monitoredCase.facts.equipment_eta !== notification.equipment_eta) return [];
+    if (notification.outcome === "proposal_prepared" && (!monitoredCase.facts.equipment_late
+      || monitoredCase.draft?.id !== notification.draft_id || monitoredCase.draft.status !== "pending")) return [];
+    if (notification.outcome === "risk_cleared" && monitoredCase.facts.equipment_late) return [];
+    return [{ notification, monitoredCase }];
+  });
+}
+
+export function managerEditRebase(current: DemoResponse, refreshed: DemoResponse | null): DemoResponse | null {
+  if (!refreshed || refreshed.case.id !== current.case.id || refreshed.joiner.id !== current.joiner.id) return null;
+  const currentRequest = current.manager_coordination.request;
+  const currentDraft = current.manager_coordination.draft;
+  const refreshedRequest = refreshed.manager_coordination.request;
+  const refreshedDraft = refreshed.manager_coordination.draft;
+  if (!currentRequest || !currentDraft || !refreshedRequest || !refreshedDraft) return null;
+  if (currentRequest.id !== refreshedRequest.id || refreshedRequest.status !== "pending_approval") return null;
+  if (currentDraft.id !== refreshedDraft.id || refreshedDraft.status !== "pending") return null;
+  return refreshed;
+}
+
+export function monitorStatusLabel(state: MonitorCaseSnapshot["state"] | null): string {
+  if (state === "checking") return "Checking a change";
+  if (state === "needs_attention") return "Needs attention";
+  if (state === "paused") return "Paused";
+  return "Watching equipment updates";
+}
+
+export function monitorNotificationText(notification: MonitorNotification, monitoredCase: DemoResponse): string {
+  const name = monitoredCase.joiner.full_name;
+  const eta = formatDate(notification.equipment_eta);
+  const start = formatDate(notification.start_date);
+  return notification.outcome === "proposal_prepared"
+    ? `${name}'s laptop is now expected on ${eta}, after the ${start} start date. I've prepared a request for a loaner or earlier delivery.`
+    : `${name}'s laptop is now expected on ${eta}, before the ${start} start date. No equipment message is needed.`;
+}
+
+const DEMO_JOINERS = [
+  { id: "J-004", full_name: "Aisha Okafor", preferred_name: "Aisha", title: "Customer Success Manager", start_date: "2026-10-12" },
+  { id: "J-001", full_name: "Priya Raman", preferred_name: "Priya", title: "Senior Software Engineer", start_date: "2026-10-05" },
+] as const;
 
 /* ---------- page ---------- */
 
 export default function Home() {
   const [run, setRun] = useState<DemoResponse | null>(null);
+  const [selectedJoinerId, setSelectedJoinerId] = useState<string>("J-004");
+  const [caseUiCache, setCaseUiCache] = useState<Record<string, { history: AskHistoryItem[]; initial: ExecutionSummaryRun | null }>>({});
   const [initialExecution, setInitialExecution] = useState<ExecutionSummaryRun | null>(null);
   const [section, setSection] = useState<Section>("overview");
+  const [workFocus, setWorkFocus] = useState<WorkFocus>("all");
   const [dateDraft, setDateDraft] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"start" | "reset" | "date" | "retry" | "edit" | "ask" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
+  const [busy, setBusy] = useState<"start" | "switch" | "reset" | "date" | "retry" | "edit" | "supplier" | "manager_prepare" | "manager_edit" | "manager_approve" | "manager_reject" | "manager_response" | "manager_confirm" | "ask" | "access" | "availability" | "buddy_prepare" | "buddy_approve" | "buddy_reject" | "buddy_accept" | "buddy_decline" | "buddy_confirm" | DemoDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingEquipment, setEditingEquipment] = useState(false);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editingManager, setEditingManager] = useState(false);
+  const [managerEditSubject, setManagerEditSubject] = useState("");
+  const [managerEditBody, setManagerEditBody] = useState("");
   const [askHistory, setAskHistory] = useState<AskHistoryItem[]>([]);
   const [askQuestion, setAskQuestion] = useState("");
   const [dateChangeRequest, setDateChangeRequest] = useState<DateChangeRequest | null>(null);
+  const [monitorSnapshot, setMonitorSnapshot] = useState<MonitorSnapshot | null>(null);
+  const [snapshotCases, setSnapshotCases] = useState<DemoResponse[]>([]);
+  const [reviewedAlerts, setReviewedAlerts] = useState<string[]>(() => {
+    // No alerts render during SSR: the case opens after a user action.
+    if (typeof window === "undefined") return [];
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(REVIEWED_ALERTS_KEY) ?? "[]");
+      return Array.isArray(saved) && saved.every((key) => typeof key === "string") ? saved : [];
+    } catch (error) {
+      console.warn("Previously dismissed Athena alerts could not be restored from this browser.", error);
+      return [];
+    }
+  });
+  const [backgroundUpdate, setBackgroundUpdate] = useState<DemoResponse | null>(null);
+  const [monitorError, setMonitorError] = useState<string | null>(null);
+  const [pendingSupplierEta, setPendingSupplierEta] = useState<string | null>(null);
+  const draftEditBlocksMutations = draftEditBlocksCaseMutation(editingEquipment, editingManager);
+
+  function dismissMonitorAlert(notification: MonitorNotification) {
+    const next = [...new Set([...reviewedAlerts, monitorAlertKey(notification)])];
+    setReviewedAlerts(next);
+    try { localStorage.setItem(REVIEWED_ALERTS_KEY, JSON.stringify(next)); }
+    catch { setError("The alert is hidden for this page, but this browser could not remember its dismissal."); }
+  }
+
+  async function reviewMonitorAlert(notification: MonitorNotification) {
+    if (busy !== null || draftEditBlocksMutations) return;
+    if (run?.case.id !== notification.case_id && !await switchJoiner(notification.joiner_id)) return;
+    setWorkFocus("equipment");
+    setSection("equipment");
+    dismissMonitorAlert(notification);
+  }
 
   function acceptRun(next: DemoResponse, replaceInitial = false) {
     setRun(next);
+    setBackgroundUpdate(null);
     setInitialExecution((current) => initialExecutionFor(current, next, replaceInitial));
     setDateDraft(next.joiner.start_date);
     setSelectedCandidateId(activeBuddyRequest(next.buddy.request)
@@ -1088,8 +1333,122 @@ export default function Home() {
       : next.buddy.availability.recommendation?.candidate_id ?? null);
   }
 
+  useEffect(() => {
+    const currentCaseId = run?.case.id;
+    if (!currentCaseId) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const schedule = () => {
+      if (disposed || document.visibilityState !== "visible") return;
+      timer = setTimeout(() => { void poll(); }, 3_000);
+    };
+    const poll = async () => {
+      if (disposed || document.visibilityState !== "visible") return;
+      try {
+        const snapshot = await getDemoSnapshot();
+        if (disposed) return;
+        setMonitorSnapshot(snapshot.monitor);
+        setSnapshotCases(snapshot.cases);
+        setMonitorError(null);
+        const current = run;
+        if (!current) return;
+        const latest = backgroundCaseFor(snapshot.cases, current.case.id, current.joiner.id);
+        if (!latest || latest.run_id === current.run_id) {
+          setBackgroundUpdate(null);
+          return;
+        }
+        // Foreground mutations publish their own result. Do not retain their
+        // intermediate snapshots as though they were unsaved editor updates.
+        if (busy !== null) return;
+        if (backgroundRefreshBlocked(editingEquipment, editingManager, busy !== null)) {
+          setBackgroundUpdate(latest);
+          return;
+        }
+        setRun(latest);
+        setInitialExecution((initial) => initialExecutionFor(initial, latest, false));
+        setDateDraft(latest.joiner.start_date);
+        setSelectedCandidateId(activeBuddyRequest(latest.buddy.request)
+          ? latest.buddy.request?.candidate_id ?? null
+          : latest.buddy.availability.recommendation?.candidate_id ?? null);
+        setBackgroundUpdate(null);
+      } catch (caught) {
+        if (!disposed) setMonitorError(caught instanceof Error ? caught.message : "Monitoring status could not be refreshed");
+      } finally {
+        schedule();
+      }
+    };
+    const resumeOnFocus = () => {
+      if (document.visibilityState !== "visible") {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        return;
+      }
+      if (timer) clearTimeout(timer);
+      timer = null;
+      void poll();
+    };
+
+    void poll();
+    document.addEventListener("visibilitychange", resumeOnFocus);
+    window.addEventListener("focus", resumeOnFocus);
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", resumeOnFocus);
+      window.removeEventListener("focus", resumeOnFocus);
+    };
+  }, [run, editingEquipment, editingManager, busy]);
+
+  function caseBody(current: DemoResponse, body: Record<string, string> = {}) {
+    return { case_id: current.case.id, run_id: current.run_id, ...body };
+  }
+
+  async function switchJoiner(joinerId: string) {
+    if (joinerId === selectedJoinerId && run?.joiner.id === joinerId) return;
+    if (draftEditBlocksMutations) {
+      setError("Save or cancel your draft edits before switching joiners.");
+      return;
+    }
+    if (!DEMO_JOINERS.some((joiner) => joiner.id === joinerId)) return;
+    if (run) {
+      setCaseUiCache((current) => ({
+        ...current,
+        [run.joiner.id]: { history: askHistory, initial: initialExecution },
+      }));
+    }
+    setBusy("switch");
+    setError(null);
+    try {
+      const next = await postDemo({ action: "open_case", joiner_id: joinerId });
+      const cached = caseUiCache[joinerId];
+      setSelectedJoinerId(committedJoinerSelection(selectedJoinerId, next.joiner.id));
+      setRun(next);
+      setInitialExecution(cached?.initial ?? next);
+      setAskHistory(cached?.history ?? []);
+      setDateDraft(next.joiner.start_date);
+      setSelectedCandidateId(activeBuddyRequest(next.buddy.request)
+        ? next.buddy.request?.candidate_id ?? null
+        : next.buddy.availability.recommendation?.candidate_id ?? null);
+      setEditingEquipment(false);
+      setEditingManager(false);
+      setBackgroundUpdate(null);
+      setPendingSupplierEta(null);
+      setAskQuestion("");
+      setDateChangeRequest(null);
+      setWorkFocus("all");
+      setSection("overview");
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The joiner could not be opened");
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function startFlow() {
-    if (editingEquipment) {
+    if (draftEditBlocksMutations) {
       setError("Save or cancel your draft edits first.");
       return;
     }
@@ -1097,10 +1456,12 @@ export default function Home() {
     setBusy("start");
     setError(null);
     try {
-      const next = await postDemo();
+      const next = await postDemo({ joiner_id: selectedJoinerId });
       acceptRun(next, true);
       setEditingEquipment(false);
+      setEditingManager(false);
       setAskHistory([]);
+      setWorkFocus("all");
       setAskQuestion("");
       setDateChangeRequest(null);
       setSection("overview");
@@ -1112,19 +1473,31 @@ export default function Home() {
   }
 
   async function resetFlow() {
-    if (editingEquipment) {
+    if (draftEditBlocksMutations) {
       setError("Save or cancel your draft edits first.");
       return;
     }
     setBusy("reset");
     setError(null);
     try {
-      const next = await postDemo();
-      acceptRun(next, true);
+      await postDemo({ action: "reset" });
+      setRun(null);
+      setSelectedJoinerId("J-004");
+      setCaseUiCache({});
+      setInitialExecution(null);
+      setDateDraft("");
+      setSelectedCandidateId(null);
       setEditingEquipment(false);
+      setEditingManager(false);
       setAskHistory([]);
+      setWorkFocus("all");
       setAskQuestion("");
       setDateChangeRequest(null);
+      setMonitorSnapshot(null);
+      setSnapshotCases([]);
+      setBackgroundUpdate(null);
+      setMonitorError(null);
+      setPendingSupplierEta(null);
       setSection("overview");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The demo reset failed");
@@ -1134,12 +1507,14 @@ export default function Home() {
   }
 
   async function decide(decision: DemoDecision) {
-    if (editingEquipment || !run || !run.draft || run.screen_state !== "awaiting_decision") return;
+    if (editingEquipment || editingManager || !run || !run.draft || run.screen_state !== "awaiting_decision") return;
     setBusy(decision);
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, decision }));
+      acceptRun(await postDemo(caseBody(run, { decision })));
     } catch (caught) {
+      const recovery = equipmentApprovalRecovery(caught, run.case.id);
+      if (recovery) acceptRun(recovery);
       setError(caught instanceof Error ? caught.message : "The approval action failed");
     } finally {
       setBusy(null);
@@ -1147,6 +1522,10 @@ export default function Home() {
   }
 
   async function askAthena(question = askQuestion) {
+    if (draftEditBlocksMutations) {
+      setError("Save or cancel your draft edits first.");
+      return;
+    }
     const trimmed = question.trim();
     if (!trimmed || trimmed.length > 300) return;
     const openingCase = run === null;
@@ -1155,13 +1534,16 @@ export default function Home() {
     setError(null);
     try {
       const next = await postDemo(openingCase
-        ? { action: "ask", question: trimmed }
-        : { run_id: run.run_id, action: "ask", question: trimmed });
+        ? { action: "ask", question: trimmed, joiner_id: selectedJoinerId }
+        : caseBody(run, { action: "ask", question: trimmed }));
       if (!next.answer) throw new Error("Ask Athena returned no answer.");
       acceptRun(next, openingCase);
-      if (openingCase) setSection("overview");
+      const nextFocus = next.answer.clarification ? "answer" : workFocusFor(trimmed, next.answer.card);
+      setSection(nextFocus === "profile" ? "profile" : "overview");
+      setWorkFocus(nextFocus);
       setAskHistory((current) => [...current, { id: historyId, question: trimmed, answer: next.answer!, snapshot: next }]);
-      const dateInterpretation = startDateRequestFor(trimmed, next.joiner.start_date);
+      if (next.answer.clarification) setDateChangeRequest(null);
+      const dateInterpretation = next.answer.clarification ? null : startDateRequestFor(trimmed, next.joiner.start_date);
       if (dateInterpretation?.kind === "confirm") {
         setDateChangeRequest({ kind: "confirm", history_id: historyId, date: dateInterpretation.date!, label: dateInterpretation.label!, status: "pending" });
       } else if (dateInterpretation?.kind === "clarify") {
@@ -1176,6 +1558,11 @@ export default function Home() {
   }
 
   async function confirmStartDateRequest() {
+    if (draftEditBlocksMutations) {
+      setError("Save or cancel your draft edits first.");
+      return;
+    }
+    if (busy !== null) return;
     const request = dateChangeRequest;
     // Same rule as the header date control: the case stays mutable until the run phase resolves,
     // regardless of whether the equipment draft has been decided.
@@ -1187,7 +1574,7 @@ export default function Home() {
     setBusy("date");
     setError(null);
     try {
-      const next = await postDemo({ run_id: run.run_id, action: "start_date_change", start_date: request.date });
+      const next = await postDemo(caseBody(run, { action: "start_date_change", start_date: request.date }));
       acceptRun(next);
       setDateChangeRequest({ ...request, status: "confirmed" });
     } catch (caught) {
@@ -1204,7 +1591,7 @@ export default function Home() {
   }
 
   async function changeStartDate() {
-    if (editingEquipment) {
+    if (editingEquipment || editingManager) {
       setError("Save or cancel your draft edits first.");
       return;
     }
@@ -1213,7 +1600,7 @@ export default function Home() {
     setError(null);
     setDateChangeRequest(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "start_date_change", start_date: dateDraft }));
+      acceptRun(await postDemo(caseBody(run, { action: "start_date_change", start_date: dateDraft })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The start-date change failed");
     } finally {
@@ -1222,11 +1609,11 @@ export default function Home() {
   }
 
   async function runAssistantAgain() {
-    if (editingEquipment || !run || run.screen_state !== "draft_unavailable") return;
+    if (editingEquipment || editingManager || !run || run.screen_state !== "draft_unavailable") return;
     setBusy("retry");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "retry_agent" }));
+      acceptRun(await postDemo(caseBody(run, { action: "retry_agent" })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The assistant retry failed");
     } finally {
@@ -1234,13 +1621,33 @@ export default function Home() {
     }
   }
 
+  async function simulateSupplierUpdate() {
+    if (editingEquipment || editingManager || !run || run.joiner.id !== "J-001" || supplierUpdateWaiting) return;
+    const restoring = run.facts.equipment_eta === "2026-10-09";
+    const eta = restoring ? "2026-10-02" : "2026-10-09";
+    setBusy("supplier");
+    setError(null);
+    try {
+      const response = await postDemo(caseBody(run, {
+        action: "equipment_supplier_update",
+        eta,
+        status: restoring ? "ordered" : "backordered",
+      }));
+      setPendingSupplierEta(response.source_update?.data?.eta ?? eta);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The simulated supplier update failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function prepareBuddy(candidateId: string) {
-    if (editingEquipment || !run) return;
+    if (editingEquipment || editingManager || !run) return;
     setSelectedCandidateId(candidateId);
     setBusy("buddy_prepare");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_prepare", candidate_id: candidateId }));
+      acceptRun(await postDemo(caseBody(run, { action: "buddy_prepare", candidate_id: candidateId })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The buddy request could not be prepared");
     } finally {
@@ -1248,12 +1655,138 @@ export default function Home() {
     }
   }
 
+  async function requestAccess() {
+    if (editingEquipment || editingManager || !run) return;
+    setBusy("access");
+    setError(null);
+    try {
+      acceptRun(await postDemo(caseBody(run, { action: "access_request" })));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The access requests could not be submitted");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function prepareManager() {
+    if (editingEquipment || editingManager || !run) return;
+    setBusy("manager_prepare");
+    setError(null);
+    try {
+      acceptRun(await postDemo(caseBody(run, { action: "manager_prepare" })));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The manager request could not be prepared");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function beginManagerEdit() {
+    const draft = run?.manager_coordination.draft;
+    if (!draft || draft.status !== "pending") return;
+    setManagerEditSubject(draft.subject ?? "");
+    setManagerEditBody(draft.body);
+    setEditingManager(true);
+    setError(null);
+  }
+
+  function cancelManagerEdit() {
+    setEditingManager(false);
+    setError(null);
+  }
+
+  async function saveManagerEdit() {
+    const request = run?.manager_coordination.request;
+    const draft = run?.manager_coordination.draft;
+    if (!run || !request || !draft || draft.status !== "pending") return;
+    setBusy("manager_edit");
+    setError(null);
+    try {
+      const visibleRun = run;
+      const retainedRefresh = managerEditRebase(visibleRun, backgroundUpdate);
+      let editBase = retainedRefresh ?? visibleRun;
+      const editBody = {
+        action: "manager_edit",
+        request_id: request.id,
+        draft_id: draft.id,
+        subject: managerEditSubject,
+        body: managerEditBody,
+      };
+      let saved: DemoResponse;
+      try {
+        saved = await postDemo(caseBody(editBase, editBody));
+      } catch (caught) {
+        if (!(caught instanceof DemoRequestError) || caught.status !== 409) throw caught;
+        const snapshot = await getDemoSnapshot();
+        setMonitorSnapshot(snapshot.monitor);
+        setSnapshotCases(snapshot.cases);
+        const latest = backgroundCaseFor(snapshot.cases, visibleRun.case.id, visibleRun.joiner.id);
+        const retryBase = managerEditRebase(visibleRun, latest);
+        if (!retryBase || retryBase.run_id === editBase.run_id) {
+          if (latest) setBackgroundUpdate(latest);
+          throw new Error("The manager request changed while you were editing. Your wording is preserved. Cancel to review the current request.");
+        }
+        editBase = retryBase;
+        saved = await postDemo(caseBody(editBase, editBody));
+      }
+      acceptRun(saved);
+      setEditingManager(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The manager draft could not be saved");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function decideManager(decision: DemoDecision) {
+    const request = run?.manager_coordination.request;
+    const draft = run?.manager_coordination.draft;
+    if (!run || !request || !draft || !["pending_approval", "send_failed"].includes(request.status)) return;
+    setBusy(decision === "approve" ? "manager_approve" : "manager_reject");
+    setError(null);
+    try {
+      acceptRun(await postDemo(caseBody(run, { action: "manager_decision", request_id: request.id, draft_id: draft.id, decision })));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The manager approval could not be recorded");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function simulateManagerReply() {
+    const request = run?.manager_coordination.request;
+    if (!run || !request || request.status !== "awaiting_response") return;
+    setBusy("manager_response");
+    setError(null);
+    try {
+      acceptRun(await postDemo(caseBody(run, { action: "manager_response", request_id: request.id })));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The simulated manager response failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function confirmManager() {
+    const request = run?.manager_coordination.request;
+    if (!run || !request || request.status !== "responded") return;
+    setBusy("manager_confirm");
+    setError(null);
+    try {
+      acceptRun(await postDemo(caseBody(run, { action: "manager_confirm", request_id: request.id })));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The manager plan could not be confirmed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function simulateAvailability(candidateId: string) {
-    if (editingEquipment || !run) return;
+    if (editingEquipment || editingManager || !run) return;
     setBusy("availability");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_availability_change", candidate_id: candidateId }));
+      acceptRun(await postDemo(caseBody(run, { action: "buddy_availability_change", candidate_id: candidateId })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The simulated availability change failed");
     } finally {
@@ -1262,17 +1795,16 @@ export default function Home() {
   }
 
   async function decideBuddy(decision: DemoDecision) {
-    if (editingEquipment || !run || !run.buddy.request || !run.buddy.draft || run.buddy.request.status !== "pending_approval") return;
+    if (editingEquipment || editingManager || !run || !run.buddy.request || !run.buddy.draft || run.buddy.request.status !== "pending_approval") return;
     setBusy(decision === "approve" ? "buddy_approve" : "buddy_reject");
     setError(null);
     try {
-      acceptRun(await postDemo({
-        run_id: run.run_id,
+      acceptRun(await postDemo(caseBody(run, {
         action: "buddy_decision",
         request_id: run.buddy.request.id,
         draft_id: run.buddy.draft.id,
         decision,
-      }));
+      })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The buddy approval action failed");
     } finally {
@@ -1281,11 +1813,11 @@ export default function Home() {
   }
 
   async function simulateBuddyResponse(response: "accepted" | "declined") {
-    if (editingEquipment || !run || !run.buddy.request || run.buddy.request.status !== "awaiting_acceptance") return;
+    if (editingEquipment || editingManager || !run || !run.buddy.request || run.buddy.request.status !== "awaiting_acceptance") return;
     setBusy(response === "accepted" ? "buddy_accept" : "buddy_decline");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_response", request_id: run.buddy.request.id, response }));
+      acceptRun(await postDemo(caseBody(run, { action: "buddy_response", request_id: run.buddy.request.id, response })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The simulated buddy response failed");
     } finally {
@@ -1294,11 +1826,11 @@ export default function Home() {
   }
 
   async function confirmBuddyAllocation() {
-    if (editingEquipment || !run || !run.buddy.request || run.buddy.request.status !== "accepted") return;
+    if (editingEquipment || editingManager || !run || !run.buddy.request || run.buddy.request.status !== "accepted") return;
     setBusy("buddy_confirm");
     setError(null);
     try {
-      acceptRun(await postDemo({ run_id: run.run_id, action: "buddy_confirm", request_id: run.buddy.request.id }));
+      acceptRun(await postDemo(caseBody(run, { action: "buddy_confirm", request_id: run.buddy.request.id })));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The buddy confirmation failed");
     } finally {
@@ -1307,7 +1839,7 @@ export default function Home() {
   }
 
   function beginEquipmentEdit() {
-    if (!run?.draft || run.screen_state !== "awaiting_decision" || run.draft.status !== "pending") return;
+    if (editingManager || !run?.draft || run.screen_state !== "awaiting_decision" || run.draft.status !== "pending") return;
     setEditSubject(run.draft.subject ?? "");
     setEditBody(run.draft.body);
     setError(null);
@@ -1324,13 +1856,12 @@ export default function Home() {
     setBusy("edit");
     setError(null);
     try {
-      const next = await postDemo({
-        run_id: run.run_id,
+      const next = await postDemo(caseBody(run, {
         action: "edit_equipment_draft",
         draft_id: run.draft.id,
         subject: editSubject,
         body: editBody,
-      });
+      }));
       acceptRun(next);
       setEditingEquipment(false);
     } catch (caught) {
@@ -1362,6 +1893,12 @@ export default function Home() {
     { key: "delivery", at: `${run.facts.equipment_eta}T00:00:00Z`, date: `ETA ${formatDate(run.facts.equipment_eta)}`, title: "Equipment delivery", detail: `${gapLabel(run.facts.gap_days)} / ${run.facts.equipment_owner_name}`, tone: run.facts.equipment_late ? "risk" : "cleared" },
   ].sort((left, right) => Date.parse(left.at) - Date.parse(right.at)) : [];
   const openAttention = run ? [run.attention.equipment, run.attention.buddy, run.attention.compliance].filter((item) => attentionTone(item.status) !== "positive").length : 0;
+  const selectedJoiner = DEMO_JOINERS.find((joiner) => joiner.id === selectedJoinerId) ?? DEMO_JOINERS[0];
+  const currentJoinerName = run?.joiner.full_name ?? selectedJoiner.full_name;
+  const currentPreferredName = currentJoinerName.split(" ")[0];
+  const supplierUpdateWaiting = pendingSupplierEta !== null && run?.facts.equipment_eta !== pendingSupplierEta;
+  const currentMonitor = run ? monitorSnapshot?.cases.find((candidate) => candidate.case_id === run.case.id) ?? null : null;
+  const monitorNotifications = currentMonitorAlerts(monitorSnapshot?.notifications ?? [], snapshotCases, reviewedAlerts);
 
   const renderAskAthena = (compact = false, entry = false) => (
     <AskAthenaPanel
@@ -1370,6 +1907,7 @@ export default function Home() {
       compact={compact}
       entry={entry}
       busy={busy === "ask"}
+      blocked={busy !== null || draftEditBlocksMutations}
       currentRun={run}
       dateChangeRequest={dateChangeRequest}
       dateChangeBusy={busy === "date"}
@@ -1378,7 +1916,12 @@ export default function Home() {
       onNavigate={setSection}
       onConfirmDateChange={confirmStartDateRequest}
       onDismissDateChange={dismissStartDateRequest}
-    />
+      onSwitchJoiner={switchJoiner}
+      joinerName={currentJoinerName}
+      preferredName={currentPreferredName}
+    >
+      {!entry && run && renderPreparedWork(run)}
+    </AskAthenaPanel>
   );
 
   /* ---------- pieces that need state ---------- */
@@ -1416,9 +1959,57 @@ export default function Home() {
     </div>
   );
 
+  function renderPreparedWork(current: DemoResponse) {
+    const request = current.buddy.request;
+    const show = (topic: WorkFocus) => workFocus === "all" || workFocus === topic;
+    const preferredName = current.joiner.full_name.split(" ")[0];
+    return (
+      <section className="conversation-actions" aria-label="Prepared work">
+        <nav className="work-focus" aria-label="Workstream view">{(["all", "equipment", "buddy", "compliance", "dates", "access", "profile", "manager", "joiner"] as const).map((topic) => <button type="button" key={topic} aria-pressed={workFocus === topic} disabled={busy !== null || editingEquipment || editingManager} onClick={() => { setWorkFocus(topic); setSection(topic === "profile" ? "profile" : "overview"); }}>{topic === "all" ? "All readiness" : FOCUS_LABELS[topic]}</button>)}</nav>
+        <div className="prepared-heading"><h2>{workFocus === "all" ? "The day-one picture" : workFocus === "answer" ? `Explore ${preferredName}’s onboarding` : FOCUS_LABELS[workFocus]}</h2><p>{workFocus === "all" ? `Every part of ${preferredName}’s onboarding, with owners and next steps.` : workFocus === "dates" ? "Explore a new start date above. Changes need your confirmation." : workFocus === "answer" ? "Choose a workstream to see its current actions." : "Current progress and the next decision for this workstream."}</p></div>
+        {show("dates") && current.date_change && <p className="conversation-update" role="status">{preferredName} now starts on {formatDate(current.facts.start_date)}. I’ve checked the plan again.</p>}
+        {workFocus === "dates" && <section className="date-focus-card" aria-label="Start date overview"><span className="date-tile"><strong>{new Date(current.facts.start_date + "T00:00:00Z").getUTCDate()}</strong><span>{new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(new Date(current.facts.start_date + "T00:00:00Z"))}</span></span><div><h3>Current first day</h3><p>{formatDate(current.facts.start_date)}</p><p>Equipment timing, buddy availability and task deadlines are checked again when the date changes.</p></div></section>}
+        {show("equipment") && <div className="workstream equipment-work" data-workstream="equipment">{current.draft?.status === "pending" || current.screen_state === "draft_unavailable" ? renderEquipmentApproval(current) : (
+          <div className="work-receipt" role="status"><span aria-hidden="true">{current.decision === "approve" || !current.facts.equipment_late ? "✓" : "!"}</span><div><strong>{current.decision === "approve" ? "Request sent to " + current.facts.equipment_owner_name : !current.facts.equipment_late ? "Laptop expected before day one" : "Equipment still needs attention"}</strong><p>{current.attention.equipment.next_action}</p><button className="ask-link" onClick={() => setSection("equipment")}>View equipment details</button></div></div>
+        )}</div>}
+        {show("buddy") && <div className="workstream buddy-work" data-workstream="buddy">{request ? renderBuddyRequest(current) : (
+          <div className="work-receipt"><span aria-hidden="true">!</span><div><strong>Buddy support needs attention</strong><p>{current.attention.buddy.next_action}</p><button className="ask-link" onClick={() => setSection("buddy")}>Review available buddies</button></div></div>
+        )}</div>}
+        {show("compliance") && <div className="workstream compliance-work" data-workstream="compliance"><div className="work-receipt"><span aria-hidden="true">{current.attention.compliance.open_tasks > 0 ? "!" : "✓"}</span><div><strong>{current.attention.compliance.open_tasks > 0 ? "Required checks still outstanding" : "Required checks complete"}</strong><p>{current.attention.compliance.next_action}</p><span className="meta">{current.attention.compliance.owner_name} is responsible for this check.</span></div></div></div>}
+
+        {current.onboarding && (["access", "profile", "manager", "joiner"] as const).filter(show).map((kind) => <OnboardingScenario
+          key={kind}
+          kind={kind}
+          view={current.onboarding!}
+          compact={workFocus === "all"}
+          disabled={busy !== null || editingEquipment || editingManager}
+          managerEditDisabled={busy !== null}
+          onAsk={askAthena}
+          onRequestAccess={requestAccess}
+          managerCoordination={current.manager_coordination}
+          editingManager={editingManager}
+          managerEditSubject={managerEditSubject}
+          managerEditBody={managerEditBody}
+          onPrepareManager={prepareManager}
+          onBeginManagerEdit={beginManagerEdit}
+          onManagerEditSubject={setManagerEditSubject}
+          onManagerEditBody={setManagerEditBody}
+          onSaveManagerEdit={saveManagerEdit}
+          onCancelManagerEdit={cancelManagerEdit}
+          onManagerDecision={decideManager}
+          onSimulateManagerResponse={simulateManagerReply}
+          onConfirmManager={confirmManager}
+          onOpen={(topic) => { setWorkFocus(topic); setSection(topic === "profile" ? "profile" : "overview"); }}
+        />)}
+        {workFocus === "all" && current.onboarding && <details className="disclosure"><summary>All {current.onboarding.tasks.length} onboarding tasks</summary><div className="disclosure-body"><OnboardingTasks tasks={current.onboarding.tasks} /></div></details>}
+
+      </section>
+    );
+  }
+
   /* ---------- sections ---------- */
 
-  function renderOverview(current: DemoResponse) {
+  function renderCaseDetails(current: DemoResponse) {
     const nextAction = agentNextAction(current, overallAttentionNextAction(current));
     const rows = [
       { key: "equipment" as Section, label: "Equipment", data: current.attention.equipment, detail: current.facts.equipment_late ? `ETA ${formatDate(current.facts.equipment_eta)}, start ${formatDate(current.facts.start_date)}` : `ETA ${formatDate(current.facts.equipment_eta)} before start` },
@@ -1482,37 +2073,15 @@ export default function Home() {
           </div>
         </section>
         </div>
-        <div className="overview-side">{renderAskAthena()}</div>
+
       </div>
     );
   }
 
-  function renderEquipment(current: DemoResponse) {
+  function renderEquipmentApproval(current: DemoResponse) {
     return (
-      <>
-        <div className="section-title"><h2>Equipment</h2><p>Case facts on the left, the exact proposed action on the right.</p></div>
-        <div className="two-col">
-          <div className="stack">
-            <section className="panel" aria-label="Equipment facts">
-              <div className="panel-head"><h3>Current facts</h3><Tag tone={attentionTone(current.attention.equipment.status)}>{current.attention.equipment.status}</Tag></div>
-              <div className="panel-body stack">
-                {riskCard}
-                <div className="facts">
-                  <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
-                  <div><span>Equipment ETA</span><strong>{formatDate(current.facts.equipment_eta)}</strong></div>
-                  <div><span>Relation</span><strong>{gapLabel(current.facts.gap_days)}</strong></div>
-                  <div><span>Task deadline</span><strong>{formatDateTime(current.facts.equipment_task_due_at)}</strong></div>
-                  <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
-                  <div><span>Task</span><strong>{current.facts.equipment_task_title}</strong></div>
-                </div>
-                <div className="next-action"><strong>Next:</strong> {agentNextAction(current, current.attention.equipment.next_action)}</div>
-                {dateChangeNote}
-              </div>
-            </section>
-          </div>
-
           <section className="panel" aria-label="Approval">
-            <div className="panel-head"><h3>Approval-ready draft</h3><Tag tone={decisionTone(current)}>{decisionLabel(current)}</Tag></div>
+            <div className="panel-head"><h3>Message to {current.facts.equipment_owner_name}</h3><Tag tone={decisionTone(current)}>{decisionLabel(current)}</Tag></div>
             <div className="panel-body stack">
               {current.draft ? (
                 <>
@@ -1520,7 +2089,7 @@ export default function Home() {
                     <div><span>To</span><strong>{current.draft.recipient}</strong></div>
                     <div><span>Channel</span><strong>{current.draft.channel}</strong></div>
                     {!editingEquipment && <div><span>Subject</span><strong>{current.draft.subject}</strong></div>}
-                    <div><span>Wording</span><div className="draft-tags"><Tag tone="violet">{modelLabel(current.model.provider)}</Tag>{current.draft.edited_by && <Tag tone="info">Edited by People</Tag>}</div></div>
+                    <details className="wording-details"><summary>About this draft</summary><div className="draft-tags"><Tag tone="violet">{modelLabel(current.model.provider)}</Tag>{current.draft.edited_by && <Tag tone="info">Edited by People</Tag>}</div></details>
                   </div>
                   {editingEquipment ? (
                     <div className="draft-editor">
@@ -1546,9 +2115,9 @@ export default function Home() {
               ) : <ApprovalEmptyState run={current} />}
 
               <details className="disclosure">
-                <summary><span>Why this action</span><span className="meta">facts and policy source</span></summary>
+                <summary><span>Why this needs attention</span></summary>
                 <div className="disclosure-body">
-                  <p className="muted small">The recommendation is grounded in the current case snapshot. Generated wording is kept separate from source facts.</p>
+                  <p className="muted small">These dates and the equipment policy explain why I prepared this request.</p>
                   <div className="facts">
                     <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
                     <div><span>Equipment ETA</span><strong>{formatDate(current.facts.equipment_eta)}</strong></div>
@@ -1556,7 +2125,7 @@ export default function Home() {
                     <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
                   </div>
                   <div><p className="muted small">Source policy: {current.facts.policy_page_id}</p><blockquote className="quote">{current.facts.policy_quote}</blockquote></div>
-                  <div className="gate"><strong>Human gate</strong>{current.facts.approval_required}</div>
+                  <div className="gate"><strong>Your approval</strong>{current.facts.approval_required}</div>
                 </div>
               </details>
 
@@ -1570,11 +2139,11 @@ export default function Home() {
                 </div>
               ) : isPending ? (
                 <div className="actions">
-                  <p>Needs approval. Sending is simulated in this build. Nothing leaves Athena until you approve.</p>
+                  <p>I’ve prepared this request. Review the wording before sending.</p>
                  <div className="action-buttons">
                     <button className="button secondary" onClick={() => decide("reject")} disabled={busy !== null}>Reject</button>
                     <button className="button ghost" onClick={beginEquipmentEdit} disabled={busy !== null}>Edit</button>
-                   <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Approving..." : "Approve"}</button>
+                   <button className="button primary" onClick={() => decide("approve")} disabled={busy !== null}>{busy === "approve" ? "Sending..." : "Approve and send"}</button>
                  </div>
                 </div>
               ) : current.screen_state === "draft_unavailable" ? (
@@ -1590,14 +2159,67 @@ export default function Home() {
               ) : (
                 <div className={`outcome ${wasApproved ? "positive" : "negative"}`} role="status">
                   <span className="outcome-icon">{wasApproved ? "✓" : "×"}</span>
-                  <div><strong>{wasApproved ? "Sent with approval. Awaiting IT response." : "Nothing was sent."}</strong><p>{current.after_approval?.summary}</p>{current.draft?.decided_by && <p>Decided by {current.draft.decided_by}{current.draft.decision_reason ? `: ${current.draft.decision_reason}` : ""}</p>}</div>
+                  <div><strong>{wasApproved ? "Sent with approval. Awaiting IT response." : "Nothing was sent."}</strong><p>{current.attention.equipment.next_action}</p></div>
                 </div>
               )}
             </div>
           </section>
+    );
+  }
+
+  function renderEquipment(current: DemoResponse) {
+    return (
+      <>
+        <div className="section-title"><h2>Equipment</h2><p>Delivery dates and the message prepared for IT.</p></div>
+        <div className="two-col">
+          <div className="stack">
+            <section className="panel" aria-label="Equipment facts">
+              <div className="panel-head"><h3>Current facts</h3><Tag tone={attentionTone(current.attention.equipment.status)}>{current.attention.equipment.status}</Tag></div>
+              <div className="panel-body stack">
+                {riskCard}
+                <div className="facts">
+                  <div><span>Start date</span><strong>{formatDate(current.facts.start_date)}</strong></div>
+                  <div><span>Equipment ETA</span><strong>{formatDate(current.facts.equipment_eta)}</strong></div>
+                  <div><span>Relation</span><strong>{gapLabel(current.facts.gap_days)}</strong></div>
+                  <div><span>Task deadline</span><strong>{formatDateTime(current.facts.equipment_task_due_at)}</strong></div>
+                  <div><span>Owner</span><strong>{current.facts.equipment_owner_name}</strong></div>
+                  <div><span>Task</span><strong>{current.facts.equipment_task_title}</strong></div>
+                </div>
+                <div className="next-action"><strong>Next:</strong> {agentNextAction(current, current.attention.equipment.next_action)}</div>
+                {dateChangeNote}
+              </div>
+            </section>
+          </div>
+
+          <section className="panel"><div className="panel-head"><h3>Message history</h3></div><div className="panel-body"><p>{equipmentMessageHistoryText(current)}</p><p className="muted small">{current.draft?.status === "pending" ? "Review and send this message in the conversation." : current.attention.equipment.next_action}</p></div></section>
         </div>
-        {renderAskAthena(true)}
+
       </>
+    );
+  }
+
+  function renderBuddyRequest(current: DemoResponse) {
+    const request = current.buddy.request;
+    if (!request) return null;
+    const pending = request.status === "pending_approval";
+    const candidate = current.buddy.availability.candidates.find((item) => item.candidate.id === request.candidate_id);
+    return (
+      <section className="panel prepared-request" aria-label="Buddy request">
+        <div className="panel-head"><h3>{pending ? `Buddy request for ${request.candidate_name}` : request.status === "confirmed" ? `${request.candidate_name} is confirmed` : `Buddy support: ${request.candidate_name}`}</h3></div>
+        <div className="panel-body stack">
+          {pending && <p className="request-context">{request.candidate_name} has two available sessions in {current.joiner.full_name.split(" ")[0]}’s first week. {candidate ? `${candidate.candidate.active_buddies} of 2 buddy places are currently taken.` : "Review the availability before sending."}</p>}
+          {pending && current.buddy.draft && <div className="request-wording"><strong>{current.buddy.draft.subject}</strong><p>{current.buddy.draft.body}</p></div>}
+          {pending && <div className="action-buttons"><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null || editingEquipment}>{busy === "buddy_approve" ? "Sending..." : "Approve and send"}</button><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null || editingEquipment}>Reject</button></div>}
+          {request.status === "awaiting_acceptance" && <p role="status">The request has been sent. We’re waiting for {request.candidate_name} to respond.</p>}
+          {request.status === "awaiting_acceptance" && current.buddy.after_approval?.status === "ok" && <details className="disclosure"><summary>Simulate a buddy response</summary><div className="disclosure-body"><p className="muted small">No real buddy was contacted. Choose a response to see how Athena continues.</p><div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null || editingEquipment}>Simulate buddy declines</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null || editingEquipment}>Simulate buddy accepts</button></div></div></details>}
+          {request.status === "accepted" && <div className="stack" role="status"><p>{request.candidate_name} has accepted. Confirm the allocation to finish arranging {current.joiner.full_name.split(" ")[0]}’s buddy.</p><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null || editingEquipment}>Confirm allocation as People</button></div>}
+          {request.status === "confirmed" && <p role="status">People has confirmed the allocation and the two onboarding sessions.</p>}
+          {request.status === "rejected" && <p role="status">You rejected this request. Nothing was sent.</p>}
+          {request.status === "declined" && <p role="status">{request.candidate_name} declined. {current.attention.buddy.next_action}</p>}
+          {request.status === "superseded" && <p role="status">This request was replaced after the dates or availability changed. {current.attention.buddy.next_action}</p>}
+          <div className="request-links"><button className="ask-link" onClick={() => setSection("buddy")}>View calendar and other buddies</button><details className="disclosure"><summary>Request history and wording</summary><div className="disclosure-body stack"><p>{request.sent_at ? `Approved and sent ${formatDateTime(request.sent_at)}.` : "Not sent."}{request.response ? ` ${request.candidate_name} ${request.response}.` : ""}{request.confirmed_at ? ` People confirmed ${formatDateTime(request.confirmed_at)}.` : ""}</p>{!pending && current.buddy.draft && <p>{current.buddy.draft.body}</p>}<span className="meta">{current.model.provider === "anthropic" ? "Anthropic wording" : "Fixed mock draft"} · {request.id}</span><div className="slots">{request.slots.map((slot) => <div className="slot" key={slot.id}>{formatSlot(slot)}</div>)}</div></div></details></div>
+        </div>
+      </section>
     );
   }
 
@@ -1605,18 +2227,9 @@ export default function Home() {
     const request = buddyRequest;
     const detail = selectedAssessment;
     const canPrepare = !!detail && !hasActiveBuddy && !editingEquipment && busy === null && detail.eligibility.eligible && detail.availability.status === "available";
-    const stepState = (n: 1 | 2 | 3): "todo" | "active" | "done" => {
-      if (!request) return n === 1 ? "active" : "todo";
-      const s = request.status;
-      const sent = !!request.sent_at;
-      const responded = !!request.response;
-      if (n === 1) return sent ? "done" : "active";
-      if (n === 2) return responded ? "done" : sent && s === "awaiting_acceptance" ? "active" : "todo";
-      return request.confirmed_at ? "done" : responded && s === "accepted" ? "active" : "todo";
-    };
     return (
       <>
-        <div className="section-title"><h2>Buddy support</h2><p>Compare candidates on the left. The request on the right is not sent until People approves the exact preview.</p></div>
+        <div className="section-title"><h2>Buddy support</h2><p>See who has time to support {current.joiner.full_name.split(" ")[0]}. The request stays in the conversation for your review.</p></div>
         <div className="two-col">
           <div className="stack">
             <section className="panel" aria-label="Candidate comparison">
@@ -1688,78 +2301,10 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="panel" aria-label="Buddy request">
-              <div className="panel-head"><h3>Request</h3>{request ? <Tag tone={requestTone(request.status)}>{requestLabel(request.status)}</Tag> : <span className="meta">none prepared</span>}</div>
-              <div className="panel-body stack">
-                {!request && <p className="muted small">No buddy request prepared. Prepare one from the selected candidate to see the exact draft and the three separate steps.</p>}
-                {request && (
-                  <>
-                    <div className="facts">
-                      <div><span>Candidate</span><strong>{request.candidate_name}</strong></div>
-                      <div><span>Start date</span><strong>{formatDate(request.start_date)}</strong></div>
-                      <div><span>{request.status === "confirmed" ? "Confirmed commitment" : "Proposed commitment"}</span><strong>{request.slots.length} sessions, first working week</strong></div>
-                    </div>
-                    <div className="slots">
-                      {request.slots.map((slot) => <div className="slot" key={slot.id}><span className="kind">{slot.kind}</span><span className="when">{formatSlot(slot)}</span><span className="tz">{slot.duration_minutes} min · {slot.timezone}</span></div>)}
-                    </div>
-                    {current.buddy.draft && (
-                      <div className="message">
-                        <div className="message-avatar" aria-hidden="true">A</div>
-                        <div>
-                          <div className="message-head"><strong>{current.buddy.draft.subject}</strong><span>to {current.buddy.draft.recipient}</span><Tag tone="violet">{current.model.provider === "anthropic" ? "Anthropic wording" : "Deterministic mock"}</Tag><Tag>{current.buddy.draft.status}</Tag></div>
-                          <p>{current.buddy.draft.body}</p>
-                          <p className="muted small">{current.model.provider === "anthropic" ? "The live adapter generated this wording from the current facts. Approval is still required." : "This mock run uses a fixed draft; the live adapter generates wording from the same facts."}</p>
-                        </div>
-                      </div>
-                    )}
 
-                    <div className="steps">
-                      <div className={`step ${stepState(1)}`}>
-                        <span className="step-num" aria-hidden="true">1</span>
-                        <div className="step-body">
-                          <h4>People approves the exact request</h4>
-                          {request.status === "pending_approval" && current.buddy.draft ? (
-                            <div className="action-buttons"><button className="button secondary" onClick={() => decideBuddy("reject")} disabled={busy !== null || editingEquipment}>Reject</button><button className="button primary" onClick={() => decideBuddy("approve")} disabled={busy !== null || editingEquipment}>{busy === "buddy_approve" ? "Approving..." : "Approve"}</button></div>
-                          ) : <p>{request.status === "rejected" ? "People rejected the request. No message was sent." : request.sent_at ? `Approved and sent ${formatDateTime(request.sent_at)}.${request.status === "superseded" ? ` Superseded afterwards: ${request.invalidation_reason ?? "current facts changed."}` : ""}` : request.status === "superseded" ? request.invalidation_reason ?? "Superseded before approval." : "Waiting."}</p>}
-                        </div>
-                      </div>
-                      <div className={`step ${stepState(2)}`}>
-                        <span className="step-num" aria-hidden="true">2</span>
-                        <div className="step-body">
-                          <h4>Buddy responds <span className="sim-badge">Simulated response</span></h4>
-                          {request.status === "awaiting_acceptance" && current.buddy.after_approval?.status === "ok" ? (
-                            <>
-                              <p>Message receipt is recorded. No real buddy was contacted. Choose the response for this exact request.</p>
-                              <div className="action-buttons"><button className="button secondary" onClick={() => simulateBuddyResponse("declined")} disabled={busy !== null || editingEquipment}>{busy === "buddy_decline" ? "Recording..." : "Simulate buddy declines"}</button><button className="button primary" onClick={() => simulateBuddyResponse("accepted")} disabled={busy !== null || editingEquipment}>{busy === "buddy_accept" ? "Recording..." : "Simulate buddy accepts"}</button></div>
-                            </>
-              ) : <p>{request.response === "declined" ? `${request.candidate_name} declined this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}. The assistant will re-evaluate the current candidates.` : request.response === "accepted" ? `${request.candidate_name} accepted this request${request.responded_at ? ` ${formatDateTime(request.responded_at)}` : ""}.` : request.sent_at ? "Awaiting response." : "Waiting for approval first."}</p>}
-                        </div>
-                      </div>
-                      <div className={`step ${stepState(3)}`}>
-                        <span className="step-num" aria-hidden="true">3</span>
-                        <div className="step-body">
-                          <h4>People confirms the allocation</h4>
-                          {request.status === "accepted" ? (
-                            <>
-                              <p>Acceptance is separate from confirmation. The allocation task completes only here.</p>
-                              <div className="action-buttons"><button className="button primary" onClick={confirmBuddyAllocation} disabled={busy !== null || editingEquipment}>{busy === "buddy_confirm" ? "Confirming..." : "Confirm allocation as People"}</button></div>
-                            </>
-                          ) : <p>{request.confirmed_at ? `Confirmed by ${request.confirmed_by_name ?? "the named People actor"}. ${request.candidate_name} is recorded on this case.` : request.response === "declined" ? "Not reached: buddy declined." : "Waiting for acceptance first."}</p>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {request.status === "confirmed" && <div className="outcome positive" role="status"><span className="outcome-icon">✓</span><div><strong>Allocation confirmed by People.</strong><p>Buddy task completed by {request.confirmed_by_name ?? "the named People actor"}.</p></div></div>}
-                    {request.status === "declined" && <div className="outcome unavailable" role="status"><span className="outcome-icon">!</span><div><strong>Buddy declined in simulation.</strong><p>Choose another current candidate on the left.</p></div></div>}
-                    {request.status === "rejected" && <div className="outcome negative" role="status"><span className="outcome-icon">×</span><div><strong>People rejected the request.</strong><p>No message was sent. Choose another current candidate on the left.</p></div></div>}
-                    {request.status === "superseded" && <div className="outcome unavailable" role="status"><span className="outcome-icon">!</span><div><strong>Request superseded by current facts.</strong><p>{request.invalidation_reason ?? "Availability or the start date changed."} Prepare a new request from the refreshed comparison.</p></div></div>}
-                  </>
-                )}
-              </div>
-            </section>
           </div>
         </div>
-        {renderAskAthena(true)}
+
       </>
     );
   }
@@ -1796,7 +2341,7 @@ export default function Home() {
             </div>
           </div>
         </details>
-        {renderAskAthena(true)}
+
       </>
     );
   }
@@ -1827,51 +2372,83 @@ export default function Home() {
           <nav className="tabs" aria-label="Sections">{navButtons("tab")}</nav>
         </div>
 
+        <div className="viewer-context" aria-label="Your workspace role">
+          <strong>People team workspace</strong>
+          <span>Demo role: Sarah Mitchell · People team</span>
+        </div>
         <header className="case-header">
           <div className="case-identity">
-            <span className="avatar" aria-hidden="true">{run ? initials(run.joiner.full_name) : "AO"}</span>
+            <span className="avatar" aria-hidden="true">{initials(currentJoinerName)}</span>
             <div>
-              <h1>{run ? run.joiner.full_name : "Aisha Okafor"}</h1>
-              <p>{run ? `${run.joiner.title} · ${run.joiner.office} · ${run.joiner.work_mode}` : "Customer Success Manager · London · hybrid"}</p>
-              <div className="case-tags">
-                {run ? <><Tag tone="info">{run.case.state.replaceAll("_", " ")}</Tag><Tag>{run.case.id}</Tag><Tag>{run.case.task_count} tasks</Tag><Tag tone="violet">{modelLabel(run.model.provider)}</Tag></> : <><Tag>J-004</Tag><Tag>No case loaded</Tag></>}
-              </div>
+              <span className="case-caption">Onboarding for</span>
+              <h1>{currentJoinerName}</h1>
+              <p>{run ? `${run.joiner.title} · ${run.joiner.office} · ${run.joiner.work_mode}` : selectedJoiner.title}</p>
+              <p className="case-start">{run ? `Starts ${formatDate(run.joiner.start_date)}` : `Starting ${formatDate(selectedJoiner.start_date)}`}</p>
             </div>
           </div>
           <div className="header-controls">
-            <div className="field">
+            <div className="field joiner-switcher">
+              <label htmlFor="joiner-select">Joiner</label>
+              <select id="joiner-select" value={selectedJoinerId} onChange={(event) => switchJoiner(event.target.value)} disabled={busy !== null || draftEditBlocksMutations}>
+                {DEMO_JOINERS.map((joiner) => <option key={joiner.id} value={joiner.id}>{joiner.full_name}</option>)}
+              </select>
+            </div>
+            {run && <div className="field">
               <label htmlFor="start-date">Start date</label>
               <div className="field-row">
-                <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={!run || run.phase === "resolved" || busy !== null || editingEquipment} />
-                <button className="button secondary" onClick={changeStartDate} disabled={!run || run.phase === "resolved" || busy !== null || editingEquipment || !dateDraft || dateDraft === run.joiner.start_date}>{busy === "date" ? "Recalculating..." : "Recalculate case"}</button>
+                <input id="start-date" className="date-input" type="date" value={dateDraft} onChange={(event) => setDateDraft(event.target.value)} disabled={!run || run.phase === "resolved" || busy !== null || draftEditBlocksMutations} />
+                <button className="button secondary" onClick={changeStartDate} disabled={!run || run.phase === "resolved" || busy !== null || draftEditBlocksMutations || !dateDraft || dateDraft === run.joiner.start_date}>{busy === "date" ? "Recalculating..." : "Update start date"}</button>
               </div>
-            </div>
-            <div className="demo-controls">
-              <span>Demo controls</span>
+            </div>}
+            <details className="demo-controls"><summary>Demo controls</summary>
               <div className="demo-actions">
-                <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment || run !== null}>{busy === "start" ? "Processing event..." : "Simulate contract signed"}</button>
-                <button className="button secondary" onClick={resetFlow} disabled={busy !== null || editingEquipment || run === null}>{busy === "reset" ? "Resetting..." : "Reset"}</button>
+                <button className="button primary" onClick={startFlow} disabled={busy !== null || editingEquipment || editingManager || run !== null}>{busy === "start" ? "Processing event..." : "Simulate contract signed"}</button>
+                {run?.joiner.id === "J-001" && <button className="button secondary" onClick={simulateSupplierUpdate} disabled={busy !== null || draftEditBlocksMutations || supplierUpdateWaiting}>{busy === "supplier" ? "Updating supplier..." : supplierUpdateWaiting ? "Supplier update recorded" : run.facts.equipment_eta === "2026-10-09" ? "Restore supplier ETA" : "Simulate supplier delay"}</button>}
+                <button className="button secondary" onClick={resetFlow} disabled={busy !== null || editingEquipment || editingManager || run === null}>{busy === "reset" ? "Resetting..." : "Reset all demo cases"}</button>
               </div>
-            </div>
+            </details>
           </div>
         </header>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
+        {run && <div className={`monitor-bar ${currentMonitor?.state ?? "watching"}`} role="status" aria-live="polite">
+          <span className="monitor-dot" aria-hidden="true" />
+          <strong>{monitorStatusLabel(currentMonitor?.state ?? null)}</strong>
+          <span>{currentMonitor?.last_successful_check_at ? `Last checked ${formatDateTime(currentMonitor.last_successful_check_at)}` : "Waiting for the first background check"}</span>
+          <span className="sim-badge">Simulated systems</span>
+          {currentMonitor?.next_action && <span>{currentMonitor.next_action}</span>}
+          {monitorError && <span className="monitor-error">{monitorError}</span>}
+        </div>}
+        <BackgroundUpdateNotice hasUpdate={backgroundUpdate !== null} editingEquipment={editingEquipment} editingManager={editingManager} />
 
         <main className="work">
-          {!run && (
-            <div className="entry-layout">
-              <div className="entry-main">{renderAskAthena(false, true)}</div>
-              <div className="entry-side"><WorkflowTriggerCard busy={busy !== null} onTrigger={startFlow} /></div>
+          {!run && <div className="conversation-entry"><BotanicalWelcome entry joinerName={currentJoinerName} preferredName={currentPreferredName} />{renderAskAthena(false, true)}<details className="disclosure entry-event"><summary>Or start with a contract-signed event</summary><WorkflowTriggerCard busy={busy !== null} onTrigger={startFlow} /></details></div>}
+          {run && <div className={`conversation-layout ${section !== "overview" ? "with-details" : ""}`}>
+            <div className="conversation-main"><BotanicalWelcome focus={workFocus} joinerName={currentJoinerName} preferredName={currentPreferredName} />
+              {monitorNotifications.length > 0 && <section className="monitor-notifications" aria-label="Equipment monitoring updates">{monitorNotifications.map(({ notification, monitoredCase }) => {
+                const isCurrentCase = monitoredCase.case.id === run.case.id;
+                return <article className="monitor-notification" key={notification.id}>
+                  <div><span className="notification-label">Athena noticed a supplier change</span><strong>{monitoredCase.joiner.full_name}</strong><p>{monitorNotificationText(notification, monitoredCase)}</p><span className="meta">Checked {formatDateTime(notification.at)} · People approval is still required for any message.</span></div>
+                  <div className="monitor-notification-actions">
+                    <button className="button secondary small" onClick={() => void reviewMonitorAlert(notification)} disabled={monitorNotificationNavigationBlocked(busy !== null, editingEquipment, editingManager)}>{isCurrentCase ? "Review equipment" : `View ${monitoredCase.joiner.full_name.split(" ")[0]}`}</button>
+                    <button className="button ghost small" onClick={() => dismissMonitorAlert(notification)} aria-label={`Dismiss ${monitoredCase.joiner.full_name.split(" ")[0]}'s equipment alert`}>Dismiss</button>
+                  </div>
+                </article>;
+              })}</section>}
+              {supplierUpdateWaiting && <p className="supplier-pending" role="status">Supplier update recorded. Athena will assess it independently on the next background check.</p>}
+              {renderAskAthena()}
+              <details className="disclosure technical-drawer"><summary>How Athena reached this</summary><div className="disclosure-body">{renderCaseDetails(run)}{renderActivity(run)}</div></details>
             </div>
-          )}
-          {run && section === "overview" && renderOverview(run)}
-          {run && section === "equipment" && renderEquipment(run)}
-          {run && section === "buddy" && renderBuddy(run)}
-          {run && section === "activity" && renderActivity(run)}
+            {section !== "overview" && <aside className="context-panel" aria-label="Onboarding details" onKeyDown={(event) => { if (event.key === "Escape") { setSection("overview"); document.getElementById("ask-question")?.focus(); } }}><div className="context-heading"><strong>{section === "equipment" ? "Equipment" : section === "buddy" ? "Buddy availability" : section === "profile" ? "Employee profile" : "How Athena reached this"}</strong><button autoFocus className="button ghost small" onClick={() => { setSection("overview"); document.getElementById("ask-question")?.focus(); }}>Close details</button></div>
+              {section === "equipment" && renderEquipment(run)}
+              {section === "buddy" && renderBuddy(run)}
+              {section === "activity" && renderActivity(run)}
+              {section === "profile" && run.onboarding && <JoinerProfile view={run.onboarding} />}
+            </aside>}
+          </div>}
         </main>
 
-        <footer className="app-foot">Athena for Quilstead · mock systems only · no persistence · no live integrations</footer>
+        <footer className="app-foot">Athena for Quilstead · Demo with fictional people and simulated systems</footer>
       </div>
     </div>
   );

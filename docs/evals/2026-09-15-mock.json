@@ -1,0 +1,2295 @@
+{
+  "generated_at": "2026-09-15T17:18:24.724Z",
+  "mode": "mock",
+  "model": "claude-haiku-4-5-20251001",
+  "passes": 3,
+  "budget_usd": null,
+  "cumulative_cost_usd": 0,
+  "budget_exceeded": false,
+  "results": [
+    {
+      "scenario": {
+        "id": "contract-j001",
+        "label": "J-001 contract signed",
+        "joiner_id": "J-001",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j002",
+        "label": "J-002 RTW blocked",
+        "joiner_id": "J-002",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY",
+            "RTW_NOT_EVIDENCED"
+          ],
+          "terminal_case_state": "blocked",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j003",
+        "label": "J-003 manager cover",
+        "joiner_id": "J-003",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "MANAGER_UNAVAILABLE",
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "MANAGER_UNAVAILABLE",
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j004",
+        "label": "J-004 equipment risk",
+        "joiner_id": "J-004",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge",
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "it-1",
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.",
+            "model_steps": 8,
+            "tool_calls": 9,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 14
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.",
+            "model_steps": 8,
+            "tool_calls": 9,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain and the buddy request to Ewan Grant.",
+            "model_steps": 8,
+            "tool_calls": 9,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j005",
+        "label": "J-005 no buddy",
+        "joiner_id": "J-005",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j006",
+        "label": "J-006 policy question fixture",
+        "joiner_id": "J-006",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j007",
+        "label": "J-007 instruction fixture",
+        "joiner_id": "J-007",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j008",
+        "label": "J-008 date-change fixture",
+        "joiner_id": "J-008",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j009",
+        "label": "J-009 contractor",
+        "joiner_id": "J-009",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": false,
+          "stop_reason": null,
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "OUT_OF_SCOPE"
+          ],
+          "terminal_case_state": "rejected",
+          "next_action_prefix": null
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j010",
+        "label": "J-010 DE clean",
+        "joiner_id": "J-010",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j011",
+        "label": "J-011 US clean",
+        "joiner_id": "J-011",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j012",
+        "label": "J-012 elevated access",
+        "joiner_id": "J-012",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-02"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Rob Fletcher.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Rob Fletcher.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Rob Fletcher.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "date-j004-19",
+        "label": "J-004 start moved to 19 October",
+        "joiner_id": "J-004",
+        "trigger": "start_date_changed",
+        "start_date": "2026-10-19",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-02"
+          ],
+          "escalation_codes": [
+            "START_DATE_CHANGED"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Start date moved to 2026-10-19. Approve the re-proposed buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-19. Approve the re-proposed buddy request to Rob Fletcher.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 5
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-19. Approve the re-proposed buddy request to Rob Fletcher.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-19. Approve the re-proposed buddy request to Rob Fletcher.",
+            "model_steps": 5,
+            "tool_calls": 5,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "date-j004-09",
+        "label": "J-004 start moved to 9 October",
+        "joiner_id": "J-004",
+        "trigger": "start_date_changed",
+        "start_date": "2026-10-09",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge",
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "it-1",
+            "b-02"
+          ],
+          "escalation_codes": [
+            "START_DATE_CHANGED"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher. Approve the equipment nudge to Nadia Hussain as well.",
+            "model_steps": 7,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher. Approve the equipment nudge to Nadia Hussain as well.",
+            "model_steps": 7,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 6
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge",
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "it-1",
+              "b-02"
+            ],
+            "escalation_codes": [
+              "START_DATE_CHANGED"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Start date moved to 2026-10-09. Approve the re-proposed buddy request to Rob Fletcher. Approve the equipment nudge to Nadia Hussain as well.",
+            "model_steps": 7,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "decline-j004-ewan",
+        "label": "J-004 Ewan declines",
+        "joiner_id": "J-004",
+        "trigger": "buddy_declined",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-01"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the replacement buddy request to Amara Osei; Ewan Grant declined."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the replacement buddy request to Amara Osei; Ewan Grant declined.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the replacement buddy request to Amara Osei; Ewan Grant declined.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 5
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the replacement buddy request to Amara Osei; Ewan Grant declined.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "availability-j004-ewan",
+        "label": "J-004 Ewan availability changes",
+        "joiner_id": "J-004",
+        "trigger": "availability_changed",
+        "candidate_id": "b-06",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-01"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the refreshed buddy request to Amara Osei after availability changed."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the refreshed buddy request to Amara Osei after availability changed.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the refreshed buddy request to Amara Osei after availability changed.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 4
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-01"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the refreshed buddy request to Amara Osei after availability changed.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "track-j004",
+        "label": "J-004 equipment on track",
+        "joiner_id": "J-004",
+        "trigger": "contract.signed",
+        "equipment_on_track": true,
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "buddy_intro"
+          ],
+          "proposal_recipients": [
+            "b-06"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "No equipment action needed. Approve the buddy request to Ewan Grant."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "buddy_intro"
+            ],
+            "proposal_recipients": [
+              "b-06"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "No equipment action needed. Approve the buddy request to Ewan Grant.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "access-j004",
+        "label": "J-004 permitted access requests",
+        "joiner_id": "J-004",
+        "trigger": "access_requested",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "6 access requests are awaiting their named approvers; no access has been granted."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "6 access requests are awaiting their named approvers; no access has been granted.",
+            "model_steps": 8,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "6 access requests are awaiting their named approvers; no access has been granted.",
+            "model_steps": 8,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 3
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "6 access requests are awaiting their named approvers; no access has been granted.",
+            "model_steps": 8,
+            "tool_calls": 8,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "manager-j004",
+        "label": "J-004 manager coordination",
+        "joiner_id": "J-004",
+        "trigger": "manager_coordination",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge"
+          ],
+          "proposal_recipients": [
+            "m-4"
+          ],
+          "escalation_codes": [],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the first-day plan request to Chloe Bennett."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "m-4"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the first-day plan request to Chloe Bennett.",
+            "model_steps": 3,
+            "tool_calls": 3,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "m-4"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the first-day plan request to Chloe Bennett.",
+            "model_steps": 3,
+            "tool_calls": 3,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "m-4"
+            ],
+            "escalation_codes": [],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the first-day plan request to Chloe Bennett.",
+            "model_steps": 3,
+            "tool_calls": 3,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "equipment-j001-delay",
+        "label": "J-001 supplier delay after opening",
+        "joiner_id": "J-001",
+        "trigger": "equipment_changed",
+        "equipment_update_eta": "2026-10-09",
+        "equipment_update_status": "backordered",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [
+            "nudge"
+          ],
+          "proposal_recipients": [
+            "it-1"
+          ],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "Approve the equipment nudge to Nadia Hussain."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "it-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 2
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "it-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [
+              "nudge"
+            ],
+            "proposal_recipients": [
+              "it-1"
+            ],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "Approve the equipment nudge to Nadia Hussain.",
+            "model_steps": 4,
+            "tool_calls": 4,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j002-repeat",
+        "label": "J-002 repeated RTW fixture",
+        "joiner_id": "J-002",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY",
+            "RTW_NOT_EVIDENCED"
+          ],
+          "terminal_case_state": "blocked",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 1
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY",
+              "RTW_NOT_EVIDENCED"
+            ],
+            "terminal_case_state": "blocked",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j005-repeat",
+        "label": "J-005 repeated no-buddy fixture",
+        "joiner_id": "J-005",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": true,
+          "stop_reason": "finished",
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "NO_ELIGIBLE_BUDDY"
+          ],
+          "terminal_case_state": "in_progress",
+          "next_action_prefix": "People to arrange a buddy by hand; no eligible candidate in the current snapshot."
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": true,
+            "stop_reason": "finished",
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "NO_ELIGIBLE_BUDDY"
+            ],
+            "terminal_case_state": "in_progress",
+            "next_action": "People to arrange a buddy by hand; no eligible candidate in the current snapshot.",
+            "model_steps": 6,
+            "tool_calls": 6,
+            "refused": 1,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": [
+            "agent.guard.refused: Tool identity.grant_access refused by this run's read-only allowlist."
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "id": "contract-j009-repeat",
+        "label": "J-009 repeated contractor fixture",
+        "joiner_id": "J-009",
+        "trigger": "contract.signed",
+        "expected": {
+          "run": false,
+          "stop_reason": null,
+          "proposal_kinds": [],
+          "proposal_recipients": [],
+          "escalation_codes": [
+            "OUT_OF_SCOPE"
+          ],
+          "terminal_case_state": "rejected",
+          "next_action_prefix": null
+        }
+      },
+      "attempts": [
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        },
+        {
+          "pass": true,
+          "actual": {
+            "run": false,
+            "stop_reason": null,
+            "proposal_kinds": [],
+            "proposal_recipients": [],
+            "escalation_codes": [
+              "OUT_OF_SCOPE"
+            ],
+            "terminal_case_state": "rejected",
+            "next_action": null,
+            "model_steps": 0,
+            "tool_calls": 0,
+            "refused": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost_usd": 0,
+            "wall_ms": 0
+          },
+          "mismatches": [],
+          "notes": []
+        }
+      ]
+    }
+  ]
+}
